@@ -6,3 +6,6 @@ Upload the complete contents of this folder to a GitHub repository. In GitHub, o
 - Load any saved quote back into the Quote Builder with all customer and measurement data.
 - Clear Quote resets every field for the next estimate.
 - Press Enter in any measurement field to create and focus a new window row.
+
+
+Version 1.2 adds Level 1 voice measurement entry with transcript preview and confirmation. Example: Living room, 48 by 72, quantity 2. Voice recognition requires Safari/compatible browser, HTTPS, and microphone permission.
