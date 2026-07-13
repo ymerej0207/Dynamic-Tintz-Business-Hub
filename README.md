@@ -1,20 +1,16 @@
-# Dynamic Tintz Business Hub v2.0 Test
+# Dynamic Tintz OS V3.0 Cloud Test
 
-## Included
+Includes secure login, role-based dashboards, Angi leads, follow-up queue, contact-attempt logging, time clock, unpaid breaks, weekly hours, team time, and assigned jobs. Start with SETUP-V3.md.
 
-- Full hometown shortcut library
-- Quote creation, recall, update, duplicate, and deletion
-- Auto-save and draft recovery
+
+## V3.0.1 Patch
+
+Fixed the Team Time profile relationship by explicitly selecting the employee relationship through `time_entries_employee_id_fkey`. This removes the Supabase ambiguity between `employee_id` and `approved_by`.
+
+
+## V3.1 Cloud Operations
+- Cloud quote builder with customer records
+- Quote recall and editing
+- Ceramic list price, tier price, savings and deposit
 - Enter-to-add measurement rows
-- iPhone keyboard dictation workflow
-- Ceramic list-price, tier-price, savings, and discount comparison
-- Project statuses and internal notes
-- Operational dashboard counts
-- Customer/quote CRM
-- Copy, email, and print/PDF proposals
-- Square invoice payload preview
-- Secure Square Sandbox/Production connector
-- 50% deposit or full-total Square draft invoice option
-- Offline Home Screen support
-
-Upload the web files to GitHub Pages as before. `square-worker.js`, `wrangler.toml.example`, and `SQUARE-SETUP.md` are for the optional secure Square integration.
+- Owner shortcut hub
