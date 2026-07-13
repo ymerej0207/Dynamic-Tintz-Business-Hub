@@ -23,3 +23,11 @@ Fixed the Team Time profile relationship by explicitly selecting the employee re
 - Project notes and total glass area are visible on the field job card.
 - Pricing and owner financial information remain hidden.
 - Run `V3.1.1-INSTALLER-DIMENSIONS-PATCH.sql` once in Supabase before testing.
+
+
+## V3.2 — Schedule & Assign
+- Jeremy can schedule and assign an installation directly from a saved cloud quote.
+- Existing assignments can be edited.
+- The quote is automatically marked Scheduled and assigned to the selected installer.
+- Justin immediately receives the address, appointment, notes, room names, dimensions, quantities, and square footage.
+- Run V3.2-SCHEDULE-ASSIGN-VERIFY.sql once before testing.
