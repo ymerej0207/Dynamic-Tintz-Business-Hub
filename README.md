@@ -14,3 +14,12 @@ Fixed the Team Time profile relationship by explicitly selecting the employee re
 - Ceramic list price, tier price, savings and deposit
 - Enter-to-add measurement rows
 - Owner shortcut hub
+
+
+## V3.1.1 — Installer Job Dimensions
+
+- Installers can open assigned jobs and view room names, width, height, quantity, and calculated square footage.
+- Installers only receive quote measurements for jobs specifically assigned to their account.
+- Project notes and total glass area are visible on the field job card.
+- Pricing and owner financial information remain hidden.
+- Run `V3.1.1-INSTALLER-DIMENSIONS-PATCH.sql` once in Supabase before testing.
