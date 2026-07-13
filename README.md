@@ -1,18 +1,20 @@
-# Dynamic Tintz Business Hub V1
+# Dynamic Tintz Business Hub v2.0 Test
 
-Upload the complete contents of this folder to a GitHub repository. In GitHub, open Settings > Pages, select Deploy from a branch, choose main and /(root), then save. Open the published URL in Safari on iPhone and use Share > Add to Home Screen.
+## Included
 
-## Version 1.1 updates
-- Load any saved quote back into the Quote Builder with all customer and measurement data.
-- Clear Quote resets every field for the next estimate.
-- Press Enter in any measurement field to create and focus a new window row.
+- Full hometown shortcut library
+- Quote creation, recall, update, duplicate, and deletion
+- Auto-save and draft recovery
+- Enter-to-add measurement rows
+- iPhone keyboard dictation workflow
+- Ceramic list-price, tier-price, savings, and discount comparison
+- Project statuses and internal notes
+- Operational dashboard counts
+- Customer/quote CRM
+- Copy, email, and print/PDF proposals
+- Square invoice payload preview
+- Secure Square Sandbox/Production connector
+- 50% deposit or full-total Square draft invoice option
+- Offline Home Screen support
 
-
-Version 1.2 adds Level 1 voice measurement entry with transcript preview and confirmation. Example: Living room, 48 by 72, quantity 2. Voice recognition requires Safari/compatible browser, HTTPS, and microphone permission.
-
-
-## Version 1.3
-- Reliable Home Screen voice workflow through native iPhone keyboard dictation
-- Optional one-shot live microphone fallback with a safety timeout
-- $12/sq-ft list-price comparison
-- Volume-tier price, savings amount, and discount percentage
+Upload the web files to GitHub Pages as before. `square-worker.js`, `wrangler.toml.example`, and `SQUARE-SETUP.md` are for the optional secure Square integration.
