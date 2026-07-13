@@ -9,3 +9,10 @@ Upload the complete contents of this folder to a GitHub repository. In GitHub, o
 
 
 Version 1.2 adds Level 1 voice measurement entry with transcript preview and confirmation. Example: Living room, 48 by 72, quantity 2. Voice recognition requires Safari/compatible browser, HTTPS, and microphone permission.
+
+
+## Version 1.3
+- Reliable Home Screen voice workflow through native iPhone keyboard dictation
+- Optional one-shot live microphone fallback with a safety timeout
+- $12/sq-ft list-price comparison
+- Volume-tier price, savings amount, and discount percentage
