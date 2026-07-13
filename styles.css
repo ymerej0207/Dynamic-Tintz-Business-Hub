@@ -6,3 +6,5 @@ body{margin:0;background:#020909;color:#f5ffff;font-family:-apple-system,BlinkMa
 
 #scheduleJobModal .panel{width:min(720px,100%)}
 .quote-card .actions{margin-top:12px}
+
+.btn.warn{background:rgba(255,201,102,.12);color:#ffe0a3;border-color:rgba(255,201,102,.25)}
