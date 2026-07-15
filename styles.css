@@ -18,3 +18,7 @@ body{margin:0;background:#020909;color:#f5ffff;font-family:-apple-system,BlinkMa
 .operation-card{background:linear-gradient(180deg,#082326,#041719);border:1px solid var(--line);border-radius:19px;padding:15px;margin-bottom:10px}.compact-grid>div{background:#041416;border:1px solid var(--line);border-radius:13px;padding:10px}.compact-grid b{display:block;margin-top:4px}.operation-notes{margin-top:10px;padding:10px;border-left:3px solid var(--teal);background:#041416;border-radius:8px;font-size:12px;color:#cce2e2}
 .time-row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}.time-row:last-child{border-bottom:0}
 @media(max-width:680px){.dashboard-grid{grid-template-columns:1fr 1fr}.pipeline-row{grid-template-columns:95px 1fr 28px}}
+
+.shortcut-card .head{align-items:flex-start}
+.shortcut-card h2{margin-bottom:7px}
+.shortcut-message{font-size:14px;line-height:1.55;color:#d9eeee;white-space:pre-wrap}
