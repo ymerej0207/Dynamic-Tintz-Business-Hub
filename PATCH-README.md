@@ -1,15 +1,14 @@
-# Dynamic Tintz OS V4.1 — Hometown Response Trial
+# Dynamic Tintz OS V4.0 — Operations Suite Patch
 
-GitHub-only patch. No Supabase SQL is required.
+GitHub-only update. No Supabase SQL is required.
 
-Upload every file in this ZIP into the local repository folder while the `development` branch is selected. Replace matching files, commit, and push.
+Upload all files in this ZIP to the root of your existing GitHub repository and replace the matching files.
 
-Included:
-- 35 hometown-style Dynamic Tintz responses
-- Angi-specific evening, next-morning, three-day, and final follow-ups
-- Categories and category filtering
-- Search by keyword, category, or message
-- One-tap copy
-- Add and edit custom responses
-- Built-in response refresh
-- Existing custom shortcuts preserved during migration
+Major additions:
+- Expanded owner dashboard and pipeline snapshot
+- Lead search, status filters, and Convert Lead to Quote
+- Due-now and upcoming follow-up queues
+- Quote search, filters, pipeline value, average ticket, and duplication
+- Full Operations Board with job filters and owner status controls
+- Grouped weekly employee hours and CSV export
+- Existing quote builder, scheduling, installer dimensions, time clock, assignments, and job execution preserved
