@@ -1,4 +1,4 @@
-const CACHE="dynamic-tintz-os-v5.1.0-stable";
+const CACHE="dynamic-tintz-os-v5.1.1-stable";
 const ASSETS=["./","./index.html","./app.js?v=5.1.0","./styles.css","./logo.png","./manifest.webmanifest","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png"];
 self.addEventListener("install",event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)))});
 self.addEventListener("activate",event=>{event.waitUntil(Promise.all([clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))]))});
