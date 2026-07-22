@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dynamic Tintz OS V4.0 — Operations Suite Patch
 
 GitHub-only update. No Supabase SQL is required.
@@ -12,3 +13,34 @@ Major additions:
 - Full Operations Board with job filters and owner status controls
 - Grouped weekly employee hours and CSV export
 - Existing quote builder, scheduling, installer dimensions, time clock, assignments, and job execution preserved
+=======
+# Dynamic Tintz OS V5.0 — Fast Quote + Responses Trial
+
+GitHub-only patch. No Supabase SQL required.
+
+Upload all files in this ZIP to your local repository while the `development` branch is selected.
+
+## Priority features
+
+### Quick Responses
+- Full V4.1 hometown response library remains included
+- Owner dashboard now has a prominent Quick Responses button
+- Bottom navigation label changed to Responses
+- Search, categories, one-tap copy, custom editing, and refresh remain available
+
+### Fast Quote Builder
+- Always-visible live pricing summary
+- Normal price, Dynamic Tintz price, customer savings, deposit, and solar option
+- Faster Enter-key navigation across room, width, height, and quantity
+- Enter on quantity creates the next window
+- New row carries forward the previous room name
+- Duplicate any window
+- Duplicate the most recent window
+- Per-row square-foot totals
+- Fixed mobile action bar with Add Window and Save
+- Responsive iPhone-first layout
+
+## Commit summary
+
+V5.0 Fast Quote and Responses Trial
+>>>>>>> parent of 22d5e93 (Rollback to V4.1 working version)
