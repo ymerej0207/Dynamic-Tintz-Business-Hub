@@ -1,79 +1,20 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><title>Dynamic Tintz OS</title></head><body>
 <div id="auth" class="auth card"><div class="brand"><img src="logo.png"><div><h1>Dynamic Tintz OS</h1><p>Secure team access</p></div></div><div class="field"><label>Email</label><input id="email" type="email"></div><div class="field"><label>Password</label><input id="password" type="password"></div><button id="login" class="btn primary wide">Sign In</button><button id="reset" class="btn" style="margin-top:10px">Send Password Reset</button><p id="message" class="muted"></p></div>
 <div id="app" class="shell hidden"><div class="brand"><img src="logo.png"><div><h1>Dynamic Tintz OS</h1><p id="userline"></p></div></div>
-<main id="owner" class="view"><div class="head"><h2>Owner Command Center</h2><span class="pill">Owner</span></div><div class="grid dashboard-grid"><div class="card metric"><b id="newLeads">0</b><span>New Leads</span></div><div class="card metric"><b id="dueLeads">0</b><span>Follow-Ups Due</span></div><div class="card metric"><b id="clocked">0</b><span>Clocked In</span></div><div class="card metric"><b id="pendingQuotes">0</b><span>Pending Quotes</span></div><div class="card metric"><b id="scheduledJobs">0</b><span>Scheduled Jobs</span></div><div class="card metric"><b id="completedMonth">0</b><span>Completed This Month</span></div></div><div class="card"><h3>Today's Mission</h3><div id="mission" class="muted"></div><div class="actions"><button class="btn primary" data-go="shortcuts">Quick Responses</button><button class="btn" data-go="leads">Work Leads</button><button class="btn" data-go="quotes">Create Quote</button><button class="btn" data-go="operations">Operations Board</button></div></div><div class="card"><h3>Live Job Operations</h3><div id="liveJobs" class="muted">Loading job statuses…</div></div><div class="card"><h3>Quote Pipeline</h3><div id="pipelineSnapshot" class="pipeline-bars"></div></div></main>
+<main id="owner" class="view"><div class="head"><h2>Owner Command Center</h2><span class="pill">Owner</span></div><div class="grid dashboard-grid"><div class="card metric"><b id="newLeads">0</b><span>New Leads</span></div><div class="card metric"><b id="dueLeads">0</b><span>Follow-Ups Due</span></div><div class="card metric"><b id="clocked">0</b><span>Clocked In</span></div><div class="card metric"><b id="pendingQuotes">0</b><span>Pending Quotes</span></div><div class="card metric"><b id="scheduledJobs">0</b><span>Scheduled Jobs</span></div><div class="card metric"><b id="completedMonth">0</b><span>Completed This Month</span></div></div><div class="card"><h3>Today's Mission</h3><div id="mission" class="muted"></div><div class="actions"><button class="btn primary" data-go="leads">Work Leads</button><button class="btn" data-go="operations">Operations Board</button><button class="btn" data-go="quotes">Create Quote</button></div></div><div class="card"><h3>Live Job Operations</h3><div id="liveJobs" class="muted">Loading job statuses…</div></div><div class="card"><h3>Quote Pipeline</h3><div id="pipelineSnapshot" class="pipeline-bars"></div></div></main>
 <main id="employee" class="view"><div class="head"><h2>Installer Dashboard</h2><span class="pill">Installer</span></div><div id="employeeClock" class="card"></div><div class="card"><h3>Assigned Jobs</h3><div id="jobs" class="muted">No assigned jobs yet.</div></div></main>
 <main id="leads" class="view"><div class="head"><h2>Lead Center</h2><button id="addLead" class="btn primary">+ Add Angi Lead</button></div><div class="card"><div class="grid2"><div class="field"><label>Search Leads</label><input id="leadSearch" placeholder="Name, phone, city, service..."></div><div class="field"><label>Pipeline Status</label><select id="leadStatusFilter"><option value="">All Leads</option><option value="new">New</option><option value="no_answer">No Answer</option><option value="voicemail">Voicemail</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div></div></div><div id="leadList"></div></main>
 <main id="followups" class="view"><div class="head"><h2>Follow-Up Center</h2><span class="pill warn">Angi Cadence</span></div><div class="card muted">Immediate call, voicemail, and text → same evening → next morning → 3 days → final at 7 days.</div><div class="grid2"><div class="card metric"><b id="overdueFollowups">0</b><span>Due Now</span></div><div class="card metric"><b id="upcomingFollowups">0</b><span>Upcoming 7 Days</span></div></div><div class="head"><h2>Due Now</h2></div><div id="followList"></div><div class="head"><h2>Upcoming</h2></div><div id="upcomingFollowList"></div></main>
 
-<main id="quotes" class="view">
-<div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Built for rapid room-by-room estimating</div></div><button id="newQuote" class="btn primary">New Quote</button></div>
-
-<div id="quoteEditor" class="quote-layout">
-<section class="quote-main">
-<div class="card">
-<div class="grid2">
-<div class="field"><label>First Name</label><input id="qFirst"></div>
-<div class="field"><label>Last Name</label><input id="qLast"></div>
-<div class="field"><label>Email</label><input id="qEmail" type="email"></div>
-<div class="field"><label>Phone</label><input id="qPhone" type="tel"></div>
-<div class="field"><label>Service Address</label><input id="qAddress"></div>
-<div class="field"><label>Project Name</label><input id="qProject"></div>
-<div class="field"><label>Project Type</label><select id="qType"><option>Residential</option><option>Commercial</option></select></div>
-<div class="field"><label>Status</label><select id="qStatus"><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-<div class="field"><label>Miles from 75409</label><input id="qMiles" inputmode="decimal" value="0"></div>
-<div class="field"><label>Lead Source</label><input id="qLead" value="Angi"></div>
-</div>
+<main id="quotes" class="view"><div class="head"><h2>Cloud Quote Builder</h2><button id="newQuote" class="btn primary">New Quote</button></div>
+<div id="quoteEditor" class="card">
+<div class="grid2"><div class="field"><label>First Name</label><input id="qFirst"></div><div class="field"><label>Last Name</label><input id="qLast"></div><div class="field"><label>Email</label><input id="qEmail" type="email"></div><div class="field"><label>Phone</label><input id="qPhone" type="tel"></div><div class="field"><label>Service Address</label><input id="qAddress"></div><div class="field"><label>Project Name</label><input id="qProject"></div><div class="field"><label>Project Type</label><select id="qType"><option>Residential</option><option>Commercial</option></select></div><div class="field"><label>Status</label><select id="qStatus"><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div><div class="field"><label>Miles from 75409</label><input id="qMiles" inputmode="decimal" value="0"></div><div class="field"><label>Lead Source</label><input id="qLead" value="Angi"></div></div>
 <div class="field"><label>Internal Notes</label><textarea id="qNotes"></textarea></div>
-</div>
-
-<div class="card measurement-card">
-<div class="head" style="margin-top:0"><div><h2>Rooms & Windows</h2><div class="muted">Enter moves across the row; Enter on quantity creates the next window.</div></div><div class="actions"><button id="duplicateLastMeasure" class="btn">Duplicate Last</button><button id="addMeasure" class="btn primary">+ Add Window</button></div></div>
-<div class="measure-labels"><span>Room / Area</span><span>Width</span><span>Height</span><span>Qty</span><span></span></div>
-<div id="measureRows"></div>
-</div>
-
-<div class="card quote-actions-desktop">
-<div class="actions">
-<button id="saveQuote" class="btn primary">Save to Cloud</button>
-<button id="copyQuote" class="btn">Copy Quote</button>
-<button id="emailQuote" class="btn">Email</button>
-<button id="clearQuote" class="btn danger">Clear</button>
-</div>
-</div>
-</section>
-
-<aside class="quote-summary">
-<div class="card sticky-summary">
-<div class="head" style="margin-top:0"><h2>Live Quote</h2><span class="pill">Always Visible</span></div>
-<div class="summary-hero"><span>Total Glass</span><b id="qSqft">0.00</b><small>square feet</small></div>
-<div class="summary-line"><span>Normal Price<br><small>$12 per sq ft</small></span><strong id="qListPrice">$0.00</strong></div>
-<div class="summary-line featured"><span>Dynamic Tintz Price<br><small id="qCerTier"></small></span><strong id="qCerPrice">$0.00</strong></div>
-<div class="summary-line savings"><span>Customer Savings</span><strong id="qSavings">$0.00 (0%)</strong></div>
-<div class="summary-line"><span>50% Deposit<br><small>including 6.25% tax</small></span><strong id="qDeposit">$0.00</strong></div>
-<div class="summary-divider"></div>
-<div class="summary-line"><span>Solar Control Option<br><small id="qSolarTier"></small></span><strong id="qSolarPrice">$0.00</strong></div>
-<span id="qTierPrice" class="hidden"></span>
-</div>
-</aside>
-</div>
-
-<div class="mobile-quote-bar">
-<button id="mobileAddWindow" class="btn">+ Window</button>
-<div><span id="mobileSqft">0.00 sq ft</span><b id="mobilePrice">$0.00</b></div>
-<button id="mobileSaveQuote" class="btn primary">Save</button>
-</div>
-
-<div class="head"><h2>Saved Quotes</h2></div>
-<div class="card">
-<div class="grid2">
-<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
-<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-</div>
-<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
-</div>
-<div id="savedQuotes"></div>
-</main>
+<div class="head"><h2>Measurements</h2><button id="addMeasure" class="btn">+ Add Window</button></div><div id="measureRows"></div>
+<div class="pricegrid"><div class="card"><b>Premium Ceramic</b><div id="qCerPrice" class="price">$0.00</div><div id="qCerTier" class="muted"></div><div class="price-lines"><div class="price-line"><span>Normal price at $12/sq ft</span><strong id="qListPrice">$0.00</strong></div><div class="price-line"><span>Volume-tier price</span><strong id="qTierPrice">$0.00</strong></div><div class="price-line savings"><span>Discount / savings</span><strong id="qSavings">$0.00 (0%)</strong></div></div></div><div class="card"><b>Solar Control</b><div id="qSolarPrice" class="price">$0.00</div><div id="qSolarTier" class="muted"></div></div></div>
+<div class="grid2"><div class="card metric"><b id="qSqft">0.00</b><span>Total square feet</span></div><div class="card metric"><b id="qDeposit">$0.00</b><span>50% ceramic deposit incl. tax</span></div></div>
+<div class="actions"><button id="saveQuote" class="btn primary">Save to Cloud</button><button id="copyQuote" class="btn">Copy Quote</button><button id="emailQuote" class="btn">Email</button><button id="clearQuote" class="btn danger">Clear</button></div></div>
+<div class="head"><h2>Saved Quotes</h2></div><div class="card"><div class="grid2"><div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div><div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div></div><div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div></div><div id="savedQuotes"></div></main>
 <main id="operations" class="view"><div class="head"><h2>Operations Board</h2><button id="refreshOperations" class="btn">Refresh</button></div><div class="card"><div class="grid2"><div class="field"><label>Job Status</label><select id="operationStatus"><option value="">All Jobs</option><option>Scheduled</option><option>Confirmed</option><option>En Route</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><div class="field"><label>Date Range</label><select id="operationRange"><option value="today">Today</option><option value="7">Next 7 Days</option><option value="30">Next 30 Days</option><option value="all">All Jobs</option></select></div></div></div><div id="operationsList"></div></main>
 <main id="shortcuts" class="view"><div class="head"><div><h2>Hometown Response Hub</h2><div id="shortcutCountLabel" class="muted">Loading responses…</div></div><button id="addShortcut" class="btn primary">+ Add</button></div><div class="card"><div class="grid2"><div class="field"><label>Search Responses</label><input id="shortcutSearch" placeholder="Keyword, category, or message"></div><div class="field"><label>Category</label><select id="shortcutCategoryFilter"><option>All</option></select></div></div><div class="actions"><button id="refreshShortcuts" class="btn">Refresh Built-In Responses</button></div></div><div id="shortcutList"></div></main>
 <main id="time" class="view"><div class="head"><h2>My Time Clock</h2></div><div id="timeCard" class="card"></div><div id="timeList"></div></main>

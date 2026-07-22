@@ -1,29 +1,15 @@
-# Dynamic Tintz OS V5.0 — Fast Quote + Responses Trial
+# Dynamic Tintz OS V4.1 — Hometown Response Trial
 
-GitHub-only patch. No Supabase SQL required.
+GitHub-only patch. No Supabase SQL is required.
 
-Upload all files in this ZIP to your local repository while the `development` branch is selected.
+Upload every file in this ZIP into the local repository folder while the `development` branch is selected. Replace matching files, commit, and push.
 
-## Priority features
-
-### Quick Responses
-- Full V4.1 hometown response library remains included
-- Owner dashboard now has a prominent Quick Responses button
-- Bottom navigation label changed to Responses
-- Search, categories, one-tap copy, custom editing, and refresh remain available
-
-### Fast Quote Builder
-- Always-visible live pricing summary
-- Normal price, Dynamic Tintz price, customer savings, deposit, and solar option
-- Faster Enter-key navigation across room, width, height, and quantity
-- Enter on quantity creates the next window
-- New row carries forward the previous room name
-- Duplicate any window
-- Duplicate the most recent window
-- Per-row square-foot totals
-- Fixed mobile action bar with Add Window and Save
-- Responsive iPhone-first layout
-
-## Commit summary
-
-V5.0 Fast Quote and Responses Trial
+Included:
+- 35 hometown-style Dynamic Tintz responses
+- Angi-specific evening, next-morning, three-day, and final follow-ups
+- Categories and category filtering
+- Search by keyword, category, or message
+- One-tap copy
+- Add and edit custom responses
+- Built-in response refresh
+- Existing custom shortcuts preserved during migration
