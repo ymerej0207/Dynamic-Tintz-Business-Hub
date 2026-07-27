@@ -1,5 +1,143 @@
-const CACHE="dynamic-tintz-os-v5.1.1-stable";
-const ASSETS=["./","./index.html","./app.js?v=5.1.0","./styles.css","./logo.png","./manifest.webmanifest","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png"];
-self.addEventListener("install",event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)))});
-self.addEventListener("activate",event=>{event.waitUntil(Promise.all([clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))]))});
-self.addEventListener("fetch",event=>{if(event.request.method!=="GET")return;const url=new URL(event.request.url);if(url.origin===location.origin&&(url.pathname.endsWith("/app.js")||url.pathname.endsWith("/index.html")||url.pathname.endsWith("/"))){event.respondWith(fetch(event.request).then(response=>{let copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}).catch(()=>caches.match(event.request).then(r=>r||caches.match("./index.html"))));return}event.respondWith(caches.match(event.request).then(cached=>cached||fetch(event.request).then(response=>{let copy=response.clone();caches.open(CACHE).then(cache=>cache.put(event.request,copy));return response}))) });
+/*
+ * Dynamic Tintz OS service worker
+ * Release: 5.2.1-mobile-cache-fix
+ */
+
+const CACHE_PREFIX = "dynamic-tintz-os-";
+const CACHE_NAME = `${CACHE_PREFIX}5.2.1-mobile-cache-fix`;
+
+const APP_SHELL = [
+  "./",
+  "./index.html",
+  "./app.js",
+  "./styles.css",
+  "./manifest.webmanifest",
+  "./logo.png",
+];
+
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(
+        APP_SHELL.map((url) =>
+          cache.add(new Request(url, { cache: "reload" }))
+        )
+      )
+    )
+  );
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    Promise.all([
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+            .map((key) => caches.delete(key))
+        )
+      ),
+      self.clients.claim(),
+    ])
+  );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+
+  if (event.data === "CLEAR_DYNAMIC_TINTZ_CACHES") {
+    event.waitUntil(
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX))
+            .map((key) => caches.delete(key))
+        )
+      )
+    );
+  }
+});
+
+function isSupabaseOrApiRequest(url) {
+  return (
+    url.hostname.includes("supabase.co") ||
+    url.pathname.includes("/rest/v1/") ||
+    url.pathname.includes("/auth/v1/") ||
+    url.pathname.includes("/functions/v1/")
+  );
+}
+
+function isNetworkFirstAsset(request, url) {
+  if (request.mode === "navigate") return true;
+
+  return (
+    url.origin === self.location.origin &&
+    (
+      url.pathname.endsWith("/") ||
+      url.pathname.endsWith("/index.html") ||
+      url.pathname.endsWith("/app.js") ||
+      url.pathname.endsWith("/styles.css") ||
+      url.pathname.endsWith("/manifest.webmanifest")
+    )
+  );
+}
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(new Request(request, { cache: "no-store" }));
+
+    if (response && response.ok && response.type === "basic") {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request, { ignoreSearch: true });
+
+    if (cached) return cached;
+
+    if (request.mode === "navigate") {
+      const fallback = await caches.match("./index.html", { ignoreSearch: true });
+      if (fallback) return fallback;
+    }
+
+    throw error;
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request, { ignoreSearch: true });
+  if (cached) return cached;
+
+  const response = await fetch(request);
+
+  if (response && response.ok && response.type === "basic") {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }
+
+  return response;
+}
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+
+  if (isSupabaseOrApiRequest(url) || url.origin !== self.location.origin) {
+    return;
+  }
+
+  if (isNetworkFirstAsset(request, url)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  event.respondWith(cacheFirst(request));
+});
