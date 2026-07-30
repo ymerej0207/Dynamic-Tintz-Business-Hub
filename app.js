@@ -6,9 +6,9 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 function when(v){return v?new Date(v).toLocaleString():"—"}function owner(){return ["owner","manager"].includes(profile.role)}
 async function login(){$("message").textContent="Signing in…";let{error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});$("message").textContent=error?error.message:""}
 async function reset(){let e=$("email").value.trim();if(!e)return $("message").textContent="Enter your email first.";let{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.href});$("message").textContent=error?error.message:"Password reset sent."}
-async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();show(owner()?"owner":"employee")}
+async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();setupEmployeeAdmin();show(owner()?"owner":"employee")}
 function renderNav(){let t=owner()?[['owner','⌂','Home'],['leads','📞','Leads'],['followups','🔁','Follow-Ups'],['quotes','🧾','Quotes'],['operations','📅','Operations'],['shortcuts','💬','Responses'],['team','⏱','Team'],['account','⚙','Account']]:[['employee','⌂','Home'],['time','⏱','Clock'],['account','⚙','Account']];$("nav").style.gridTemplateColumns=`repeat(${t.length},1fr)`;$("nav").innerHTML=t.map((x,i)=>`<button data-v="${x[0]}" class="${i?'':'active'}"><b>${x[1]}</b>${x[2]}</button>`).join('');$("nav").querySelectorAll('button').forEach(b=>b.onclick=()=>show(b.dataset.v))}
-async function show(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures()}if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations()}
+async function show(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures()}if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner())loadEmployeeAdmin()}
 async function dashboard(){let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult]=await Promise.all([sb.from('leads').select('*',{count:'exact',head:true}).eq('status','new'),sb.from('leads').select('*',{count:'exact',head:true}).lte('next_follow_up_at',iso).not('status','in','("approved","lost","do_not_contact","no_response")'),sb.from('time_entries').select('*',{count:'exact',head:true}).eq('status','open'),sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved']),sb.from('jobs').select('*',{count:'exact',head:true}).in('status',['Scheduled','Confirmed','En Route','In Progress']),sb.from('jobs').select('*',{count:'exact',head:true}).eq('status','Completed').gte('updated_at',monthStart),sb.from('jobs').select('id,title,status,service_address,scheduled_start,assigned_to,assignee:profiles!jobs_assigned_to_fkey(full_name,email)').in('status',['Scheduled','Confirmed','En Route','In Progress']).order('scheduled_start'),sb.from('quotes').select('status')]);$('newLeads').textContent=a.count||0;$('dueLeads').textContent=b.count||0;$('clocked').textContent=c.count||0;$('pendingQuotes').textContent=pending.count||0;$('scheduledJobs').textContent=scheduled.count||0;$('completedMonth').textContent=completed.count||0;let tasks=[];if(a.count)tasks.push(`${a.count} new lead${a.count===1?' needs':'s need'} immediate contact.`);if(b.count)tasks.push(`${b.count} follow-up${b.count===1?' is':'s are'} due.`);if(pending.count)tasks.push(`${pending.count} active quote${pending.count===1?' remains':'s remain'} in the pipeline.`);$('mission').innerHTML=tasks.length?tasks.map(x=>`• ${x}`).join('<br>'):'Everything is caught up right now.';let jobs=jobsResult.data||[];$('liveJobs').innerHTML=jobs.length?jobs.slice(0,6).map(j=>`<div class="live-job"><div><b>${esc(j.title||'Installation')}</b><div class="muted">${when(j.scheduled_start)} • ${esc(j.service_address||'')}<br>${esc(j.assignee?.full_name||j.assignee?.email||'Unassigned')}</div></div><span class="pill">${esc(j.status)}</span></div>`).join(''):'No active jobs right now.';let counts={};(quotesResult.data||[]).forEach(q=>counts[q.status]=(counts[q.status]||0)+1);let pipeline=['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved','Scheduled','Completed'],max=Math.max(1,...pipeline.map(s=>counts[s]||0));$('pipelineSnapshot').innerHTML=pipeline.map(s=>`<div class="pipeline-row"><span>${esc(s)}</span><div class="pipeline-track"><i style="width:${((counts[s]||0)/max)*100}%"></i></div><b>${counts[s]||0}</b></div>`).join('')}
 function card(l,due=false){return `<div class="item"><div class="head"><div><h2>${esc((l.first_name+' '+l.last_name).trim()||'Unnamed Lead')}</h2><div class="muted">${esc(l.source||'Angi')} • ${when(l.received_at)}</div></div><span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span></div><div class="muted">${esc(l.phone)}${l.email?` • ${esc(l.email)}`:''}<br>${esc(l.city||l.service_address||'')}<br>${esc(l.service_requested||'')}<br>Attempts: ${l.attempt_count||0}${due?`<br><b>Follow-up:</b> ${when(l.next_follow_up_at)}`:''}</div><div class="actions"><a class="btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button><button class="btn primary" data-log="${l.id}">Log Attempt</button><button class="btn" data-leadquote="${l.id}">Create Quote</button>${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}</div></div>`}
 async function copyText(value){
@@ -150,6 +150,123 @@ function refreshBuiltInShortcuts(){
   localStorage.setItem('dt.cloud.shortcuts.version',SHORTCUT_LIBRARY_VERSION);
   renderShortcuts();
   toast('Built-in responses refreshed');
+}
+
+
+function setupEmployeeAdmin(){
+  if(!owner()||$('employeeAdminCard'))return;
+  let account=$('account');
+  if(!account)return;
+  let card=document.createElement('div');
+  card.id='employeeAdminCard';
+  card.className='card';
+  card.innerHTML=`
+    <div class="head">
+      <div>
+        <h2>Employee Access</h2>
+        <div class="muted">Create accounts, assign roles, change temporary passwords, and disable access.</div>
+      </div>
+      <button class="btn primary" id="addEmployeeAccount">Add Employee</button>
+    </div>
+    <div id="employeeAdminMessage" class="muted" style="margin:12px 0"></div>
+    <div id="employeeAdminList"><div class="muted">Open Account to load employees.</div></div>`;
+  account.appendChild(card);
+  $('addEmployeeAccount').onclick=()=>openEmployeeEditor();
+}
+async function callUserAdmin(action,payload={}){
+  let{data,error}=await sb.functions.invoke('manage-users',{body:{action,...payload}});
+  if(error)throw error;
+  if(data?.error)throw new Error(data.error);
+  return data;
+}
+async function loadEmployeeAdmin(){
+  if(!owner()||!$('employeeAdminList'))return;
+  $('employeeAdminMessage').textContent='Loading employee accounts…';
+  try{
+    let result=await callUserAdmin('list');
+    let users=result.users||[];
+    $('employeeAdminMessage').textContent=`${users.length} account${users.length===1?'':'s'}`;
+    $('employeeAdminList').innerHTML=users.length?users.map(u=>`
+      <div class="item">
+        <div class="head">
+          <div>
+            <h2>${esc(u.full_name||u.email||'Employee')}</h2>
+            <div class="muted">${esc(u.email||'')} ${u.username?`• @${esc(u.username)}`:''}</div>
+          </div>
+          <span class="pill">${u.active===false?'Disabled':esc(u.role||'installer')}</span>
+        </div>
+        <div class="actions">
+          <button class="btn" data-useredit="${u.id}">Manage</button>
+          <button class="btn" data-userpassword="${u.id}">Set Temporary Password</button>
+          <button class="btn ${u.active===false?'primary':'danger'}" data-useractive="${u.id}" data-active="${u.active===false?'true':'false'}">${u.active===false?'Reactivate':'Disable'}</button>
+        </div>
+      </div>`).join(''):'<div class="muted">No employee accounts found.</div>';
+    window._adminUsers=users;
+    $('employeeAdminList').querySelectorAll('[data-useredit]').forEach(b=>b.onclick=()=>openEmployeeEditor(window._adminUsers.find(u=>u.id===b.dataset.useredit)));
+    $('employeeAdminList').querySelectorAll('[data-userpassword]').forEach(b=>b.onclick=()=>setEmployeePassword(b.dataset.userpassword));
+    $('employeeAdminList').querySelectorAll('[data-useractive]').forEach(b=>b.onclick=()=>setEmployeeActive(b.dataset.useractive,b.dataset.active==='true'));
+  }catch(e){
+    $('employeeAdminMessage').textContent=e.message||'Could not load employee accounts.';
+  }
+}
+function ensureEmployeeModal(){
+  if($('employeeAdminModal'))return;
+  let modal=document.createElement('div');
+  modal.id='employeeAdminModal';
+  modal.className='modal';
+  modal.innerHTML=`<div class="modal-card">
+    <div class="head"><h2 id="employeeAdminModalTitle">Add Employee</h2><button class="btn" id="closeEmployeeAdminModal">Close</button></div>
+    <input id="employeeAdminId" type="hidden">
+    <label>Full Name<input id="employeeAdminName" autocomplete="off"></label>
+    <label>Email<input id="employeeAdminEmail" type="email" autocomplete="off"></label>
+    <label>Username<input id="employeeAdminUsername" autocomplete="off" placeholder="justin"></label>
+    <label>Role<select id="employeeAdminRole"><option value="installer">Installer</option><option value="office">Office</option><option value="manager">Manager</option><option value="owner">Owner</option></select></label>
+    <label id="employeePasswordLabel">Temporary Password<input id="employeeAdminPassword" type="password" autocomplete="new-password" placeholder="At least 8 characters"></label>
+    <div class="actions"><button class="btn primary" id="saveEmployeeAdmin">Save Employee</button></div>
+    <div id="employeeAdminModalMessage" class="muted" style="margin-top:10px"></div>
+  </div>`;
+  document.body.appendChild(modal);
+  $('closeEmployeeAdminModal').onclick=()=>modal.classList.remove('show');
+  $('saveEmployeeAdmin').onclick=saveEmployeeAdmin;
+}
+function openEmployeeEditor(user=null){
+  ensureEmployeeModal();
+  $('employeeAdminId').value=user?.id||'';
+  $('employeeAdminName').value=user?.full_name||'';
+  $('employeeAdminEmail').value=user?.email||'';
+  $('employeeAdminUsername').value=user?.username||'';
+  $('employeeAdminRole').value=user?.role||'installer';
+  $('employeeAdminPassword').value='';
+  $('employeeAdminEmail').disabled=!!user;
+  $('employeePasswordLabel').style.display=user?'none':'block';
+  $('employeeAdminModalTitle').textContent=user?'Manage Employee':'Add Employee';
+  $('employeeAdminModalMessage').textContent='';
+  $('employeeAdminModal').classList.add('show');
+}
+async function saveEmployeeAdmin(){
+  let id=$('employeeAdminId').value,name=$('employeeAdminName').value.trim(),email=$('employeeAdminEmail').value.trim(),username=$('employeeAdminUsername').value.trim().toLowerCase(),role=$('employeeAdminRole').value,password=$('employeeAdminPassword').value;
+  if(!name||!email||!username)return $('employeeAdminModalMessage').textContent='Name, email, and username are required.';
+  if(!id&&password.length<8)return $('employeeAdminModalMessage').textContent='Temporary password must be at least 8 characters.';
+  $('employeeAdminModalMessage').textContent='Saving…';
+  try{
+    if(id)await callUserAdmin('update_profile',{user_id:id,full_name:name,username,role});
+    else await callUserAdmin('create',{full_name:name,email,username,role,password});
+    $('employeeAdminModal').classList.remove('show');
+    toast(id?'Employee updated.':'Employee account created.');
+    await loadEmployeeAdmin();
+  }catch(e){$('employeeAdminModalMessage').textContent=e.message}
+}
+async function setEmployeePassword(userId){
+  let user=window._adminUsers?.find(u=>u.id===userId);
+  let password=prompt(`Enter a new temporary password for ${user?.full_name||user?.email||'this employee'}.\n\nUse at least 8 characters.`);
+  if(password===null)return;
+  if(password.length<8)return toast('Password must be at least 8 characters.');
+  try{await callUserAdmin('set_password',{user_id:userId,password});toast('Temporary password updated.')}catch(e){toast(e.message)}
+}
+async function setEmployeeActive(userId,active){
+  let user=window._adminUsers?.find(u=>u.id===userId);
+  if(!confirm(`${active?'Reactivate':'Disable'} access for ${user?.full_name||user?.email||'this employee'}?`))return;
+  try{await callUserAdmin('set_active',{user_id:userId,active});toast(active?'Employee reactivated.':'Employee access disabled.');await loadEmployeeAdmin()}catch(e){toast(e.message)}
 }
 
 function bindOwnerCommandCenter(){
