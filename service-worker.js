@@ -3,7 +3,7 @@
  * Release: 5.6.2-google-calendar-dev-ready
  */
 
-const CACHE_PREFIX = "dynamic-tintz-os-";
+const CACHE_PREFIX = "dynamic-tintz-v5.6.3";
 const CACHE_NAME = `${CACHE_PREFIX}5.6.2-google-calendar-dev-ready`;
 
 const APP_SHELL = [
