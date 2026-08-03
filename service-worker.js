@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.6.2-google-calendar-dev-ready
+ * Release: 5.7-roll-optimizer
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.6.3";
-const CACHE_NAME = `${CACHE_PREFIX}5.6.2-google-calendar-dev-ready`;
+const CACHE_PREFIX = "dynamic-tintz-v5.7-";
+const CACHE_NAME = `${CACHE_PREFIX}roll-optimizer`; 
 
 const APP_SHELL = [
   "./",

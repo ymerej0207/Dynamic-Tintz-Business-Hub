@@ -7,8 +7,8 @@ function when(v){return v?new Date(v).toLocaleString():"—"}function owner(){re
 async function login(){$("message").textContent="Signing in…";let{error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});$("message").textContent=error?error.message:""}
 async function reset(){let e=$("email").value.trim();if(!e)return $("message").textContent="Enter your email first.";let{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.href});$("message").textContent=error?error.message:"Password reset sent."}
 async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();setupEmployeeAdmin();if(owner())$("calendarIntegrationCard")?.classList.remove("hidden");show(owner()?"owner":"employee")}
-function renderNav(){let t=owner()?[['owner','⌂','Home'],['leads','📞','Leads'],['followups','🔁','Follow-Ups'],['quotes','🧾','Quotes'],['operations','📅','Operations'],['shortcuts','💬','Responses'],['team','⏱','Team'],['account','⚙','Account']]:[['employee','⌂','Home'],['time','⏱','Clock'],['account','⚙','Account']];$("nav").style.gridTemplateColumns=`repeat(${t.length},1fr)`;$("nav").innerHTML=t.map((x,i)=>`<button data-v="${x[0]}" class="${i?'':'active'}"><b>${x[1]}</b>${x[2]}</button>`).join('');$("nav").querySelectorAll('button').forEach(b=>b.onclick=()=>show(b.dataset.v))}
-async function show(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures()}if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus()}}
+function renderNav(){let t=owner()?[['owner','⌂','Home'],['leads','📞','Leads'],['followups','🔁','Follow-Ups'],['quotes','🧾','Quotes'],['optimizer','✂','Roll Optimizer'],['operations','📅','Operations'],['shortcuts','💬','Responses'],['team','⏱','Team'],['account','⚙','Account']]:[['employee','⌂','Home'],['time','⏱','Clock'],['account','⚙','Account']];$("nav").style.gridTemplateColumns=`repeat(${t.length},1fr)`;$("nav").innerHTML=t.map((x,i)=>`<button data-v="${x[0]}" class="${i?'':'active'}"><b>${x[1]}</b>${x[2]}</button>`).join('');$("nav").querySelectorAll('button').forEach(b=>b.onclick=()=>show(b.dataset.v))}
+async function show(id){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===id));if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures()}if(id==='optimizer')loadRollOptimizer();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus()}}
 async function dashboard(){let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult]=await Promise.all([sb.from('leads').select('*',{count:'exact',head:true}).eq('status','new'),sb.from('leads').select('*',{count:'exact',head:true}).lte('next_follow_up_at',iso).not('status','in','("approved","lost","do_not_contact","no_response")'),sb.from('time_entries').select('*',{count:'exact',head:true}).eq('status','open'),sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved']),sb.from('jobs').select('*',{count:'exact',head:true}).in('status',['Scheduled','Confirmed','En Route','In Progress']),sb.from('jobs').select('*',{count:'exact',head:true}).eq('status','Completed').gte('updated_at',monthStart),sb.from('jobs').select('id,title,status,service_address,scheduled_start,assigned_to,assignee:profiles!jobs_assigned_to_fkey(full_name,email)').in('status',['Scheduled','Confirmed','En Route','In Progress']).order('scheduled_start'),sb.from('quotes').select('status')]);$('newLeads').textContent=a.count||0;$('dueLeads').textContent=b.count||0;$('clocked').textContent=c.count||0;$('pendingQuotes').textContent=pending.count||0;$('scheduledJobs').textContent=scheduled.count||0;$('completedMonth').textContent=completed.count||0;let tasks=[];if(a.count)tasks.push(`${a.count} new lead${a.count===1?' needs':'s need'} immediate contact.`);if(b.count)tasks.push(`${b.count} follow-up${b.count===1?' is':'s are'} due.`);if(pending.count)tasks.push(`${pending.count} active quote${pending.count===1?' remains':'s remain'} in the pipeline.`);$('mission').innerHTML=tasks.length?tasks.map(x=>`• ${x}`).join('<br>'):'Everything is caught up right now.';let jobs=jobsResult.data||[];$('liveJobs').innerHTML=jobs.length?jobs.slice(0,6).map(j=>`<div class="live-job"><div><b>${esc(j.title||'Installation')}</b><div class="muted">${when(j.scheduled_start)} • ${esc(j.service_address||'')}<br>${esc(j.assignee?.full_name||j.assignee?.email||'Unassigned')}</div></div><span class="pill">${esc(j.status)}</span></div>`).join(''):'No active jobs right now.';let counts={};(quotesResult.data||[]).forEach(q=>counts[q.status]=(counts[q.status]||0)+1);let pipeline=['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved','Scheduled','Completed'],max=Math.max(1,...pipeline.map(s=>counts[s]||0));$('pipelineSnapshot').innerHTML=pipeline.map(s=>`<div class="pipeline-row"><span>${esc(s)}</span><div class="pipeline-track"><i style="width:${((counts[s]||0)/max)*100}%"></i></div><b>${counts[s]||0}</b></div>`).join('')}
 function card(l,due=false){return `<div class="item"><div class="head"><div><h2>${esc((l.first_name+' '+l.last_name).trim()||'Unnamed Lead')}</h2><div class="muted">${esc(l.source||'Angi')} • ${when(l.received_at)}</div></div><span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span></div><div class="muted">${esc(l.phone)}${l.email?` • ${esc(l.email)}`:''}<br>${esc(l.city||l.service_address||'')}<br>${esc(l.service_requested||'')}<br>Attempts: ${l.attempt_count||0}${due?`<br><b>Follow-up:</b> ${when(l.next_follow_up_at)}`:''}</div><div class="actions"><a class="btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button><button class="btn primary" data-log="${l.id}">Log Attempt</button><button class="btn" data-leadquote="${l.id}">Create Quote</button>${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}</div></div>`}
 async function copyText(value){
@@ -100,7 +100,7 @@ function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this
 function currentQuoteText(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;return `Dynamic Tintz Window Film Proposal\n\nCustomer: ${$('qFirst').value} ${$('qLast').value}\nProject: ${$('qProject').value||'Window Film Project'}\nAddress: ${$('qAddress').value}\nTotal glass: ${s.toFixed(2)} sq ft\n\nPremium Ceramic normal price: ${money(list)}\nVolume-tier price: ${money(c.price)}\nCustomer savings: ${money(save)} (${pct}%)\nSolar Control: ${money(o.price)}\n\n50% deposit due at invoicing; balance due upon completion.\nResidential Lifetime Warranty • 12 Year Commercial Warranty\nProudly Veteran Owned and Operated\nDynamic Tintz • 469-840-4008`}
 async function saveCloudQuote(){let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteForm(false);loadQuotes()}
 async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
-function renderQuoteResults(){let data=window._cloudQuotes||[],q=($('quoteSearch')?.value||'').toLowerCase(),status=$('quoteStatusFilter')?.value||'',filtered=data.filter(x=>(!status||x.status===status)&&JSON.stringify(x).toLowerCase().includes(q)),open=data.filter(x=>!['Completed','Lost'].includes(x.status)),value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;$('quotePipelineValue').textContent=money(value);$('quoteAverage').textContent=money(avg);$('quoteCount').textContent=data.length;$('savedQuotes').innerHTML=filtered.length?filtered.map(q=>{let job=Array.isArray(q.jobs)?q.jobs[0]:q.jobs,globalIndex=data.indexOf(q);return `<div class="quote-card"><div class="head"><div><h2>${esc((q.customer?.first_name||'')+' '+(q.customer?.last_name||''))}</h2><div class="muted">${esc(q.project_name||'Project')} • ${new Date(q.created_at).toLocaleDateString()}</div></div><span class="pill">${esc(q.status)}</span></div><div class="muted">${esc(q.service_address)}<br>${Number(q.total_sqft).toFixed(2)} sq ft • Ceramic ${money(q.ceramic_price)}${job?`<br><b>Assigned job:</b> ${when(job.scheduled_start)} • ${esc(job.status)}`:'<br><b>Not scheduled yet</b>'}</div><div class="actions"><button class="btn primary" data-openquote="${q.id}">Open</button><button class="btn" data-duplicatequote="${q.id}">Duplicate</button><button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}<button class="btn" data-copycloud="${globalIndex}">Copy</button><button class="btn danger" data-deletequote="${q.id}">Delete Quote</button></div></div>`}).join(''):'<div class="card muted">No matching cloud quotes.</div>';$('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=()=>openCloudQuote(b.dataset.openquote));$('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=()=>duplicateCloudQuote(b.dataset.duplicatequote));$('savedQuotes').querySelectorAll('[data-schedulequote]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.schedulequote));$('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=()=>removeAssignment(b.dataset.removeassignment,b.dataset.jobid));$('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=()=>deleteCloudQuote(b.dataset.deletequote));$('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied')))}
+function renderQuoteResults(){let data=window._cloudQuotes||[],q=($('quoteSearch')?.value||'').toLowerCase(),status=$('quoteStatusFilter')?.value||'',filtered=data.filter(x=>(!status||x.status===status)&&JSON.stringify(x).toLowerCase().includes(q)),open=data.filter(x=>!['Completed','Lost'].includes(x.status)),value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;$('quotePipelineValue').textContent=money(value);$('quoteAverage').textContent=money(avg);$('quoteCount').textContent=data.length;$('savedQuotes').innerHTML=filtered.length?filtered.map(q=>{let job=Array.isArray(q.jobs)?q.jobs[0]:q.jobs,globalIndex=data.indexOf(q);return `<div class="quote-card"><div class="head"><div><h2>${esc((q.customer?.first_name||'')+' '+(q.customer?.last_name||''))}</h2><div class="muted">${esc(q.project_name||'Project')} • ${new Date(q.created_at).toLocaleDateString()}</div></div><span class="pill">${esc(q.status)}</span></div><div class="muted">${esc(q.service_address)}<br>${Number(q.total_sqft).toFixed(2)} sq ft • Ceramic ${money(q.ceramic_price)}${job?`<br><b>Assigned job:</b> ${when(job.scheduled_start)} • ${esc(job.status)}`:'<br><b>Not scheduled yet</b>'}</div><div class="actions"><button class="btn primary" data-openquote="${q.id}">Open</button><button class="btn" data-optimizequote="${q.id}">Optimize Roll</button><button class="btn" data-duplicatequote="${q.id}">Duplicate</button><button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}<button class="btn" data-copycloud="${globalIndex}">Copy</button><button class="btn danger" data-deletequote="${q.id}">Delete Quote</button></div></div>`}).join(''):'<div class="card muted">No matching cloud quotes.</div>';$('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=()=>openCloudQuote(b.dataset.openquote));$('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=()=>openQuoteInOptimizer(b.dataset.optimizequote));$('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=()=>duplicateCloudQuote(b.dataset.duplicatequote));$('savedQuotes').querySelectorAll('[data-schedulequote]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.schedulequote));$('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=()=>removeAssignment(b.dataset.removeassignment,b.dataset.jobid));$('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=()=>deleteCloudQuote(b.dataset.deletequote));$('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied')))}
 async function duplicateCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);let customer={first_name:q.customer?.first_name||'',last_name:q.customer?.last_name||'',email:q.customer?.email||'',phone:q.customer?.phone||'',service_address:q.customer?.service_address||q.service_address||'',lead_source:q.customer?.lead_source||'',notes:q.customer?.notes||''},{data:newCustomer,error:customerError}=await sb.from('customers').insert(customer).select().single();if(customerError)return toast(customerError.message);let payload={customer_id:newCustomer.id,project_name:(q.project_name||'Project')+' — Copy',project_type:q.project_type,status:'New Lead',service_address:q.service_address,miles:q.miles,total_sqft:q.total_sqft,ceramic_list_price:q.ceramic_list_price,ceramic_price:q.ceramic_price,ceramic_savings:q.ceramic_savings,solar_price:q.solar_price,tax_rate:q.tax_rate,notes:q.notes,measurements:q.measurements,assigned_to:null},{error:quoteError}=await sb.from('quotes').insert(payload);if(quoteError)return toast(quoteError.message);toast('Quote duplicated as a new project.');await loadQuotes()}
 async function syncCalendarJob(jobId,action='sync'){let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{job_id:jobId,action}});if(error)throw error;if(data?.ok===false)throw new Error(data.error||'Calendar sync failed');return data}
 async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x=>x.id===quoteId),name=`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||q?.project_name||'this quote';if(!confirm(`Remove the scheduled assignment for ${name}?\n\nThis will remove the job from the installer dashboard, but it will keep the quote and customer record.`))return;try{await syncCalendarJob(jobId,'delete')}catch(e){console.warn('Calendar delete warning:',e)}let{error:jobError}=await sb.from('jobs').delete().eq('id',jobId);if(jobError)return toast(jobError.message);let{error:quoteError}=await sb.from('quotes').update({assigned_to:null,status:'Approved',updated_at:new Date().toISOString()}).eq('id',quoteId);if(quoteError)return toast('Assignment removed, but quote update failed: '+quoteError.message);toast('Assignment removed. Quote remains available.');await loadQuotes()}async function deleteCloudQuote(quoteId){let q=window._cloudQuotes?.find(x=>x.id===quoteId),name=`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||q?.project_name||'this quote';let confirmed=confirm(`Permanently delete the quote for ${name}?\n\nThis will also remove any linked scheduled job and immediately remove it from the installer dashboard. The customer record will remain available for future work.\n\nThis cannot be undone.`);if(!confirmed)return;let{error:jobError}=await sb.from('jobs').delete().eq('quote_id',quoteId);if(jobError)return toast('Quote was not deleted because the linked job could not be removed: '+jobError.message);let{error:quoteError}=await sb.from('quotes').delete().eq('id',quoteId);if(quoteError)return toast(quoteError.message);if(editingQuoteId===quoteId)clearQuoteForm(false);toast('Quote and linked assignment permanently deleted.');await loadQuotes()}async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loading installers…';let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name)').eq('id',quoteId).single();if(error)return toast(error.message);quote=data}let[{data:people,error:peopleError},{data:existing,error:jobError}]=await Promise.all([sb.from('profiles').select('id,full_name,email,role,active').eq('active',true).in('role',['installer','manager','owner']).order('full_name'),sb.from('jobs').select('*').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle()]);if(peopleError||jobError)return toast((peopleError||jobError).message);if(!people?.length)return toast('No active installer accounts were found.');let selected=existing?.assigned_installers?.length?existing.assigned_installers:(existing?.assigned_to?[existing.assigned_to]:[people.find(p=>String(p.role)==='installer')?.id||people[0].id]);$('scheduleInstallers').innerHTML=(people||[]).map(p=>`<label class="installer-option"><input type="checkbox" value="${p.id}" ${selected.includes(p.id)?'checked':''}><span>${esc(p.full_name||p.email)}<small>${esc(String(p.role))}</small></span></label>`).join('');$('scheduleQuoteId').value=quoteId;$('scheduleQuoteName').textContent=`${quote.customer?.first_name||''} ${quote.customer?.last_name||''} • ${quote.project_name||'Project'}`.trim();$('scheduleTitle').value=existing?.title||`${quote.customer?.last_name||quote.customer?.first_name||'Customer'} — ${quote.project_name||'Window Film Installation'}`;$('scheduleNotes').value=existing?.notes||quote.notes||'';$('scheduleStatus').value=existing?.status||'Scheduled';$('scheduleStart').value=toLocalInput(existing?.scheduled_start);$('scheduleEnd').value=toLocalInput(existing?.scheduled_end);$('scheduleJobModal').dataset.jobId=existing?.id||'';$('scheduleMessage').textContent=existing?'This quote already has an assigned job. Saving will update it.':'Choose one or more installers and the installation time.';$('scheduleJobModal').classList.add('show')}function toLocalInput(value){if(!value)return'';let d=new Date(value),off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}async function saveScheduledJob(){let quoteId=$('scheduleQuoteId').value,assigned=[...$('scheduleInstallers').querySelectorAll('input:checked')].map(x=>x.value),start=$('scheduleStart').value,title=$('scheduleTitle').value.trim();if(!quoteId||!assigned.length||!start||!title){$('scheduleMessage').textContent='At least one installer, start time, and job title are required.';return}let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data}=await sb.from('quotes').select('*').eq('id',quoteId).single();quote=data}let selectedStatus=$('scheduleStatus').value,payload={quote_id:quoteId,title,service_address:quote?.service_address||'',scheduled_start:new Date(start).toISOString(),scheduled_end:$('scheduleEnd').value?new Date($('scheduleEnd').value).toISOString():null,status:selectedStatus,archived_at:selectedStatus==='Completed'?new Date().toISOString():null,notes:$('scheduleNotes').value.trim(),assigned_to:assigned[0],assigned_installers:assigned,updated_at:new Date().toISOString()},jobId=$('scheduleJobModal').dataset.jobId,res;if(jobId)res=await sb.from('jobs').update(payload).eq('id',jobId).select('id').single();else res=await sb.from('jobs').insert(payload).select('id').single();if(res.error){$('scheduleMessage').textContent=res.error.message;return}jobId=res.data?.id||jobId;let{error:qError}=await sb.from('quotes').update({status:selectedStatus==='Completed'?'Completed':'Scheduled',assigned_to:assigned[0],updated_at:new Date().toISOString()}).eq('id',quoteId);if(qError){$('scheduleMessage').textContent='Job saved, but quote status update failed: '+qError.message;return}try{await syncCalendarJob(jobId,selectedStatus==='Canceled'?'delete':'sync')}catch(e){$('scheduleMessage').textContent='Job saved, but calendar sync failed: '+e.message;return}$('scheduleJobModal').classList.remove('show');toast(jobId?'Job saved and calendar synced.':'Job scheduled and calendar synced.');await loadQuotes()}async function loadOperations(){let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));operationsCache=(data||[]).map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean)}));renderOperations()}
@@ -270,6 +270,369 @@ async function setEmployeeActive(userId,active){
   try{await callUserAdmin('set_active',{user_id:userId,active});toast(active?'Employee reactivated.':'Employee access disabled.');await loadEmployeeAdmin()}catch(e){toast(e.message)}
 }
 
+
+/* ============================================================
+   Dynamic Tintz Roll Optimization Engine
+   Strip-packing heuristic with multi-start pattern comparison.
+   Objective order: linear footage, waste, cutter changes, workflow.
+   ============================================================ */
+let rollOptimizerResult=null;
+let rollOptimizerQuoteId=null;
+
+function optimizerEsc(value){return esc(String(value??''))}
+function optimizerRound(value,digits=2){let p=10**digits;return Math.round((Number(value)||0)*p)/p}
+function optimizerFeet(inches){return `${optimizerRound(inches/12,2)} ft`}
+function optimizerInches(inches){return `${optimizerRound(inches,2)}"`}
+
+function parseOptimizerInput(text){
+  const lines=String(text||'').replace(/[×X]/g,'x').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const pieces=[];
+  let pendingLabel='';
+  let pendingDimension=null;
+  const push=(label,w,h,qty=1)=>{
+    w=Number(w);h=Number(h);qty=Math.max(1,Math.round(Number(qty)||1));
+    if(w>0&&h>0)pieces.push({label:label||`Piece ${pieces.length+1}`,w,h,qty,rotatable:true});
+  };
+  for(let i=0;i<lines.length;i++){
+    let line=lines[i];
+    let direct=line.match(/^\s*(\d+)\s*(?:@|pcs?\s*@?|pieces?\s*@?)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)(?:\s*(.*))?$/i);
+    if(direct){push((direct[4]||pendingLabel).trim(),direct[2],direct[3],direct[1]);pendingDimension=null;continue}
+    let qtyTail=line.match(/^(.+?)\s+qty\s*[:=]?\s*(\d+)\s*$/i);
+    if(qtyTail&&pendingDimension){push(pendingLabel,pendingDimension.w,pendingDimension.h,qtyTail[2]);pendingDimension=null;continue}
+    let dimension=line.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)(?:\s|$)/i);
+    if(dimension){
+      let before=line.slice(0,dimension.index).replace(/[-:]+$/,'').trim();
+      let qtyBefore=line.match(/^\s*(\d+)\s*(?:@|pcs?|pieces?)\s*/i);
+      let qtyAfter=line.match(/(?:qty|quantity)\s*[:=]?\s*(\d+)/i);
+      let qty=qtyBefore?.[1]||qtyAfter?.[1]||1;
+      let label=before.replace(/^\d+\s*(?:@|pcs?|pieces?)\s*/i,'').trim()||pendingLabel;
+      let next=lines[i+1]||'';
+      let nextQty=next.match(/^qty\s*[:=]?\s*(\d+)$/i);
+      if(nextQty){qty=nextQty[1];i++}
+      push(label,dimension[1],dimension[2],qty);
+      pendingDimension=null;
+      continue;
+    }
+    let qtyOnly=line.match(/^qty\s*[:=]?\s*(\d+)$/i);
+    if(qtyOnly&&pendingDimension){push(pendingLabel,pendingDimension.w,pendingDimension.h,qtyOnly[1]);pendingDimension=null;continue}
+    pendingLabel=line.replace(/:$/,'').trim();
+  }
+  return pieces;
+}
+
+function quoteOptimizerPieces(quote){
+  const raw=Array.isArray(quote?.measurements)?quote.measurements:[];
+  return raw.filter(x=>Number(x.w)>0&&Number(x.h)>0&&Number(x.qty||1)>0).map((x,i)=>({
+    label:x.area||`Window ${i+1}`,w:Number(x.w),h:Number(x.h),qty:Number(x.qty)||1,rotatable:x.rotatable!==false
+  }));
+}
+function optimizerPiecesToText(pieces){
+  return pieces.map(p=>`${p.label?`${p.label}: `:''}${p.qty} @ ${optimizerRound(p.w,3)}x${optimizerRound(p.h,3)}`).join('\n');
+}
+async function loadRollOptimizer(){
+  let select=$('optimizerQuote');
+  if(!select)return;
+  let quotes=window._cloudQuotes||[];
+  if(!quotes.length){
+    let{data,error}=await sb.from('quotes').select('id,project_name,service_address,measurements,customer:customers(first_name,last_name)').order('created_at',{ascending:false});
+    if(!error)quotes=data||[];
+  }
+  window._optimizerQuotes=quotes;
+  let current=select.value;
+  select.innerHTML='<option value="">Manual / pasted measurements</option>'+quotes.map(q=>`<option value="${q.id}">${optimizerEsc(`${q.customer?.first_name||''} ${q.customer?.last_name||''}`.trim()||q.project_name||'Quote')} — ${optimizerEsc(q.project_name||'Project')}</option>`).join('');
+  if(current&&quotes.some(q=>q.id===current))select.value=current;
+}
+function openQuoteInOptimizer(id){
+  rollOptimizerQuoteId=id;
+  show('optimizer');
+  setTimeout(()=>{if($('optimizerQuote')){$('optimizerQuote').value=id;loadSelectedOptimizerQuote()}},0);
+}
+function loadSelectedOptimizerQuote(){
+  let id=$('optimizerQuote')?.value||'';
+  let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===id);
+  if(!q){rollOptimizerQuoteId=null;return toast('Select a saved quote first.')}
+  let pieces=quoteOptimizerPieces(q);
+  if(!pieces.length)return toast('This quote has no usable window dimensions.');
+  rollOptimizerQuoteId=id;
+  $('optimizerInput').value=optimizerPiecesToText(pieces);
+  $('optimizerMessage').textContent=`Loaded ${pieces.reduce((s,p)=>s+p.qty,0)} pieces from ${q.project_name||'saved quote'}.`;
+}
+
+function expandOptimizerPieces(groups){
+  let out=[],n=1;
+  groups.forEach((g,gi)=>{for(let i=0;i<g.qty;i++)out.push({id:`p${n++}`,group:gi,label:g.label||`Piece ${gi+1}`,w:Number(g.w),h:Number(g.h),rotatable:g.rotatable!==false})});
+  return out;
+}
+function orientationsFor(piece,rollWidth,allowRotation,kerf){
+  let options=[];
+  const add=(across,length,rotated)=>{
+    if(across+kerf<=rollWidth+1e-7&&!options.some(o=>Math.abs(o.across-across)<1e-7&&Math.abs(o.length-length)<1e-7))
+      options.push({piece,across,length,rotated});
+  };
+  add(piece.w,piece.h,false);
+  if(allowRotation&&piece.rotatable)add(piece.h,piece.w,true);
+  return options;
+}
+function patternSignature(lanes){
+  return lanes.map(x=>optimizerRound(x.across,3)).sort((a,b)=>b-a).join('|');
+}
+function normalizePattern(lanes,rollWidth,kerf){
+  lanes=[...lanes].sort((a,b)=>b.across-a.across||b.length-a.length);
+  let used=lanes.reduce((s,x)=>s+x.across+kerf,0),pull=Math.max(...lanes.map(x=>x.length)),area=lanes.reduce((s,x)=>s+x.piece.w*x.piece.h,0);
+  return {lanes,pull,usedWidth:used,stripWaste:Math.max(0,rollWidth-used),wasteArea:rollWidth*pull-area,signature:patternSignature(lanes)};
+}
+function candidatePatterns(anchor,remaining,settings,rng,strategy){
+  const {rollWidth,maxLanes,allowRotation,kerf}=settings;
+  let patterns=[];
+  let anchorOptions=orientationsFor(anchor,rollWidth,allowRotation,kerf);
+  const pool=remaining.filter(x=>x.id!==anchor.id);
+  for(const a of anchorOptions){
+    patterns.push(normalizePattern([a],rollWidth,kerf));
+    if(maxLanes<2)continue;
+    let ranked=pool.map(p=>({p,opts:orientationsFor(p,rollWidth,allowRotation,kerf)})).filter(x=>x.opts.length);
+    ranked.sort((x,y)=>{
+      const ax=x.p.w*x.p.h,ay=y.p.w*y.p.h;
+      if(strategy==='width')return Math.max(y.p.w,y.p.h)-Math.max(x.p.w,x.p.h);
+      if(strategy==='length')return Math.max(y.p.w,y.p.h)-Math.max(x.p.w,x.p.h);
+      if(strategy==='random')return rng()-.5;
+      return ay-ax;
+    });
+    ranked=ranked.slice(0,Math.min(18,ranked.length));
+    for(let i=0;i<ranked.length;i++)for(const b of ranked[i].opts){
+      if(a.across+b.across+2*kerf>rollWidth+1e-7)continue;
+      patterns.push(normalizePattern([a,b],rollWidth,kerf));
+      if(maxLanes<3)continue;
+      for(let j=i+1;j<ranked.length;j++)for(const c of ranked[j].opts){
+        if(new Set([a.piece.id,b.piece.id,c.piece.id]).size<3)continue;
+        if(a.across+b.across+c.across+3*kerf>rollWidth+1e-7)continue;
+        patterns.push(normalizePattern([a,b,c],rollWidth,kerf));
+      }
+    }
+  }
+  const unique=new Map();
+  patterns.forEach(p=>{
+    let key=p.lanes.map(x=>`${x.piece.id}:${x.across}:${x.length}`).sort().join(',');
+    if(!unique.has(key)||unique.get(key).wasteArea>p.wasteArea)unique.set(key,p);
+  });
+  return [...unique.values()];
+}
+function seededRandom(seed){
+  let x=(seed||123456789)>>>0;
+  return ()=>{x=(1664525*x+1013904223)>>>0;return x/4294967296}
+}
+function buildOptimizerPlan(instances,settings,trial){
+  let rng=seededRandom(911+trial*7919),remaining=[...instances],patterns=[],lastSig='';
+  const strategies=['area','width','length','random'];
+  let strategy=strategies[trial%strategies.length];
+  while(remaining.length){
+    remaining.sort((a,b)=>{
+      if(strategy==='random')return rng()-.5;
+      if(strategy==='width')return Math.max(b.w,b.h)-Math.max(a.w,a.h)||b.w*b.h-a.w*a.h;
+      if(strategy==='length')return Math.max(b.w,b.h)-Math.max(a.w,a.h)||b.w*b.h-a.w*a.h;
+      return b.w*b.h-a.w*a.h||Math.max(b.w,b.h)-Math.max(a.w,a.h);
+    });
+    let anchor=remaining[0];
+    let candidates=candidatePatterns(anchor,remaining,settings,rng,strategy);
+    let best=null,bestScore=Infinity;
+    for(const p of candidates){
+      let setupPenalty=p.signature===lastSig?0:settings.setupWeight;
+      let laneBonus=(p.lanes.length-1)*settings.laneReward;
+      let score=p.pull*100000+p.wasteArea*10+setupPenalty-laneBonus+rng()*settings.randomness;
+      // Reward similar-length lanes because they minimize lane-end scrap.
+      let minLen=Math.min(...p.lanes.map(x=>x.length));
+      score+=(p.pull-minLen)*p.lanes.length*20;
+      if(score<bestScore){bestScore=score;best=p}
+    }
+    patterns.push(best);
+    let used=new Set(best.lanes.map(x=>x.piece.id));
+    remaining=remaining.filter(x=>!used.has(x.id));
+    lastSig=best.signature;
+  }
+  // Group identical cutter setups to minimize adjustments.
+  let grouped=new Map();
+  patterns.forEach(p=>{if(!grouped.has(p.signature))grouped.set(p.signature,[]);grouped.get(p.signature).push(p)});
+  let ordered=[...grouped.entries()].sort((a,b)=>{
+    let la=a[1].reduce((s,p)=>s+p.pull,0),lb=b[1].reduce((s,p)=>s+p.pull,0);
+    return lb-la;
+  }).flatMap(x=>x[1]);
+  let linear=ordered.reduce((s,p)=>s+p.pull,0);
+  let totalArea=instances.reduce((s,p)=>s+p.w*p.h,0);
+  let wasteArea=settings.rollWidth*linear-totalArea;
+  let changes=0;for(let i=1;i<ordered.length;i++)if(ordered[i].signature!==ordered[i-1].signature)changes++;
+  let distinct=new Set(ordered.map(p=>p.signature)).size;
+  return {patterns:ordered,linear,totalArea,wasteArea,changes,distinct};
+}
+function compareOptimizerPlans(a,b){
+  const eps=.001;
+  if(Math.abs(a.linear-b.linear)>eps)return a.linear-b.linear;
+  if(Math.abs(a.wasteArea-b.wasteArea)>eps)return a.wasteArea-b.wasteArea;
+  if(a.changes!==b.changes)return a.changes-b.changes;
+  if(a.distinct!==b.distinct)return a.distinct-b.distinct;
+  return a.patterns.length-b.patterns.length;
+}
+function optimizeFilmRoll(groups,settings){
+  const instances=expandOptimizerPieces(groups);
+  for(const p of instances){
+    if(!orientationsFor(p,settings.rollWidth,settings.allowRotation,settings.kerf).length)
+      throw new Error(`${p.label} (${p.w}" × ${p.h}") cannot fit across a ${settings.rollWidth}" roll in any allowed orientation.`);
+  }
+  let trials=settings.depth==='deep'?240:settings.depth==='fast'?35:110;
+  let best=null;
+  for(let t=0;t<trials;t++){
+    let plan=buildOptimizerPlan(instances,{...settings,setupWeight:t%5===0?5000:1200,laneReward:t%3===0?900:350,randomness:t<4?0:450},t);
+    if(!best||compareOptimizerPlans(plan,best)<0)best=plan;
+  }
+  best.groups=groups;best.settings=settings;best.instances=instances;best.trials=trials;
+  best.remaining=settings.rollLength-best.linear;
+  best.efficiency=best.linear?best.totalArea/(settings.rollWidth*best.linear)*100:0;
+  best.wastePct=100-best.efficiency;
+  return best;
+}
+function optimizerSetupText(pattern,rollWidth,kerf=0){
+  let widths=pattern.lanes.map(x=>optimizerRound(x.across,3));
+  let positions=[],sum=0;
+  widths.slice(0,-1).forEach(w=>{sum+=w;positions.push(optimizerRound(sum,3));sum+=kerf});
+  let remainder=Math.max(0,rollWidth-widths.reduce((s,w)=>s+w,0)-kerf*widths.length);
+  return {widths,positions,remainder};
+}
+function consolidateOptimizerPulls(patterns){
+  let out=[];
+  patterns.forEach((p,i)=>{
+    let setup=optimizerSetupText(p,p._rollWidth||72,p._kerf||0),last=out[out.length-1];
+    let pieceKey=p.lanes.map(x=>`${x.piece.label}|${x.across}|${x.length}|${x.rotated}`).sort().join(';;');
+    if(last&&last.signature===p.signature&&last.pull===p.pull&&last.pieceKey===pieceKey){
+      last.repeat++;
+      last.patterns.push(p);
+    }else out.push({signature:p.signature,pull:p.pull,pieceKey,repeat:1,patterns:[p],setup});
+  });
+  return out;
+}
+function renderOptimizerResult(result,title='Manual Job'){
+  let {settings}=result;
+  result.patterns.forEach(p=>{p._rollWidth=settings.rollWidth;p._kerf=settings.kerf});
+  let pulls=consolidateOptimizerPulls(result.patterns);
+  let setupGroups=[],last=null;
+  result.patterns.forEach((p,index)=>{
+    if(!last||last.signature!==p.signature){
+      last={signature:p.signature,start:index+1,end:index+1,setup:optimizerSetupText(p,settings.rollWidth,settings.kerf)};
+      setupGroups.push(last);
+    }else last.end=index+1;
+  });
+  let totalPieces=result.instances.length,remainingOk=result.remaining>=-1e-7;
+  let pieceRows=result.groups.map(g=>`<tr><td>${optimizerEsc(g.label)}</td><td>${g.qty}</td><td>${optimizerInches(g.w)} × ${optimizerInches(g.h)}</td><td>${optimizerRound(g.w*g.h*g.qty/144,2)} sq ft</td></tr>`).join('');
+  let pullHtml=pulls.map((g,gi)=>{
+    let p=g.patterns[0],setup=optimizerSetupText(p,settings.rollWidth,settings.kerf);
+    let lanes=p.lanes.map((x,li)=>{let endScrap=Math.max(0,p.pull-x.length);return `<li><b>Lane ${li+1}:</b> ${optimizerEsc(x.piece.label)} — cut ${optimizerInches(x.across)} across × ${optimizerInches(x.length)} pull length ${x.rotated?'<span class="pill warn">Rotated</span>':''}${endScrap>.01?` <small>• lane-end scrap ${optimizerInches(endScrap)}</small>`:''}</li>`}).join('');
+    let strip=setup.remainder>0.01?`<div class="optimizer-scrap">Unused width on this pull: ${optimizerInches(setup.remainder)}</div>`:'';
+    return `<div class="optimizer-pull">
+      <div class="head"><h3>Pull ${gi+1}${g.repeat>1?` — Repeat ${g.repeat} times`:''}</h3><span class="pill">${optimizerInches(g.pull)}</span></div>
+      <div><b>Cutter lanes:</b> ${setup.widths.map(optimizerInches).join(' | ')}</div>
+      <div class="muted"><b>Head positions from left edge:</b> ${setup.positions.length?setup.positions.map(optimizerInches).join(' | '):'No internal head needed'}</div>
+      <ol>${lanes}</ol>${strip}
+      <div class="optimizer-command"><b>Installer command:</b> Pull ${optimizerInches(g.pull)}, cross-cut, ${g.repeat>1?`repeat ${g.repeat} total pulls`:'continue to next instruction'}.</div>
+    </div>`;
+  }).join('');
+  let setupHtml=setupGroups.map((s,i)=>`<div class="optimizer-setup">
+    <b>Setup ${i+1}</b>
+    <span>Lane widths: ${s.setup.widths.map(optimizerInches).join(' | ')}</span>
+    <span>Head positions: ${s.setup.positions.length?s.setup.positions.map(optimizerInches).join(' | '):'No internal head needed'}</span>
+    <small>Use for pulls ${s.start}${s.end!==s.start?`–${s.end}`:''}</small>
+  </div>`).join('');
+  $('optimizerResultTitle').textContent=title;
+  $('optimizerOutput').innerHTML=`
+    <div class="grid3 optimizer-metrics">
+      <div class="mini-stat"><b>${optimizerInches(settings.rollWidth)}</b><span>Roll Width</span></div>
+      <div class="mini-stat"><b>${optimizerFeet(settings.rollLength)}</b><span>Available Length</span></div>
+      <div class="mini-stat"><b>${optimizerRound(result.totalArea/144,2)}</b><span>Sq Ft Needed</span></div>
+      <div class="mini-stat"><b>${optimizerInches(result.linear)}</b><span>Linear Inches Required</span></div>
+      <div class="mini-stat ${remainingOk?'':'optimizer-danger'}"><b>${remainingOk?optimizerFeet(result.remaining):'SHORT'}</b><span>Remaining Roll</span></div>
+      <div class="mini-stat"><b>${optimizerRound(result.efficiency,1)}%</b><span>Material Efficiency</span></div>
+    </div>
+    ${remainingOk?'':`<div class="card optimizer-alert"><b>Insufficient inventory:</b> This plan requires ${optimizerFeet(result.linear-settings.rollLength)} more film than the entered roll length.</div>`}
+    <div class="card"><div class="head" style="margin-top:0"><h3>Roll Summary</h3><span class="pill">${totalPieces} pieces</span></div>
+      <div class="optimizer-summary-grid">
+        <div><span>Total material area</span><b>${optimizerRound(result.totalArea/144,2)} sq ft</b></div>
+        <div><span>Linear footage pulled</span><b>${optimizerFeet(result.linear)}</b></div>
+        <div><span>Waste percentage</span><b>${optimizerRound(result.wastePct,1)}%</b></div>
+        <div><span>Efficiency percentage</span><b>${optimizerRound(result.efficiency,1)}%</b></div>
+        <div><span>Cutter setups</span><b>${result.distinct}</b></div>
+        <div><span>Head changes</span><b>${result.changes}</b></div>
+      </div>
+    </div>
+    <div class="card"><div class="head" style="margin-top:0"><h3>Cutter Setup</h3><span class="pill">${settings.maxLanes} heads available</span></div>${setupHtml}
+      <div class="muted" style="margin-top:10px">The plan minimizes linear footage first. Equal-footage layouts are ranked by waste, cutter changes, then workflow simplicity. ${result.trials} candidate layouts were compared.</div>
+    </div>
+    <div class="card"><h3>Pull Sequence & Piece Schedule</h3>${pullHtml}</div>
+    <div class="card"><h3>Piece Schedule</h3><div class="table-wrap"><table class="optimizer-table"><thead><tr><th>Area</th><th>Qty</th><th>Size</th><th>Area</th></tr></thead><tbody>${pieceRows}</tbody></table></div></div>
+    <div class="card"><h3>Waste Report</h3>
+      <div class="optimizer-summary-grid">
+        <div><span>Total unused film area</span><b>${optimizerRound(result.wasteArea/144,2)} sq ft</b></div>
+        <div><span>Width/length waste</span><b>${optimizerRound(result.wastePct,1)}%</b></div>
+        <div><span>Usable roll remaining</span><b>${remainingOk?optimizerFeet(result.remaining):'None — inventory short'}</b></div>
+        <div><span>Future use</span><b>${result.remaining>=12?'Retain remaining roll for future jobs':'Small remnants only'}</b></div>
+      </div>
+      <p class="muted">Long continuous remainder stays on the roll and remains fully usable. Short lane-end scraps and narrow strips should be labeled by width and length before disposal or remnant storage.</p>
+    </div>
+    <div class="card"><h3>Optimization Notes</h3>
+      <p>Selected the lowest-linear-footage solution found across ${result.trials} internally compared layouts. Rotation was ${settings.allowRotation?'enabled':'disabled'}. The plan uses no more than ${settings.maxLanes} simultaneous lanes and prioritizes repeated setups where linear footage remains equal.</p>
+    </div>`;
+  $('optimizerResults').classList.remove('hidden');
+}
+function runRollOptimizer(){
+  let message=$('optimizerMessage');
+  try{
+    let groups=parseOptimizerInput($('optimizerInput').value);
+    if(!groups.length)throw new Error('Enter or load at least one valid window dimension.');
+    let settings={
+      rollWidth:Number($('optimizerRollWidth').value)||72,
+      rollLength:(Number($('optimizerRollLength').value)||0)*12,
+      maxLanes:Math.max(1,Math.round(Number($('optimizerHeads').value)||3)),
+      kerf:Math.max(0,Number($('optimizerKerf').value)||0),
+      allowRotation:$('optimizerRotation').value==='yes',
+      depth:$('optimizerDepth').value
+    };
+    if(settings.rollWidth<=0)throw new Error('Roll width must be greater than zero.');
+    message.textContent='Comparing cutting layouts…';
+    setTimeout(()=>{
+      try{
+        let result=optimizeFilmRoll(groups,settings);
+        let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===rollOptimizerQuoteId);
+        rollOptimizerResult=result;
+        renderOptimizerResult(result,q?.project_name||`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||'Manual Job');
+        message.textContent=`Optimization complete. ${result.trials} layouts compared.`;
+        $('optimizerResults').scrollIntoView({behavior:'smooth',block:'start'});
+      }catch(e){message.textContent=e.message}
+    },30);
+  }catch(e){message.textContent=e.message}
+}
+async function saveRollOptimizerPlan(){
+  if(!rollOptimizerResult)return toast('Run the optimizer first.');
+  let payload={
+    quote_id:rollOptimizerQuoteId||null,
+    roll_width:rollOptimizerResult.settings.rollWidth,
+    roll_length_available:rollOptimizerResult.settings.rollLength,
+    linear_inches_required:rollOptimizerResult.linear,
+    efficiency_percentage:rollOptimizerResult.efficiency,
+    waste_percentage:rollOptimizerResult.wastePct,
+    input_data:rollOptimizerResult.groups,
+    result_data:rollOptimizerResult,
+    created_by:session?.user?.id||null
+  };
+  let{error}=await sb.from('roll_optimization_plans').insert(payload);
+  if(error){
+    if(String(error.message).includes('roll_optimization_plans'))return toast('Run ROLL-OPTIMIZER-MIGRATION.sql before saving plans.');
+    return toast(error.message);
+  }
+  toast('Optimization plan saved to cloud.');
+}
+function printRollOptimizer(){
+  if(!rollOptimizerResult)return toast('Run the optimizer first.');
+  window.print();
+}
+function clearRollOptimizer(){
+  $('optimizerInput').value='';$('optimizerQuote').value='';$('optimizerMessage').textContent='';$('optimizerResults').classList.add('hidden');$('optimizerOutput').innerHTML='';rollOptimizerResult=null;rollOptimizerQuoteId=null;
+}
+
 function bindOwnerCommandCenter(){
   const wire=(metricId,action)=>{
     const metric=$(metricId),card=metric?.closest('.card.metric');
@@ -296,6 +659,6 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
+bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
 bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('refreshOperations','onclick',loadOperations);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');

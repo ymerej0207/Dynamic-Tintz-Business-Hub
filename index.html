@@ -74,6 +74,79 @@
 </div>
 <div id="savedQuotes"></div>
 </main>
+
+<main id="optimizer" class="view">
+  <div class="head">
+    <div>
+      <h2>Roll Optimization Engine</h2>
+      <div class="muted">Commercial-style strip nesting for residential and commercial film jobs.</div>
+    </div>
+    <span class="pill">Production Planning</span>
+  </div>
+
+  <div class="optimizer-layout">
+    <section>
+      <div class="card">
+        <div class="head" style="margin-top:0">
+          <div><h3>Job Input</h3><div class="muted">Load a saved quote or paste measurements in any common format.</div></div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label>Saved Quote</label>
+            <select id="optimizerQuote"><option value="">Manual / pasted measurements</option></select>
+          </div>
+          <div class="field optimizer-load-field">
+            <label>&nbsp;</label>
+            <button id="optimizerLoadQuote" class="btn wide">Load Selected Quote</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Measurements</label>
+          <textarea id="optimizerInput" class="optimizer-input" placeholder="2 @ 44x88&#10;1 @ 32x56&#10;11 @ 34x28&#10;3 @ 34x53"></textarea>
+          <small class="muted">Accepted: “2 @ 44x88”, room names followed by dimensions and quantity, or quote measurements.</small>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="head" style="margin-top:0"><h3>Roll & Cutter Settings</h3></div>
+        <div class="grid3">
+          <div class="field"><label>Roll Width (in)</label><input id="optimizerRollWidth" type="number" inputmode="decimal" value="72" min="1" step="0.25"></div>
+          <div class="field"><label>Roll Length Available (ft)</label><input id="optimizerRollLength" type="number" inputmode="decimal" value="50" min="0" step="0.1"></div>
+          <div class="field"><label>Adjustable Cutting Heads</label><input id="optimizerHeads" type="number" inputmode="numeric" value="3" min="1" max="12"></div>
+          <div class="field"><label>Trim / Kerf Allowance (in per lane)</label><input id="optimizerKerf" type="number" inputmode="decimal" value="0" min="0" step="0.0625"></div>
+          <div class="field"><label>Rotation</label><select id="optimizerRotation"><option value="yes">Allow rotation</option><option value="no">Do not rotate pieces</option></select></div>
+          <div class="field"><label>Optimization Depth</label><select id="optimizerDepth"><option value="fast">Fast</option><option value="standard" selected>Standard</option><option value="deep">Deep</option></select></div>
+        </div>
+        <div class="actions">
+          <button id="optimizerRun" class="btn primary">Optimize Roll</button>
+          <button id="optimizerClear" class="btn">Clear</button>
+        </div>
+        <div id="optimizerMessage" class="muted" style="margin-top:10px"></div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="card sticky-summary optimizer-status-card">
+        <h3>Planning Standard</h3>
+        <div class="optimizer-priority"><b>1</b><span>Lowest linear footage</span></div>
+        <div class="optimizer-priority"><b>2</b><span>Lowest material waste</span></div>
+        <div class="optimizer-priority"><b>3</b><span>Fewest cutter changes</span></div>
+        <div class="optimizer-priority"><b>4</b><span>Simplest installer workflow</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="optimizerResults" class="optimizer-results hidden">
+    <div class="head">
+      <div><h2>Optimized Cutting Plan</h2><div id="optimizerResultTitle" class="muted"></div></div>
+      <div class="actions">
+        <button id="optimizerSavePlan" class="btn">Save Plan</button>
+        <button id="optimizerPrint" class="btn primary">Print Installer Plan</button>
+      </div>
+    </div>
+    <div id="optimizerOutput"></div>
+  </div>
+</main>
 <main id="operations" class="view"><div class="head"><h2>Operations Board</h2><button id="refreshOperations" class="btn">Refresh</button></div><div class="card"><div class="grid2"><div class="field"><label>Job Status</label><select id="operationStatus"><option value="">All Jobs</option><option>Scheduled</option><option>Confirmed</option><option>En Route</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><div class="field"><label>Date Range</label><select id="operationRange"><option value="today">Today</option><option value="7">Next 7 Days</option><option value="30">Next 30 Days</option><option value="all">All Jobs</option></select></div></div></div><div id="operationsList"></div></main>
 <main id="shortcuts" class="view"><div class="head"><div><h2>Hometown Response Hub</h2><div id="shortcutCountLabel" class="muted">Loading responses…</div></div><button id="addShortcut" class="btn primary">+ Add</button></div><div class="card"><div class="grid2"><div class="field"><label>Search Responses</label><input id="shortcutSearch" placeholder="Keyword, category, or message"></div><div class="field"><label>Category</label><select id="shortcutCategoryFilter"><option>All</option></select></div></div><div class="actions"><button id="refreshShortcuts" class="btn">Refresh Built-In Responses</button></div></div><div id="shortcutList"></div></main>
 <main id="time" class="view"><div class="head"><h2>My Time Clock</h2></div><div id="timeCard" class="card"></div><div id="timeList"></div></main>
