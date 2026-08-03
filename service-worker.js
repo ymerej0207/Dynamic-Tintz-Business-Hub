@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.7-roll-optimizer
+ * Release: 5.7.1-mobile-state-modal-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.7-";
-const CACHE_NAME = `${CACHE_PREFIX}roll-optimizer`; 
+const CACHE_PREFIX = "dynamic-tintz-v5.7.1-";
+const CACHE_NAME = `${CACHE_PREFIX}mobile-state-modal-fix`; 
 
 const APP_SHELL = [
   "./",
