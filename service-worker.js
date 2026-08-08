@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.8.6-icloud-scheduling-fix
+ * Release: 5.8.7-mobile-viewport-nav
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.8.6-";
-const CACHE_NAME = `${CACHE_PREFIX}mobile-state-modal-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v5.8.7-";
+const CACHE_NAME = `${CACHE_PREFIX}mobile-viewport-nav`; 
 
 const APP_SHELL = [
   "./",
