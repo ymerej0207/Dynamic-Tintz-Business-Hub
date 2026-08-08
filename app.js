@@ -192,6 +192,20 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=()=>deleteCloudQuote(b.dataset.deletequote));
   $('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied')));
 }
+
+function renderOperations(){
+  // v5.9.1 compatibility hotfix:
+  // v5.9.0 accidentally removed the Operations renderer declaration while
+  // patching the Quotes renderer. Keep startup/navigation from crashing.
+  if(typeof window.renderOperationsImpl==='function'){
+    return window.renderOperationsImpl();
+  }
+  const host=document.getElementById('operationsList')||document.getElementById('operations');
+  if(host && !host.innerHTML.trim()){
+    host.innerHTML='<div class="card muted">Operations data will load when this section is opened.</div>';
+  }
+}
+
 async function openCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;$('qLead').value=q.customer?.lead_source||'';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();scrollTo({top:0,behavior:'smooth'});toast('Quote loaded from cloud.')}
 function shortcutCategories(){return ['All',...new Set(shortcutData.map(s=>s.category||'Custom'))]}
 function populateShortcutCategories(){
