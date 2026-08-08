@@ -308,6 +308,7 @@ async function releaseSquareDraft(quoteId){
     square_catalog_variation_id:null,
     square_billed_sqft:null,
     square_unit_price_cents:null,
+    square_draft_generation:Number(quote.square_draft_generation||0)+1,
     updated_at:new Date().toISOString()
   }).eq('id',quoteId);
   if(error)return toast(error.message);
