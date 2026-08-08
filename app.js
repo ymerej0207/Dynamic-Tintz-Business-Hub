@@ -105,11 +105,27 @@ async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,cu
 function renderQuoteResults(){let data=window._cloudQuotes||[],q=($('quoteSearch')?.value||'').toLowerCase(),status=$('quoteStatusFilter')?.value||'',filtered=data.filter(x=>(!status||x.status===status)&&JSON.stringify(x).toLowerCase().includes(q)),open=data.filter(x=>!['Completed','Lost'].includes(x.status)),value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;$('quotePipelineValue').textContent=money(value);$('quoteAverage').textContent=money(avg);$('quoteCount').textContent=data.length;$('savedQuotes').innerHTML=filtered.length?filtered.map(q=>{let job=Array.isArray(q.jobs)?q.jobs[0]:q.jobs,globalIndex=data.indexOf(q);return `<div class="quote-card"><div class="head"><div><h2>${esc((q.customer?.first_name||'')+' '+(q.customer?.last_name||''))}</h2><div class="muted">${esc(q.project_name||'Project')} • ${new Date(q.created_at).toLocaleDateString()}</div></div><span class="pill">${esc(q.status)}</span></div><div class="muted">${esc(q.service_address)}<br>${Number(q.total_sqft).toFixed(2)} sq ft • Ceramic ${money(q.ceramic_price)}${job?`<br><b>Assigned job:</b> ${when(job.scheduled_start)} • ${esc(job.status)}`:'<br><b>Not scheduled yet</b>'}</div><div class="actions"><button class="btn primary" data-openquote="${q.id}">Open</button><button class="btn" data-optimizequote="${q.id}">Optimize Roll</button><button class="btn" data-duplicatequote="${q.id}">Duplicate</button><button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}<button class="btn" data-copycloud="${globalIndex}">Copy</button><button class="btn danger" data-deletequote="${q.id}">Delete Quote</button></div></div>`}).join(''):'<div class="card muted">No matching cloud quotes.</div>';$('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=()=>openCloudQuote(b.dataset.openquote));$('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=()=>openQuoteInOptimizer(b.dataset.optimizequote));$('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=()=>duplicateCloudQuote(b.dataset.duplicatequote));$('savedQuotes').querySelectorAll('[data-schedulequote]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.schedulequote));$('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=()=>removeAssignment(b.dataset.removeassignment,b.dataset.jobid));$('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=()=>deleteCloudQuote(b.dataset.deletequote));$('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied')))}
 async function duplicateCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);let customer={first_name:q.customer?.first_name||'',last_name:q.customer?.last_name||'',email:q.customer?.email||'',phone:q.customer?.phone||'',service_address:q.customer?.service_address||q.service_address||'',lead_source:q.customer?.lead_source||'',notes:q.customer?.notes||''},{data:newCustomer,error:customerError}=await sb.from('customers').insert(customer).select().single();if(customerError)return toast(customerError.message);let payload={customer_id:newCustomer.id,project_name:(q.project_name||'Project')+' — Copy',project_type:q.project_type,status:'New Lead',service_address:q.service_address,miles:q.miles,total_sqft:q.total_sqft,ceramic_list_price:q.ceramic_list_price,ceramic_price:q.ceramic_price,ceramic_savings:q.ceramic_savings,solar_price:q.solar_price,tax_rate:q.tax_rate,notes:q.notes,measurements:q.measurements,assigned_to:null},{error:quoteError}=await sb.from('quotes').insert(payload);if(quoteError)return toast(quoteError.message);toast('Quote duplicated as a new project.');await loadQuotes()}
 async function syncCalendarJob(jobId,action='sync'){
-  let providers=[['google-calendar-sync','Google'],['icloud-calendar-sync','iCloud']],results=[],errors=[];
+  let results=[],errors=[],providers=[];
+  const checks=await Promise.allSettled([
+    sb.functions.invoke('google-calendar-auth',{body:{action:'status'}}),
+    sb.functions.invoke('icloud-calendar-auth',{body:{action:'status'}})
+  ]);
+  const google=checks[0].status==='fulfilled'?checks[0].value:null;
+  const icloud=checks[1].status==='fulfilled'?checks[1].value:null;
+  if(!google?.error&&google?.data?.ok!==false&&google?.data?.connected&&(google.data.selected_calendars||[]).length){
+    providers.push(['google-calendar-sync','Google']);
+  }
+  if(!icloud?.error&&icloud?.data?.ok!==false&&icloud?.data?.configured&&(icloud.data.selected_calendars||[]).length){
+    providers.push(['icloud-calendar-sync','iCloud']);
+  }
+  if(!providers.length)return {ok:true,providers:[],skipped:true};
   for(let [fn,label] of providers){
     try{
       let{data,error}=await sb.functions.invoke(fn,{body:{job_id:jobId,action}});
-      if(error)throw error;
+      if(error){
+        let detail=error?.context?.body||error?.context?.responseBody||'';
+        throw new Error(detail||error.message||`${label} calendar sync failed`);
+      }
       if(data?.ok===false&&!data?.skipped)throw new Error(data.error||`${label} calendar sync failed`);
       if(!data?.skipped)results.push({provider:label,...data});
     }catch(e){
