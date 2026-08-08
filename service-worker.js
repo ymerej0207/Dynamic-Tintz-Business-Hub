@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.8.7-mobile-viewport-nav
+ * Release: 5.9.0-square-draft-v2
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.8.7-";
-const CACHE_NAME = `${CACHE_PREFIX}mobile-viewport-nav`; 
+const CACHE_PREFIX = "dynamic-tintz-v5.9.0-";
+const CACHE_NAME = `${CACHE_PREFIX}square-draft-v2`; 
 
 const APP_SHELL = [
   "./",
