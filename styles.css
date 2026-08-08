@@ -194,3 +194,40 @@ input,select,textarea,button{
   }
 }
 
+
+
+/* v5.9.5 — Quote room/area picker */
+.room-area-picker{
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:6px;
+  align-items:center;
+}
+.room-area-picker .area{
+  width:100%;
+  min-width:0;
+}
+.room-area-select{
+  width:122px;
+  min-width:100px;
+  max-width:132px;
+  height:100%;
+  min-height:40px;
+  padding:7px 8px;
+  font-size:12px;
+  border-radius:10px;
+}
+@media(max-width:680px){
+  .room-area-picker{
+    grid-template-columns:minmax(0,1fr) 112px;
+    gap:5px;
+  }
+  .room-area-select{
+    width:112px;
+    min-width:0;
+    max-width:112px;
+    font-size:11px;
+    padding:6px;
+  }
+}

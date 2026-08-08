@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.9.4-square-release
+ * Release: 5.9.5-room-picker
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.9.4-";
-const CACHE_NAME = `${CACHE_PREFIX}square-release`; 
+const CACHE_PREFIX = "dynamic-tintz-v5.9.5-";
+const CACHE_NAME = `${CACHE_PREFIX}room-picker`; 
 
 const APP_SHELL = [
   "./",

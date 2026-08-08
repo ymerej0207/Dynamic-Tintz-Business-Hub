@@ -94,8 +94,157 @@ function money(n){return new Intl.NumberFormat('en-US',{style:'currency',currenc
 function qPrice(matrix,s,miles){if(s>0&&s<=18)return{price:Number(miles)>35?350:250,label:'Minimum job pricing'};let b=matrix.find(x=>s>=x[0]&&s<=x[1])||matrix[0];return{price:b[2]*s,label:money(b[2])+' per sq ft'}}
 function qSqft(){return measures.reduce((s,r)=>s+(Number(r.w)*Number(r.h)*Number(r.qty||1))/144,0)}
 function calculateQuote(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;$('qSqft').textContent=s.toFixed(2);$('qCerPrice').textContent=money(c.price);$('qCerTier').textContent=c.label;$('qSolarPrice').textContent=money(o.price);$('qSolarTier').textContent=o.label;$('qListPrice').textContent=money(list);$('qTierPrice').textContent=money(c.price);$('qSavings').textContent=money(save)+' ('+pct+'%)';$('qDeposit').textContent=money(c.price*1.0625/2);if($('mobileSqft'))$('mobileSqft').textContent=s.toFixed(2)+' sq ft';if($('mobilePrice'))$('mobilePrice').textContent=money(c.price)}
-function renderMeasures(){let el=$('measureRows');if(!el)return;el.innerHTML='';measures.forEach((r,index)=>{let d=document.createElement('div');d.className='measure-row';let area=(Number(r.w)*Number(r.h)*Number(r.qty||1)/144).toFixed(2);d.innerHTML=`<div class="measure-index">${index+1}</div><input class="area" data-mid="${r.id}" data-k="area" placeholder="Living room" value="${esc(r.area)}"><input data-mid="${r.id}" data-k="w" inputmode="decimal" placeholder="Width" value="${r.w||''}"><input data-mid="${r.id}" data-k="h" inputmode="decimal" placeholder="Height" value="${r.h||''}"><input data-mid="${r.id}" data-k="qty" inputmode="numeric" placeholder="Qty" value="${r.qty||1}"><div class="measure-total">${area} sq ft</div><button class="btn mini" data-duplicate="${r.id}" title="Duplicate window">⧉</button><button class="btn danger mini" data-remove="${r.id}" title="Delete window">×</button>`;el.appendChild(d)});el.querySelectorAll('input').forEach(i=>{i.oninput=()=>{let r=measures.find(x=>x.id===Number(i.dataset.mid));r[i.dataset.k]=i.dataset.k==='area'?i.value:Number(i.value)||0;calculateQuote();let row=i.closest('.measure-row'),total=row?.querySelector('.measure-total');if(total)total.textContent=((Number(r.w)*Number(r.h)*Number(r.qty||1))/144).toFixed(2)+' sq ft'};i.onkeydown=e=>{if(e.key!=='Enter')return;e.preventDefault();let order=['area','w','h','qty'],position=order.indexOf(i.dataset.k);if(position<order.length-1){i.closest('.measure-row')?.querySelector(`[data-k="${order[position+1]}"]`)?.focus()}else{addMeasure(true)}}});el.querySelectorAll('[data-duplicate]').forEach(b=>b.onclick=()=>duplicateMeasure(Number(b.dataset.duplicate)));el.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{measures=measures.filter(x=>x.id!==Number(b.dataset.remove));if(!measures.length)measures=[{id:nextMeasure++,area:'',w:0,h:0,qty:1}];renderMeasures()});calculateQuote()}
-function addMeasure(focus=true,preset=null){let id=nextMeasure++,last=measures[measures.length-1],row=preset||{id,area:last?.area||'',w:0,h:0,qty:1};row={...row,id};measures.push(row);renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${row.area?'w':'area'}"]`)?.focus(),40)}
+
+const commonRoomAreas=[
+  'Living Room',
+  'Office',
+  'Home Office',
+  'Kitchen',
+  'Dining Room',
+  'Master Bedroom',
+  'Primary Bedroom',
+  'Master Bathroom',
+  'Primary Bathroom',
+  'Bedroom',
+  'Upstairs Bedroom',
+  'Downstairs Bedroom',
+  'Guest Bedroom',
+  'Kids Bedroom',
+  'Nursery',
+  'Bathroom',
+  'Guest Bathroom',
+  'Half Bath',
+  'Powder Room',
+  'Game Room',
+  'Media Room',
+  'Theater Room',
+  'Family Room',
+  'Great Room',
+  'Den',
+  'Study',
+  'Library',
+  'Breakfast Nook',
+  'Breakfast Area',
+  'Sunroom',
+  'Bonus Room',
+  'Loft',
+  'Playroom',
+  'Exercise Room',
+  'Gym',
+  'Laundry Room',
+  'Mudroom',
+  'Entry',
+  'Entryway',
+  'Foyer',
+  'Hallway',
+  'Stairway',
+  'Stairwell',
+  'Landing',
+  'Front Door',
+  'Back Door',
+  'Patio Door',
+  'Sliding Door',
+  'French Doors',
+  'Patio',
+  'Enclosed Patio',
+  'Pool Room',
+  'Garage',
+  'Garage Door',
+  'Workshop',
+  'Basement',
+  'Attic',
+  'Closet',
+  'Walk-In Closet',
+  'Pantry',
+  'Storefront',
+  'Lobby',
+  'Reception',
+  'Conference Room',
+  'Break Room',
+  'Waiting Room',
+  'Exam Room',
+  'Treatment Room',
+  'Classroom',
+  'Office Front',
+  'Office Rear',
+  'Front Elevation',
+  'Rear Elevation',
+  'Left Elevation',
+  'Right Elevation',
+  'North Side',
+  'South Side',
+  'East Side',
+  'West Side'
+];
+function roomAreaOptions(){
+  return commonRoomAreas.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');
+}
+
+function renderMeasures(){
+  let el=$('measureRows');
+  if(!el)return;
+  el.innerHTML='';
+  measures.forEach((r,index)=>{
+    let d=document.createElement('div');
+    d.className='measure-row';
+    let area=(Number(r.w)*Number(r.h)*Number(r.qty||1)/144).toFixed(2);
+    d.innerHTML=`<div class="measure-index">${index+1}</div>
+      <div class="room-area-picker">
+        <input class="area" data-mid="${r.id}" data-k="area" placeholder="Type room / area" value="${esc(r.area)}" autocomplete="off">
+        <select class="room-area-select" data-roomselect="${r.id}" aria-label="Choose a common room or area">
+          <option value="">Choose room…</option>
+          ${roomAreaOptions()}
+        </select>
+      </div>
+      <input data-mid="${r.id}" data-k="w" inputmode="decimal" placeholder="Width" value="${r.w||''}">
+      <input data-mid="${r.id}" data-k="h" inputmode="decimal" placeholder="Height" value="${r.h||''}">
+      <input data-mid="${r.id}" data-k="qty" inputmode="numeric" placeholder="Qty" value="${r.qty||1}">
+      <div class="measure-total">${area} sq ft</div>
+      <button class="btn mini" data-duplicate="${r.id}" title="Duplicate window">⧉</button>
+      <button class="btn danger mini" data-remove="${r.id}" title="Delete window">×</button>`;
+    el.appendChild(d)
+  });
+  el.querySelectorAll('input[data-mid]').forEach(i=>{
+    i.oninput=()=>{
+      let r=measures.find(x=>x.id===Number(i.dataset.mid));
+      r[i.dataset.k]=i.dataset.k==='area'?i.value:Number(i.value)||0;
+      calculateQuote();
+      let row=i.closest('.measure-row'),total=row?.querySelector('.measure-total');
+      if(total)total.textContent=((Number(r.w)*Number(r.h)*Number(r.qty||1))/144).toFixed(2)+' sq ft'
+    };
+    i.onkeydown=e=>{
+      if(e.key!=='Enter')return;
+      e.preventDefault();
+      let order=['area','w','h','qty'],position=order.indexOf(i.dataset.k);
+      if(position<order.length-1){
+        i.closest('.measure-row')?.querySelector(`[data-k="${order[position+1]}"]`)?.focus()
+      }else{
+        addMeasure(true)
+      }
+    }
+  });
+  el.querySelectorAll('[data-roomselect]').forEach(s=>{
+    s.onchange=()=>{
+      if(!s.value)return;
+      let id=Number(s.dataset.roomselect),r=measures.find(x=>x.id===id);
+      if(!r)return;
+      r.area=s.value;
+      let input=s.closest('.room-area-picker')?.querySelector('[data-k="area"]');
+      if(input)input.value=s.value;
+      s.value='';
+      calculateQuote();
+      setTimeout(()=>s.closest('.measure-row')?.querySelector('[data-k="w"]')?.focus(),20)
+    }
+  });
+  el.querySelectorAll('[data-duplicate]').forEach(b=>b.onclick=()=>duplicateMeasure(Number(b.dataset.duplicate)));
+  el.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{
+    measures=measures.filter(x=>x.id!==Number(b.dataset.remove));
+    if(!measures.length)measures=[{id:nextMeasure++,area:'',w:0,h:0,qty:1}];
+    renderMeasures()
+  });
+  calculateQuote()
+}
+function addMeasure(focus=true,preset=null){let id=nextMeasure++,row=preset||{id,area:'',w:0,h:0,qty:1};row={...row,id};measures.push(row);renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${preset&&row.area?'w':'area'}"]`)?.focus(),40)}
 function duplicateMeasure(id){let source=measures.find(x=>x.id===id);if(!source)return;addMeasure(false,{...source});toast('Window duplicated')}
 function duplicateLastMeasure(){let last=measures[measures.length-1];if(!last)return;duplicateMeasure(last.id)}
 function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';$('qStatus').value='New Lead';$('qLead').value='Angi';measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;renderMeasures()}
