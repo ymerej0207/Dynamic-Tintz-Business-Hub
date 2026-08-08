@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.9.2-square-draft-rebuild
+ * Release: 5.9.4-square-release
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.9.2-";
-const CACHE_NAME = `${CACHE_PREFIX}square-draft-rebuild`; 
+const CACHE_PREFIX = "dynamic-tintz-v5.9.4-";
+const CACHE_NAME = `${CACHE_PREFIX}square-release`; 
 
 const APP_SHELL = [
   "./",
