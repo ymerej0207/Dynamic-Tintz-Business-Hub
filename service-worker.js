@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.0.1-sign-in-hotfix
+ * Release: 6.0.2-sign-in-parser-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.0.1-";
-const CACHE_NAME = `${CACHE_PREFIX}signin-hotfix`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.0.2-";
+const CACHE_NAME = `${CACHE_PREFIX}signin-parser-fix`; 
 
 const APP_SHELL = [
   "./",
