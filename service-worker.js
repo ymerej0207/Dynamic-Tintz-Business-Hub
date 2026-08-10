@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.2.0-sqft-waste-accounting
+ * Release: 6.3.0-scrap-cutoff-inventory
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.2.0-";
-const CACHE_NAME = `${CACHE_PREFIX}sqft-waste-accounting`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.3.0-";
+const CACHE_NAME = `${CACHE_PREFIX}scrap-cutoff-inventory`; 
 
 const APP_SHELL = [
   "./",

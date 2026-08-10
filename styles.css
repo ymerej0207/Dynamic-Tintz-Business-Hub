@@ -252,3 +252,9 @@ input,select,textarea,button{
   background:rgba(255,255,255,.04);
   font-weight:650;
 }
+
+/* v6.3.0 — Scrap Cutoff Inventory */
+.scrap-card{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:12px;margin:8px 0;background:rgba(255,255,255,.025);cursor:pointer}
+.scrap-check-wrap input{width:22px;height:22px;accent-color:var(--accent)}
+.scrap-main{min-width:0}.scrap-card:hover{background:rgba(255,255,255,.045)}
+@media(max-width:680px){.scrap-card{grid-template-columns:auto minmax(0,1fr)}.scrap-card>.btn{grid-column:2;justify-self:start}}
