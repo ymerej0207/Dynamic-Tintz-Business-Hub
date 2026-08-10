@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.4.0-scrap-first-optimizer
+ * Release: 6.4.1-quotes-scheduled-default
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.4.0-";
-const CACHE_NAME = `${CACHE_PREFIX}scrap-first-optimizer`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.4.1-";
+const CACHE_NAME = `${CACHE_PREFIX}quotes-scheduled-default`; 
 
 const APP_SHELL = [
   "./",
