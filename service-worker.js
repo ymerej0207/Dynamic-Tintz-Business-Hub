@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 5.9.6-square-open-state
+ * Release: 6.0.0-inventory-management
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v5.9.6-";
-const CACHE_NAME = `${CACHE_PREFIX}square-open-state`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.0.0-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-management`; 
 
 const APP_SHELL = [
   "./",
