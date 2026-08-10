@@ -242,3 +242,13 @@ input,select,textarea,button{
 .inventory-backfill-fields{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(130px,.7fr) minmax(220px,1.5fr) auto;gap:8px;align-items:center;margin-top:12px}
 .inventory-backfill-fields select,.inventory-backfill-fields input{width:100%}
 @media(max-width:760px){.inventory-backfill-fields{grid-template-columns:1fr}.inventory-backfill-main{flex-direction:column}}
+
+/* v6.2.0 — square-foot material accounting + visible optimizer waste */
+.optimizer-inventory-deduction{
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.04);
+  font-weight:650;
+}
