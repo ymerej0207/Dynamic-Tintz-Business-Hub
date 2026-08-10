@@ -234,3 +234,11 @@ input,select,textarea,button{
 
 /* v6.0.0 Inventory */
 .inventory-home-warning{display:flex;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--line)}.inventory-warning-number{text-align:right;font-size:25px;font-weight:800;color:#ffd36a}.inventory-warning-number small{display:block;font-size:10px;color:var(--muted)}.inventory-ok{display:flex;flex-direction:column;gap:4px}.inventory-product-card,.inventory-roll-card{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:18px;margin:12px 0}.inventory-low{border-color:rgba(255,190,80,.55)}.inventory-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.inventory-metrics>div{background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column}.inventory-metrics span{font-size:11px;text-transform:uppercase;color:var(--muted)}.inventory-metrics b{font-size:24px}.inventory-metrics small{color:var(--muted)}.inventory-danger b{color:#ffd36a}.inventory-roll-card{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:18px}.inventory-roll-balance{display:flex;flex-direction:column;text-align:right}.inventory-explainer{border-left:4px solid var(--accent)}.inventory-material-projection{margin-top:8px;font-weight:700;color:var(--accent)}.job-material-card{margin:14px 0;padding:14px}@media(max-width:760px){.inventory-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.inventory-roll-card{grid-template-columns:1fr}.inventory-roll-balance{text-align:left}}
+
+/* v6.1.0 — Historical inventory reconciliation */
+.inventory-backfill-row{border:1px solid var(--line);background:var(--panel);border-radius:16px;padding:14px;margin:10px 0}
+.inventory-backfill-row.processed{opacity:.72}
+.inventory-backfill-main{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.inventory-backfill-fields{display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(130px,.7fr) minmax(220px,1.5fr) auto;gap:8px;align-items:center;margin-top:12px}
+.inventory-backfill-fields select,.inventory-backfill-fields input{width:100%}
+@media(max-width:760px){.inventory-backfill-fields{grid-template-columns:1fr}.inventory-backfill-main{flex-direction:column}}

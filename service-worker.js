@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.0.2-sign-in-parser-fix
+ * Release: 6.1.0-inventory-backfill
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.0.2-";
-const CACHE_NAME = `${CACHE_PREFIX}signin-parser-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.1.0-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-backfill`; 
 
 const APP_SHELL = [
   "./",

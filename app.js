@@ -29,6 +29,124 @@ async function loadInventoryHomeAlerts(){
   let low=(data||[]).filter(x=>Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft));
   host.innerHTML=low.length?low.map(x=>`<div class="inventory-home-warning"><div><b>⚠ Order ${esc(x.product_name)}</b><div class="muted">${invFmt(x.on_hand_sqft)} sq ft physically on hand • ${invFmt(x.reserved_sqft)} sq ft reserved</div></div><div class="inventory-warning-number">${invFmt(x.projected_sqft)}<small>sq ft projected</small></div></div>`).join(''):'<div class="inventory-ok"><b>Film inventory looks healthy.</b><span>No active film is projected below its reorder threshold after scheduled jobs.</span></div>'
 }
+
+let inventoryBackfillCache=[];
+
+function inventoryJobDate(j){
+  return j.archived_at||j.scheduled_end||j.scheduled_start||j.updated_at||j.created_at||null;
+}
+
+async function loadInventoryBackfill(){
+  let host=$('inventoryBackfillList');
+  if(!host)return;
+  host.innerHTML='<div class="muted">Loading completed jobs…</div>';
+  let from=$('inventoryBackfillFrom')?.value||'';
+  let query=sb.from('jobs').select('id,quote_id,title,status,scheduled_start,scheduled_end,archived_at,updated_at,created_at,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,square_catalog_item_name,customer:customers(first_name,last_name))').eq('status','Completed').order('scheduled_start',{ascending:false});
+  let{data:jobs,error}=await query;
+  if(error){host.innerHTML=`<div class="muted">${esc(error.message)}</div>`;return}
+  jobs=(jobs||[]).filter(j=>!from||new Date(inventoryJobDate(j)||0)>=new Date(from+'T00:00:00'));
+  if(!jobs.length){inventoryBackfillCache=[];host.innerHTML='<div class="muted">No completed jobs found for this date range.</div>';return}
+
+  let ids=jobs.map(j=>j.id),quoteIds=jobs.map(j=>j.quote_id).filter(Boolean);
+  let [plansRes,consRes,optRes,products]=await Promise.all([
+    sb.from('job_material_plans').select('*').in('job_id',ids),
+    sb.from('film_inventory_consumptions').select('job_id,reversed_at').in('job_id',ids),
+    quoteIds.length?sb.from('roll_optimization_plans').select('id,quote_id,roll_width,linear_inches_required,created_at').in('quote_id',quoteIds).order('created_at',{ascending:false}):Promise.resolve({data:[]}),
+    inventoryProducts()
+  ]);
+
+  let planMap=Object.fromEntries((plansRes.data||[]).map(x=>[x.job_id,x]));
+  let consumed=new Set((consRes.data||[]).filter(x=>!x.reversed_at).map(x=>x.job_id));
+  let optimizerMap={};
+  for(let p of (optRes.data||[])){if(!optimizerMap[p.quote_id])optimizerMap[p.quote_id]=p}
+
+  inventoryBackfillCache=jobs.map(j=>{
+    let q=j.quote||{},plan=planMap[j.id]||null,opt=optimizerMap[j.quote_id]||null;
+    let product=products.find(p=>p.name===q.square_catalog_item_name)||null;
+    let feet=plan?invFeet(plan.actual_linear_inches??plan.planned_linear_inches):(opt?invFeet(opt.linear_inches_required):null);
+    let source=plan?(plan.source||'manual'):(opt?'optimizer':'manual');
+    return {job:j,plan,opt,product,feet,source,processed:consumed.has(j.id)};
+  });
+  renderInventoryBackfill();
+}
+
+function renderInventoryBackfill(){
+  let host=$('inventoryBackfillList');if(!host)return;
+  host.innerHTML=inventoryBackfillCache.length?inventoryBackfillCache.map((x,i)=>{
+    let j=x.job,q=j.quote||{},cust=q.customer||{},name=[cust.first_name,cust.last_name].filter(Boolean).join(' ')||j.title||q.project_name||'Completed Job';
+    let date=inventoryJobDate(j),film=x.product?.name||q.square_catalog_item_name||'';
+    return `<div class="inventory-backfill-row ${x.processed?'processed':''}">
+      <div class="inventory-backfill-main">
+        <div><b>${esc(name)}</b><div class="muted">${date?new Date(date).toLocaleDateString():''} • ${esc(q.project_name||j.title||'Job')} • ${Number(q.total_sqft||0).toFixed(2)} glass sq ft</div></div>
+        <span class="pill">${x.processed?'Already Deducted':x.opt?'Optimizer Found':'Needs Entry'}</span>
+      </div>
+      <div class="inventory-backfill-fields">
+        <select data-backfillproduct="${i}" ${x.processed?'disabled':''}>
+          <option value="">Select film…</option>
+          ${inventoryProductCache.map(p=>`<option value="${p.id}" ${p.id===x.product?.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+        </select>
+        <input data-backfillfeet="${i}" type="number" min="0" step="0.01" placeholder="Linear ft used" value="${x.feet==null?'':invFmt(x.feet,2)}" ${x.processed?'disabled':''}>
+        <div class="muted">${x.processed?'Inventory already reflects this job.':x.opt?'Auto-filled from saved Roll Optimizer plan.':'Enter the film actually pulled for this completed job.'}</div>
+        ${x.processed?'':`<button class="btn primary" data-backfillapply="${i}">Deduct Historical Job</button>`}
+      </div>
+    </div>`
+  }).join(''):'<div class="muted">No completed jobs loaded.</div>';
+
+  host.querySelectorAll('[data-backfillapply]').forEach(b=>b.onclick=()=>applyHistoricalInventoryJob(Number(b.dataset.backfillapply)));
+}
+
+async function applyHistoricalInventoryJob(i){
+  let x=inventoryBackfillCache[i];if(!x||x.processed)return;
+  let productId=document.querySelector(`[data-backfillproduct="${i}"]`)?.value,
+      feet=Number(document.querySelector(`[data-backfillfeet="${i}"]`)?.value)||0;
+  if(!productId||feet<=0)return toast('Select the film and enter the linear feet used.');
+  if(!confirm(`Deduct ${feet.toFixed(2)} linear ft from inventory for this completed historical job?`))return;
+
+  let product=inventoryProductCache.find(p=>p.id===productId),width=Number(product?.default_roll_width_inches)||72;
+  let optimizerId=x.opt?.id||null,source=x.opt?'optimizer':'manual';
+
+  let{data:plan,error:planError}=await sb.from('job_material_plans').upsert({
+    job_id:x.job.id,
+    product_id:productId,
+    source,
+    optimizer_plan_id:optimizerId,
+    planned_linear_inches:feet*12,
+    actual_linear_inches:feet*12,
+    roll_width_inches:width,
+    notes:'Historical inventory backfill',
+    updated_at:new Date().toISOString()
+  },{onConflict:'job_id'}).select('id').single();
+  if(planError)return toast(planError.message);
+
+  let{error}=await sb.rpc('inventory_finalize_job',{p_job_id:x.job.id});
+  if(error)return toast(error.message);
+
+  toast('Historical job deducted from inventory.');
+  await loadInventory();
+  await loadInventoryBackfill();
+  dashboard();
+}
+
+async function autoBackfillCompletedJobs(){
+  let pending=inventoryBackfillCache.filter(x=>!x.processed&&x.opt&&x.product&&Number(x.feet)>0);
+  if(!pending.length)return toast('No completed jobs with saved optimizer plans are ready for automatic backfill.');
+  if(!confirm(`Automatically deduct ${pending.length} completed job${pending.length===1?'':'s'} using their saved Roll Optimizer plans?\n\nJobs without an optimizer plan will remain for manual entry.`))return;
+  let done=0;
+  for(let x of pending){
+    let width=Number(x.product.default_roll_width_inches)||72;
+    let{error:planError}=await sb.from('job_material_plans').upsert({
+      job_id:x.job.id,product_id:x.product.id,source:'optimizer',optimizer_plan_id:x.opt.id,
+      planned_linear_inches:Number(x.opt.linear_inches_required),actual_linear_inches:Number(x.opt.linear_inches_required),
+      roll_width_inches:width,notes:'Historical inventory backfill from saved optimizer plan',updated_at:new Date().toISOString()
+    },{onConflict:'job_id'});
+    if(planError)continue;
+    let{error}=await sb.rpc('inventory_finalize_job',{p_job_id:x.job.id});
+    if(!error)done++;
+  }
+  toast(`${done} historical completed job${done===1?'':'s'} deducted.`);
+  await loadInventory();await loadInventoryBackfill();dashboard()
+}
+
 async function loadInventory(){
   let host=$('inventoryStatusList');if(host)host.innerHTML='<div class="card muted">Loading film inventory…</div>';
   try{
@@ -61,11 +179,11 @@ async function addInventoryProduct(){
   $('inventoryProductName').value='';toast('Film type added.');await loadInventory()
 }
 async function addInventoryRoll(){
-  let productId=$('inventoryRollProduct').value,width=Number($('inventoryRollWidth').value)||0,lengthFt=Number($('inventoryRollLength').value)||0,label=$('inventoryRollLabel').value.trim(),notes=$('inventoryRollNotes').value.trim();
+  let productId=$('inventoryRollProduct').value,width=Number($('inventoryRollWidth').value)||0,lengthFt=Number($('inventoryRollLength').value)||0,label=$('inventoryRollLabel').value.trim(),notes=$('inventoryRollNotes').value.trim(),receivedDate=$('inventoryRollReceivedDate')?.value||new Date().toISOString().slice(0,10);
   if(!productId||lengthFt<=0)return toast('Select the film and enter the remaining roll length.');
   let p=inventoryProductCache.find(x=>x.id===productId);if(width<=0)width=Number(p?.default_roll_width_inches)||72;let inches=lengthFt*12;
-  let{error}=await sb.from('film_inventory_rolls').insert({product_id:productId,label:label||`${lengthFt} ft roll`,roll_width_inches:width,starting_length_inches:inches,remaining_length_inches:inches,notes});if(error)return toast(error.message);
-  $('inventoryRollLength').value='';$('inventoryRollLabel').value='';$('inventoryRollNotes').value='';toast('Roll added to inventory.');await loadInventory();dashboard()
+  let{error}=await sb.from('film_inventory_rolls').insert({product_id:productId,label:label||`${lengthFt} ft roll`,roll_width_inches:width,starting_length_inches:inches,remaining_length_inches:inches,received_date:receivedDate,notes});if(error)return toast(error.message);
+  $('inventoryRollLength').value='';$('inventoryRollLabel').value='';$('inventoryRollNotes').value='';if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);toast('Roll added to inventory.');await loadInventory();dashboard()
 }
 async function adjustInventoryRoll(id){
   let r=inventoryRollCache.find(x=>x.id===id);if(!r)return;let v=prompt(`Set remaining length for ${r.product?.name||'this roll'} (linear feet):`,String(invFmt(invFeet(r.remaining_length_inches),1)));if(v===null)return;
@@ -1061,6 +1179,6 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('inventoryRefresh','onclick',loadInventory);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
 bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
