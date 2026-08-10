@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.0.0-inventory-management
+ * Release: 6.0.1-sign-in-hotfix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.0.0-";
-const CACHE_NAME = `${CACHE_PREFIX}inventory-management`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.0.1-";
+const CACHE_NAME = `${CACHE_PREFIX}signin-hotfix`; 
 
 const APP_SHELL = [
   "./",
