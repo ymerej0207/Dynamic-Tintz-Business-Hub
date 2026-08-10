@@ -258,3 +258,11 @@ input,select,textarea,button{
 .scrap-check-wrap input{width:22px;height:22px;accent-color:var(--accent)}
 .scrap-main{min-width:0}.scrap-card:hover{background:rgba(255,255,255,.045)}
 @media(max-width:680px){.scrap-card{grid-template-columns:auto minmax(0,1fr)}.scrap-card>.btn{grid-column:2;justify-self:start}}
+
+/* v6.4.0 — Scrap-first optimizer */
+.optimizer-scrap-toggle{display:flex;align-items:center;gap:10px;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+.optimizer-scrap-toggle input{width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto}
+.optimizer-scrap-match-card{border-color:rgba(77,210,142,.45);box-shadow:0 0 0 1px rgba(77,210,142,.06) inset}
+.optimizer-scrap-match{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.optimizer-scrap-match:last-of-type{border-bottom:0}
+@media(max-width:720px){.optimizer-scrap-match{grid-template-columns:1fr}.optimizer-scrap-match .pill{justify-self:start}}

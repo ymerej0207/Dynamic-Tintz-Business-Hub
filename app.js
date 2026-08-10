@@ -201,7 +201,7 @@ async function loadScrapInventory(){
   let host=$('scrapInventoryList');
   if(!host)return;
   host.innerHTML='<div class="muted">Loading scrap cutoffs…</div>';
-  let{data,error}=await sb.from('film_scrap_inventory').select('*,product:film_inventory_products(name)').eq('status','available').order('created_at',{ascending:false});
+  let{data,error}=await sb.from('film_scrap_inventory').select('*,product:film_inventory_products(name)').in('status',['available','reserved']).order('created_at',{ascending:false});
   if(error){host.innerHTML=`<div class="muted">${esc(error.message)}</div>`;return}
   scrapInventoryCache=data||[];
   renderScrapInventory();
@@ -210,19 +210,23 @@ async function loadScrapInventory(){
 function renderScrapInventory(){
   let host=$('scrapInventoryList');if(!host)return;
   let total=scrapInventoryCache.reduce((s,x)=>s+Number(x.square_feet||0),0);
-  if($('scrapInventorySummary'))$('scrapInventorySummary').textContent=`${scrapInventoryCache.length} available piece${scrapInventoryCache.length===1?'':'s'} • ${invFmt(total,2)} sq ft recoverable material`;
+  let availableCount=scrapInventoryCache.filter(x=>x.status==='available').length,reservedCount=scrapInventoryCache.filter(x=>x.status==='reserved').length;
+  if($('scrapInventorySummary'))$('scrapInventorySummary').textContent=`${availableCount} available • ${reservedCount} reserved • ${invFmt(total,2)} sq ft tracked`;
   host.innerHTML=scrapInventoryCache.length?scrapInventoryCache.map((s)=>`
     <label class="scrap-card">
       <div class="scrap-check-wrap"><input type="checkbox" data-scrapused="${s.id}" aria-label="Mark scrap used"></div>
       <div class="scrap-main">
-        <div class="head" style="margin:0"><div><b>${Number(s.width_inches)}″ × ${Number(s.height_inches)}″</b><div class="muted">${esc(s.product?.name||'Film')} • ${invFmt(s.square_feet,2)} sq ft</div></div><span class="pill">Available</span></div>
+        <div class="head" style="margin:0"><div><b>${Number(s.width_inches)}″ × ${Number(s.height_inches)}″</b><div class="muted">${esc(s.product?.name||'Film')} • ${invFmt(s.square_feet,2)} sq ft</div></div><span class="pill ${s.status==='reserved'?'warn':''}">${s.status==='reserved'?'Reserved':'Available'}</span></div>
+        ${s.status==='reserved'?`<div class="muted"><b>Reserved for optimized job.</b></div>`:''}
         ${s.label?`<div class="muted">${esc(s.label)}</div>`:''}
         ${s.notes?`<div class="muted">${esc(s.notes)}</div>`:''}
+        ${s.status==='reserved'?`<button class="btn mini" type="button" data-scraprelease="${s.id}">Release Reservation</button>`:''}
       </div>
       <button class="btn danger mini" type="button" data-scrapdelete="${s.id}">×</button>
     </label>`).join(''):'<div class="card muted">No available scrap cutoffs.</div>';
 
   host.querySelectorAll('[data-scrapused]').forEach(c=>c.onchange=()=>{if(c.checked)markScrapUsed(c.dataset.scrapused)});
+  host.querySelectorAll('[data-scraprelease]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();releaseScrapReservation(b.dataset.scraprelease)});
   host.querySelectorAll('[data-scrapdelete]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();deleteScrap(b.dataset.scrapdelete)});
 }
 
@@ -273,6 +277,14 @@ async function markScrapUsed(id){
   }).eq('id',id);
   if(error)return toast(error.message);
   toast('Scrap marked used.');
+  await loadScrapInventory();
+}
+
+
+async function releaseScrapReservation(id){
+  let{error}=await sb.from('film_scrap_inventory').update({status:'available',reserved_quote_id:null,reserved_at:null}).eq('id',id);
+  if(error)return toast(error.message);
+  toast('Scrap reservation released.');
   await loadScrapInventory();
 }
 
@@ -974,7 +986,7 @@ async function loadRollOptimizer(){
   if(!select)return;
   let quotes=window._cloudQuotes||[];
   if(!quotes.length){
-    let{data,error}=await sb.from('quotes').select('id,project_name,service_address,measurements,customer:customers(first_name,last_name)').order('created_at',{ascending:false});
+    let{data,error}=await sb.from('quotes').select('id,project_name,service_address,measurements,square_catalog_item_name,customer:customers(first_name,last_name)').order('created_at',{ascending:false});
     if(!error)quotes=data||[];
   }
   window._optimizerQuotes=quotes;
@@ -997,6 +1009,54 @@ function loadSelectedOptimizerQuote(){
   $('optimizerInput').value=optimizerPiecesToText(pieces);
   $('optimizerMessage').textContent=`Loaded ${pieces.reduce((s,p)=>s+p.qty,0)} pieces from ${q.project_name||'saved quote'}.`;
   applyInventoryToOptimizer(q);
+}
+
+
+function scrapFitsPiece(scrap,piece,allowRotation=true){
+  let sw=Number(scrap.width_inches),sh=Number(scrap.height_inches),pw=Number(piece.w),ph=Number(piece.h);
+  let normal=sw>=pw&&sh>=ph,rotated=allowRotation&&sw>=ph&&sh>=pw;
+  if(!normal&&!rotated)return null;
+  return {rotated:!normal&&rotated,wasteArea:sw*sh-pw*ph};
+}
+
+function rebuildGroupsAfterScrap(groups,matches){
+  let used={};
+  matches.forEach(m=>used[m.group]=(used[m.group]||0)+1);
+  return groups.map((g,i)=>({...g,qty:Math.max(0,Number(g.qty||1)-(used[i]||0))})).filter(g=>g.qty>0);
+}
+
+async function optimizerScrapFirst(groups,quote,settings){
+  if(!quote||$('optimizerUseScrap')?.checked===false)return {groups,matches:[]};
+  let filmName=String(quote.square_catalog_item_name||'').trim();
+  if(!filmName)return {groups,matches:[]};
+
+  let{data:product}=await sb.from('film_inventory_products').select('id,name').eq('name',filmName).maybeSingle();
+  if(!product)return {groups,matches:[]};
+
+  let{data:scraps,error}=await sb.from('film_scrap_inventory')
+    .select('*,product:film_inventory_products(name)')
+    .eq('product_id',product.id).eq('status','available').order('square_feet',{ascending:true});
+  if(error||!scraps?.length)return {groups,matches:[]};
+
+  let instances=expandOptimizerPieces(groups).sort((a,b)=>(b.w*b.h)-(a.w*a.h)),available=[...scraps],matches=[];
+  for(let piece of instances){
+    let candidates=available.map(scrap=>({scrap,fit:scrapFitsPiece(scrap,piece,settings.allowRotation)}))
+      .filter(x=>x.fit).sort((a,b)=>a.fit.wasteArea-b.fit.wasteArea||Number(a.scrap.square_feet)-Number(b.scrap.square_feet));
+    if(!candidates.length)continue;
+    let best=candidates[0];
+    matches.push({
+      scrap_id:best.scrap.id,scrap_width:Number(best.scrap.width_inches),scrap_height:Number(best.scrap.height_inches),
+      scrap_sqft:Number(best.scrap.square_feet),piece_id:piece.id,group:piece.group,label:piece.label,
+      piece_width:piece.w,piece_height:piece.h,piece_sqft:piece.w*piece.h/144,rotated:best.fit.rotated,
+      leftover_scrap_sqft:Math.max(0,best.fit.wasteArea/144),film_name:filmName
+    });
+    available=available.filter(s=>s.id!==best.scrap.id);
+  }
+  return {groups:rebuildGroupsAfterScrap(groups,matches),matches};
+}
+
+function emptyOptimizerResult(groups,settings){
+  return {patterns:[],linear:0,totalArea:0,wasteArea:0,distinct:0,changes:0,groups,settings,instances:[],trials:0,remaining:settings.rollLength,efficiency:100,wastePct:0};
 }
 
 function expandOptimizerPieces(groups){
@@ -1149,6 +1209,12 @@ function consolidateOptimizerPulls(patterns){
   return out;
 }
 function renderOptimizerResult(result,title='Manual Job'){
+  let scrapMatches=result.scrapMatches||[],scrapCovered=scrapMatches.reduce((s,m)=>s+Number(m.piece_sqft||0),0),originalGlass=Number(result.originalTotalArea||result.totalArea)/144;
+  let scrapHtml=scrapMatches.length?`<div class="card optimizer-scrap-match-card">
+    <div class="head" style="margin-top:0"><div><h3>♻ SCRAP FIRST — ${scrapMatches.length} Match${scrapMatches.length===1?'':'es'} Found</h3><div class="muted">These windows do not need fresh roll film.</div></div><span class="pill">${optimizerRound(scrapCovered,2)} sq ft glass covered</span></div>
+    ${scrapMatches.map(m=>`<div class="optimizer-scrap-match"><div><b>${optimizerEsc(m.label)}</b><div class="muted">Window ${optimizerInches(m.piece_width)} × ${optimizerInches(m.piece_height)}</div></div><div><b>USE SCRAP ${optimizerInches(m.scrap_width)} × ${optimizerInches(m.scrap_height)}</b><div class="muted">${optimizerEsc(m.film_name)}${m.rotated?' • rotate scrap':''}</div></div><span class="pill">SAVE ROLL CUT</span></div>`).join('')}
+    <div class="optimizer-command"><b>Installer command:</b> Pull these scrap pieces before cutting the roll. Saving this optimization reserves them so another job does not claim the same cutoff.</div>
+  </div>`:'';
   let {settings}=result;
   result.patterns.forEach(p=>{p._rollWidth=settings.rollWidth;p._kerf=settings.kerf});
   let pulls=consolidateOptimizerPulls(result.patterns);
@@ -1181,10 +1247,11 @@ function renderOptimizerResult(result,title='Manual Job'){
   </div>`).join('');
   $('optimizerResultTitle').textContent=title;
   $('optimizerOutput').innerHTML=`
+    ${scrapHtml}
     <div class="grid3 optimizer-metrics">
       <div class="mini-stat"><b>${optimizerInches(settings.rollWidth)}</b><span>Roll Width</span></div>
       <div class="mini-stat"><b>${optimizerFeet(settings.rollLength)}</b><span>Available Length</span></div>
-      <div class="mini-stat"><b>${optimizerRound(result.totalArea/144,2)}</b><span>Sq Ft Needed</span></div>
+      <div class="mini-stat"><b>${optimizerRound(originalGlass,2)}</b><span>Total Job Glass</span></div>
       <div class="mini-stat"><b>${optimizerInches(result.linear)}</b><span>Linear Inches Required</span></div>
       <div class="mini-stat ${remainingOk?'':'optimizer-danger'}"><b>${remainingOk?optimizerFeet(result.remaining):'SHORT'}</b><span>Remaining Roll</span></div>
       <div class="mini-stat"><b>${optimizerRound(result.efficiency,1)}%</b><span>Material Efficiency</span></div>
@@ -1192,7 +1259,9 @@ function renderOptimizerResult(result,title='Manual Job'){
     ${remainingOk?'':`<div class="card optimizer-alert"><b>Insufficient inventory:</b> This plan requires ${optimizerFeet(result.linear-settings.rollLength)} more film than the entered roll length.</div>`}
     <div class="card"><div class="head" style="margin-top:0"><h3>Roll Summary</h3><span class="pill">${totalPieces} pieces</span></div>
       <div class="optimizer-summary-grid">
-        <div><span>Glass area required</span><b>${optimizerRound(result.totalArea/144,2)} sq ft</b></div>
+        <div><span>Total job glass</span><b>${optimizerRound(originalGlass,2)} sq ft</b></div>
+        <div><span>Glass covered from scraps</span><b>${optimizerRound(scrapCovered,2)} sq ft</b></div>
+        <div><span>Glass requiring fresh roll</span><b>${optimizerRound(result.totalArea/144,2)} sq ft</b></div>
         <div><span>Total roll material pulled</span><b>${optimizerRound(settings.rollWidth*result.linear/144,2)} sq ft</b></div>
         <div><span>Calculated job waste</span><b>${optimizerRound(result.wasteArea/144,2)} sq ft</b></div>
         <div><span>Linear footage pulled</span><b>${optimizerFeet(result.linear)}</b></div>
@@ -1206,7 +1275,7 @@ function renderOptimizerResult(result,title='Manual Job'){
       <div class="muted" style="margin-top:10px">The plan minimizes linear footage first. Equal-footage layouts are ranked by waste, cutter changes, then workflow simplicity. ${result.trials} candidate layouts were compared.</div>
     </div>
     <div class="card"><h3>Pull Sequence & Piece Schedule</h3>${pullHtml}</div>
-    <div class="card"><h3>Piece Schedule</h3><div class="table-wrap"><table class="optimizer-table"><thead><tr><th>Area</th><th>Qty</th><th>Size</th><th>Area</th></tr></thead><tbody>${pieceRows}</tbody></table></div></div>
+    <div class="card"><h3>Fresh Roll Piece Schedule</h3><div class="table-wrap"><table class="optimizer-table"><thead><tr><th>Area</th><th>Qty</th><th>Size</th><th>Area</th></tr></thead><tbody>${pieceRows}</tbody></table></div></div>
     <div class="card"><h3>Waste Report</h3>
       <div class="optimizer-summary-grid">
         <div><span>Total unused film area</span><b>${optimizerRound(result.wasteArea/144,2)} sq ft</b></div>
@@ -1222,7 +1291,7 @@ function renderOptimizerResult(result,title='Manual Job'){
     </div>`;
   $('optimizerResults').classList.remove('hidden');
 }
-function runRollOptimizer(){
+async function runRollOptimizer(){
   let message=$('optimizerMessage');
   try{
     let groups=parseOptimizerInput($('optimizerInput').value);
@@ -1236,19 +1305,25 @@ function runRollOptimizer(){
       depth:$('optimizerDepth').value
     };
     if(settings.rollWidth<=0)throw new Error('Roll width must be greater than zero.');
-    message.textContent='Comparing cutting layouts…';
-    setTimeout(()=>{
-      try{
-        let result=optimizeFilmRoll(groups,settings);
-        let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===rollOptimizerQuoteId);
-        rollOptimizerResult=result;
-        renderOptimizerResult(result,q?.project_name||`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||'Manual Job');
-        message.textContent=`Optimization complete. ${result.trials} layouts compared.`;
-        $('optimizerResults').scrollIntoView({behavior:'smooth',block:'start'});
-      }catch(e){message.textContent=e.message}
-    },30);
+    let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===rollOptimizerQuoteId);
+    message.textContent='Checking scrap inventory before cutting fresh roll…';
+    let scrapPlan=await optimizerScrapFirst(groups,q,settings);
+    message.textContent=scrapPlan.matches.length?`${scrapPlan.matches.length} scrap match${scrapPlan.matches.length===1?'':'es'} found. Optimizing remaining fresh-roll cuts…`:'No usable scrap matches. Comparing fresh-roll cutting layouts…';
+    await new Promise(r=>setTimeout(r,30));
+
+    let originalTotalArea=groups.reduce((s,g)=>s+Number(g.w)*Number(g.h)*Number(g.qty||1),0);
+    let result=scrapPlan.groups.length?optimizeFilmRoll(scrapPlan.groups,settings):emptyOptimizerResult([],settings);
+    result.scrapMatches=scrapPlan.matches;
+    result.originalGroups=groups;
+    result.originalTotalArea=originalTotalArea;
+    result.scrapCoveredArea=scrapPlan.matches.reduce((s,m)=>s+Number(m.piece_width)*Number(m.piece_height),0);
+    rollOptimizerResult=result;
+    renderOptimizerResult(result,q?.project_name||`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||'Manual Job');
+    message.textContent=scrapPlan.matches.length?`Optimization complete. ${scrapPlan.matches.length} window${scrapPlan.matches.length===1?'':'s'} assigned to scrap before fresh-roll cutting.`:`Optimization complete. ${result.trials} layouts compared.`;
+    $('optimizerResults').scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){message.textContent=e.message}
 }
+
 async function saveRollOptimizerPlan(){
   if(!rollOptimizerResult)return toast('Run the optimizer first.');
   let payload={
@@ -1267,7 +1342,13 @@ async function saveRollOptimizerPlan(){
     if(String(error.message).includes('roll_optimization_plans'))return toast('Run ROLL-OPTIMIZER-MIGRATION.sql before saving plans.');
     return toast(error.message);
   }
-  toast('Optimization plan saved to cloud.');
+  let matches=rollOptimizerResult.scrapMatches||[];
+  if(matches.length&&rollOptimizerQuoteId){
+    let ids=matches.map(m=>m.scrap_id);
+    let{error:scrapError}=await sb.from('film_scrap_inventory').update({status:'reserved',reserved_quote_id:rollOptimizerQuoteId,reserved_at:new Date().toISOString()}).in('id',ids).eq('status','available');
+    if(scrapError)return toast('Plan saved, but scrap reservation failed: '+scrapError.message);
+  }
+  toast(matches.length?`Optimization saved and ${matches.length} scrap piece${matches.length===1?'':'s'} reserved.`:'Optimization plan saved to cloud.');
 }
 function printRollOptimizer(){
   if(!rollOptimizerResult)return toast('Run the optimizer first.');
