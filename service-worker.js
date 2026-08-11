@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.4.2-inventory-forecast-fix
+ * Release: 6.5.0-dashboard-leads-operations
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.4.2-";
-const CACHE_NAME = `${CACHE_PREFIX}inventory-forecast-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.5.0-";
+const CACHE_NAME = `${CACHE_PREFIX}dashboard-leads-operations`; 
 
 const APP_SHELL = [
   "./",
