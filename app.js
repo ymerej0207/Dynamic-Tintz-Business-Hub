@@ -244,7 +244,22 @@ function renderScrapInventory(){
   host.innerHTML=filmNames.map(film=>{
     let pieces=groups[film].sort((a,b)=>{
       if(a.status!==b.status)return a.status==='available'?-1:1;
-      return Number(b.square_feet||0)-Number(a.square_feet||0);
+
+      let aw=Number(a.width_inches)||0, bw=Number(b.width_inches)||0,
+          ah=Number(a.height_inches)||0, bh=Number(b.height_inches)||0;
+
+      // Primary grouping: beginning/first measurement (width) descending.
+      // So all 34x... pieces stay together, then 33x..., 32x..., etc.
+      if(aw!==bw)return bw-aw;
+
+      // Within the same first measurement, sort the second measurement descending.
+      // Example: 34x40, 34x39, 34x29, 34x28...
+      if(ah!==bh)return bh-ah;
+
+      // Stable tie-breaker: larger area first, then record id.
+      let aa=Number(a.square_feet)||0, ba=Number(b.square_feet)||0;
+      if(aa!==ba)return ba-aa;
+      return String(a.id).localeCompare(String(b.id));
     });
     let groupSqft=pieces.reduce((s,x)=>s+Number(x.square_feet||0),0);
     let groupAvailable=pieces.filter(x=>x.status==='available').length;
