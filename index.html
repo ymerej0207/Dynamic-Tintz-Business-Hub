@@ -156,41 +156,118 @@
     <div id="optimizerOutput"></div>
   </div>
 </main>
-<main id="inventory" class="view"><div class="head"><div><h2>Film Inventory</h2><div class="muted">Physical roll stock, scheduled reservations, and projected reorder levels.</div></div><button id="inventoryRefresh" class="btn">Refresh</button></div><div class="card inventory-explainer"><b>How the forecast works</b><div class="muted">Scheduling reserves planned material without physically removing it. Canceled jobs release the reservation. Completed and archived jobs officially deduct the planned or actual film from physical rolls.</div></div><div id="inventoryStatusList"></div><div class="grid2"><div class="card"><h3>Add Film Type</h3><div class="field"><label>Film / Shade Name</label><input id="inventoryProductName" placeholder="Example: 15% Ceramic Tint Install"></div><div class="grid2"><div class="field"><label>Standard Roll Width (in)</label><input id="inventoryProductWidth" type="number" value="72" min="1" step="0.25"></div><div class="field"><label>Reorder Warning (sq ft)</label><input id="inventoryProductThreshold" type="number" value="75" min="0" step="1"></div></div><button id="inventoryAddProduct" class="btn primary">Add Film Type</button></div><div id="inventoryRollCard" class="card"><h3>Add Full or Partial Roll</h3><div class="field"><label>Film</label><select id="inventoryRollProduct"><option value="">Select film…</option></select></div><div class="grid2"><div class="field"><label>Roll Width (in)</label><input id="inventoryRollWidth" type="number" value="72" min="1" step="0.25"></div><div class="field"><label>Remaining Length (linear ft)</label><input id="inventoryRollLength" type="number" min="0" step="0.1" placeholder="50 or 100"></div></div><div class="field"><label>Roll Label</label><input id="inventoryRollLabel" placeholder="New roll, partial #2, shop shelf..."></div><div class="field"><label>Roll Received / Starting Date</label><input id="inventoryRollReceivedDate" type="date"></div><div class="field"><label>Notes</label><input id="inventoryRollNotes" placeholder="Lot, supplier, location, etc."></div><button id="inventoryAddRoll" class="btn primary">Add Roll to Inventory</button></div></div><div class="head"><h2>Rolls On Hand</h2></div><div id="inventoryRollList"></div>
+<main id="inventory" class="view">
+  <div class="head inventory-page-head">
+    <div><h2>Film Inventory</h2><div class="muted">Tap any section or film to expand details.</div></div>
+    <button id="inventoryRefresh" class="btn">Refresh</button>
+  </div>
 
-<div class="head"><div><h2>Scrap Cutoff Inventory</h2><div class="muted">Usable leftover pieces that can save a fresh roll cut on future jobs.</div></div><button id="scrapRefresh" class="btn">Refresh</button></div>
-<div class="card">
-  <div class="head" style="margin-top:0"><div><h3>Quick Scrap Entry</h3><div class="muted">Paste one per line or comma-separated. Example: <b>34x28 25c</b></div></div><span class="pill">Fast Entry</span></div>
-  <div class="field"><label>Scrap Pieces</label><textarea id="scrapQuickEntry" rows="4" placeholder="34x28 25c&#10;44x18 35c&#10;22x16 blackout"></textarea></div>
-  <button id="scrapQuickAdd" class="btn primary">Add Scrap Pieces</button>
-</div>
-<div class="card">
-  <h3>Manual Scrap Entry</h3>
-  <div class="grid2">
-    <div class="field"><label>Film / Shade</label><select id="scrapProduct"><option value="">Select film…</option></select></div>
-    <div class="field"><label>Notes</label><input id="scrapNotes" placeholder="Optional"></div>
-  </div>
-  <div class="grid2">
-    <div class="field"><label>Width (in)</label><input id="scrapWidth" type="number" min="0" step="0.25"></div>
-    <div class="field"><label>Height (in)</label><input id="scrapHeight" type="number" min="0" step="0.25"></div>
-  </div>
-  <button id="scrapManualAdd" class="btn">Add Scrap</button>
-</div>
-<div class="card">
-  <div class="head" style="margin-top:0"><h3>Available Cutoffs</h3><span id="scrapInventorySummary" class="pill">0 available</span></div>
-  <div class="muted" style="margin-bottom:10px">Cutoffs are grouped by film type, with 25%, 35%, and 45% Ceramic shown first. Within each film, pieces are grouped by the first measurement so all 34×... scraps stay together, then sorted by the second measurement.</div>
-  <div id="scrapInventoryList"><div class="muted">Loading scrap inventory…</div></div>
-</div>
-<div class="head"><div><h2>Historical Inventory Reconciliation</h2><div class="muted">Backfill film used by jobs that were already completed before Inventory went live.</div></div></div>
-<div class="card inventory-explainer">
-  <b>How to use this</b>
-  <div class="muted">Enter your rolls with the date you had them on hand, then load completed jobs from that date forward. Jobs with saved Roll Optimizer plans can be deducted automatically. Older jobs without a saved plan stay on the list so you can enter the actual or best-known square footage used. Leave it blank to use the job glass square footage.</div>
-  <div class="grid2" style="margin-top:12px">
-    <div class="field"><label>Completed Jobs From</label><input id="inventoryBackfillFrom" type="date"></div>
-    <div class="actions" style="align-items:end"><button id="inventoryLoadBackfill" class="btn">Load Completed Jobs</button><button id="inventoryAutoBackfill" class="btn primary">Auto-Deduct Optimized Jobs</button></div>
-  </div>
-</div>
-<div id="inventoryBackfillList"><div class="muted">Choose a starting date and load completed jobs.</div></div>
+  <details class="inventory-section-accordion" open>
+    <summary>
+      <div><b>Film Inventory</b><span class="muted">Stock, reservations & reorder status</span></div>
+      <span class="inventory-section-hint">Tap to expand</span>
+    </summary>
+    <div class="inventory-section-body">
+      <div id="inventoryStatusList"></div>
+    </div>
+  </details>
+
+  <details id="inventoryRollsSection" class="inventory-section-accordion">
+    <summary>
+      <div><b>Rolls On Hand</b><span class="muted">Physical rolls & manual pulls</span></div>
+      <span class="inventory-section-hint">Tap to expand</span>
+    </summary>
+    <div class="inventory-section-body"><div id="inventoryRollList"></div></div>
+  </details>
+
+  <details id="inventoryAddRollSection" class="inventory-section-accordion">
+    <summary>
+      <div><b>Add Full or Partial Roll</b><span class="muted">Receive or backdate inventory</span></div>
+      <span class="inventory-section-hint">Tap to expand</span>
+    </summary>
+    <div class="inventory-section-body">
+      <div id="inventoryRollCard">
+        <div class="field"><label>Film</label><select id="inventoryRollProduct"><option value="">Select film…</option></select></div>
+        <div class="grid2">
+          <div class="field"><label>Roll Width (in)</label><input id="inventoryRollWidth" type="number" value="72" min="1" step="0.25"></div>
+          <div class="field"><label>Remaining Length (linear ft)</label><input id="inventoryRollLength" type="number" min="0" step="0.1" placeholder="50 or 100"></div>
+        </div>
+        <div class="field"><label>Roll Label</label><input id="inventoryRollLabel" placeholder="New roll, partial #2, shop shelf..."></div>
+        <div class="field"><label>Roll Received / Starting Date</label><input id="inventoryRollReceivedDate" type="date"></div>
+        <div class="field"><label>Notes</label><input id="inventoryRollNotes" placeholder="Lot, supplier, location, etc."></div>
+        <button id="inventoryAddRoll" class="btn primary">Add Roll to Inventory</button>
+      </div>
+    </div>
+  </details>
+
+  <details class="inventory-section-accordion">
+    <summary>
+      <div><b>Scrap Cutoff Inventory</b><span id="scrapInventorySummary" class="muted">Loading scraps…</span></div>
+      <span class="inventory-section-hint">Tap to expand</span>
+    </summary>
+    <div class="inventory-section-body">
+      <details class="inventory-subaccordion">
+        <summary><b>Quick Scrap Entry</b><span class="muted">Paste dimensions</span></summary>
+        <div class="inventory-subaccordion-body">
+          <div class="field"><label>Scrap Pieces</label><textarea id="scrapQuickEntry" rows="4" placeholder="34x28 25c&#10;44x18 35c&#10;22x16 blackout"></textarea></div>
+          <button id="scrapQuickAdd" class="btn primary">Add Scrap Pieces</button>
+        </div>
+      </details>
+
+      <details class="inventory-subaccordion">
+        <summary><b>Manual Scrap Entry</b><span class="muted">One cutoff at a time</span></summary>
+        <div class="inventory-subaccordion-body">
+          <div class="grid2">
+            <div class="field"><label>Film / Shade</label><select id="scrapProduct"><option value="">Select film…</option></select></div>
+            <div class="field"><label>Notes</label><input id="scrapNotes" placeholder="Optional"></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Width (in)</label><input id="scrapWidth" type="number" min="0" step="0.25"></div>
+            <div class="field"><label>Height (in)</label><input id="scrapHeight" type="number" min="0" step="0.25"></div>
+          </div>
+          <button id="scrapManualAdd" class="btn">Add Scrap</button>
+        </div>
+      </details>
+
+      <details class="inventory-subaccordion" open>
+        <summary><b>Available Cutoffs</b><span class="muted">Grouped by film, then size</span></summary>
+        <div class="inventory-subaccordion-body">
+          <div class="muted" style="margin-bottom:10px">Identical sizes are condensed into a single quantity row. Expand a size only when you need to mark an individual piece used.</div>
+          <div id="scrapInventoryList"><div class="muted">Loading scrap inventory…</div></div>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <details class="inventory-section-accordion">
+    <summary>
+      <div><b>Historical Inventory Reconciliation</b><span class="muted">Backfill previously completed jobs</span></div>
+      <span class="inventory-section-hint">Tap to expand</span>
+    </summary>
+    <div class="inventory-section-body">
+      <div class="muted">Enter your rolls with the date you had them on hand, then load completed jobs from that date forward.</div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="field"><label>Completed Jobs From</label><input id="inventoryBackfillFrom" type="date"></div>
+        <div class="actions" style="align-items:end"><button id="inventoryLoadBackfill" class="btn">Load Completed Jobs</button><button id="inventoryAutoBackfill" class="btn primary">Auto-Deduct Optimized Jobs</button></div>
+      </div>
+      <div id="inventoryBackfillList"><div class="muted">Choose a starting date and load completed jobs.</div></div>
+    </div>
+  </details>
+
+  <details class="inventory-section-accordion">
+    <summary>
+      <div><b>Add Film Type</b><span class="muted">Occasional setup / custom film</span></div>
+      <span class="inventory-section-hint">Tap to expand</span>
+    </summary>
+    <div class="inventory-section-body">
+      <div class="field"><label>Film / Shade Name</label><input id="inventoryProductName" placeholder="Example: 15% Ceramic Tint Install"></div>
+      <div class="grid2">
+        <div class="field"><label>Standard Roll Width (in)</label><input id="inventoryProductWidth" type="number" value="72" min="1" step="0.25"></div>
+        <div class="field"><label>Reorder Warning (sq ft)</label><input id="inventoryProductThreshold" type="number" value="75" min="0" step="1"></div>
+      </div>
+      <button id="inventoryAddProduct" class="btn primary">Add Film Type</button>
+    </div>
+  </details>
 </main>
 <main id="operations" class="view"><div class="head"><h2>Operations Board</h2><button id="refreshOperations" class="btn">Refresh</button></div><div class="card"><div class="grid2"><div class="field"><label>Job Status</label><select id="operationStatus"><option value="">All Jobs</option><option>Scheduled</option><option>Confirmed</option><option>En Route</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><div class="field"><label>Date Range</label><select id="operationRange"><option value="today">Today</option><option value="7" selected>Next 7 Days</option><option value="30">Next 30 Days</option><option value="all">All Jobs</option></select></div></div></div><div id="operationsList"></div></main>
 <main id="shortcuts" class="view"><div class="head"><div><h2>Hometown Response Hub</h2><div id="shortcutCountLabel" class="muted">Loading responses…</div></div><button id="addShortcut" class="btn primary">+ Add</button></div><div class="card"><div class="grid2"><div class="field"><label>Search Responses</label><input id="shortcutSearch" placeholder="Keyword, category, or message"></div><div class="field"><label>Category</label><select id="shortcutCategoryFilter"><option>All</option></select></div></div><div class="actions"><button id="refreshShortcuts" class="btn">Refresh Built-In Responses</button></div></div><div id="shortcutList"></div></main>
@@ -211,4 +288,4 @@
 <div id="organicLeadModal" class="modal"><div class="modal-card"><div class="head"><div><h2>Add Organic Lead</h2><div class="muted">Google, Facebook, Nextdoor, referrals, repeat customers, word of mouth, etc.</div></div><button class="btn" data-close="organicLeadModal">Close</button></div><div class="grid2"><div class="field"><label>First Name</label><input id="organicFirstName"></div><div class="field"><label>Last Name</label><input id="organicLastName"></div></div><div class="grid2"><div class="field"><label>Phone</label><input id="organicPhone"></div><div class="field"><label>Email</label><input id="organicEmail"></div></div><div class="field"><label>Lead Source</label><select id="organicSource"><option>Google</option><option>Facebook</option><option>Nextdoor</option><option>Referral</option><option>Repeat Customer</option><option>Word of Mouth</option><option>Website</option><option>Other Organic</option></select></div><div class="field"><label>Service Address</label><input id="organicAddress"></div><div class="field"><label>Notes</label><textarea id="organicNotes" rows="3"></textarea></div><div id="organicLeadMessage" class="muted"></div><div class="actions"><button id="saveOrganicLeadBtn" class="btn primary">Save Organic Lead</button></div></div></div><div id="scheduleJobModal" class="modal"><div class="panel"><div class="head"><div><h2>Schedule & Assign Job</h2><div id="scheduleQuoteName" class="muted"></div></div><button class="btn" data-close="scheduleJobModal">Close</button></div><input id="scheduleQuoteId" type="hidden"><div class="field"><label>Assign Installers</label><div id="scheduleInstallers" class="installer-picker"></div></div><div class="grid2"><div class="field"><label>Start Date & Time</label><input id="scheduleStart" type="datetime-local"></div><div class="field"><label>Estimated End</label><input id="scheduleEnd" type="datetime-local"></div></div><div class="field"><label>Job Title</label><input id="scheduleTitle" placeholder="Smith Residence — Window Film Installation"></div><div class="field"><label>Installer Notes</label><textarea id="scheduleNotes" placeholder="Entry instructions, parking, scaffolding, film selection, priority rooms..."></textarea></div><div class="card job-material-card"><div class="head" style="margin-top:0"><div><h3>Film Material Plan</h3><div class="muted">Used for inventory forecasting and final deduction.</div></div><span class="pill">Inventory</span></div><div class="field"><label>Film / Shade</label><select id="scheduleFilmProduct"><option value="">Select film…</option></select></div><div class="grid2"><div class="field"><label>Planned Material Used (sq ft)</label><input id="scheduleMaterialLinearFt" type="number" min="0" step="0.01" placeholder="Auto-filled from Roll Optimizer including waste"></div><div class="field"><label>Actual Material Used (sq ft, optional)</label><input id="scheduleMaterialActualFt" type="number" min="0" step="0.01" placeholder="Leave blank to use planned amount"></div></div><div id="scheduleMaterialHint" class="muted"></div><div id="scheduleMaterialProjection" class="inventory-material-projection"></div></div><div class="field"><label>Job Status</label><select id="scheduleStatus"><option>Scheduled</option><option>Confirmed</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><button id="saveScheduledJob" class="btn primary wide">Save & Assign Job</button><div id="scheduleMessage" class="muted" style="margin-top:10px"></div></div></div>
 <div id="jobDetailModal" class="modal"><div class="modal-panel"><div class="head"><div><h2 id="jobDetailTitle">Job Details</h2><div id="jobDetailMeta" class="muted"></div></div><button class="btn" data-close="jobDetailModal">Close</button></div><div class="field"><label>Job Status</label><select id="jobStatusSelect"><option>Scheduled</option><option>En Route</option><option>In Progress</option><option>Completed</option></select></div><div class="field"><label>Installer Notes</label><textarea id="jobInstallerNotes" placeholder="Access issues, film notes, customer requests, completion notes..."></textarea></div><button id="saveInstallerJobUpdate" class="btn primary clock-button">Save Job Update</button><div class="head"><h2>Rooms & Dimensions</h2></div><div id="jobDimensionList"></div></div></div>
 <div id="leadModal" class="modal"><div class="panel"><div class="head"><h2>New Angi Lead</h2><button data-close="leadModal" class="btn">Close</button></div><div class="field"><label>First Name</label><input id="lfn"></div><div class="field"><label>Last Name</label><input id="lln"></div><div class="field"><label>Phone</label><input id="lphone"></div><div class="field"><label>Email</label><input id="lemail"></div><div class="field"><label>City</label><input id="lcity"></div><div class="field"><label>Service Requested</label><input id="lservice"></div><div class="field"><label>Original Message</label><textarea id="lmessage"></textarea></div><button id="saveLead" class="btn primary wide">Save Lead</button></div></div>
-<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=6.7.3"></script></body></html>
+<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=6.8.0"></script></body></html>

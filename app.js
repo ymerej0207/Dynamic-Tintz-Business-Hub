@@ -210,100 +210,114 @@ function renderScrapInventory(){
       reservedCount=scrapInventoryCache.filter(x=>x.status==='reserved').length;
 
   if($('scrapInventorySummary')){
-    $('scrapInventorySummary').textContent=`${availableCount} available • ${reservedCount} reserved • ${invFmt(total,2)} sq ft tracked`;
+    $('scrapInventorySummary').textContent=`${availableCount} available • ${reservedCount} reserved • ${invFmt(total,2)} sq ft`;
   }
 
   if(!scrapInventoryCache.length){
-    host.innerHTML='<div class="card muted">No available or reserved scrap cutoffs.</div>';
+    host.innerHTML='<div class="muted">No available or reserved scrap cutoffs.</div>';
     return;
   }
 
   const priorityOrder=[
-    '25% Ceramic Tint Install',
-    '35% Ceramic Tint Install',
-    '45% Ceramic Tint Install',
-    '15% Ceramic Tint Install',
-    '2 Mil Security Film',
-    'Blackout Tint Install',
+    '25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install',
+    '15% Ceramic Tint Install','2 Mil Security Film','Blackout Tint Install',
     'Budget Friendly Solar Control'
   ];
 
-  let groups={};
+  let filmGroups={};
   for(let scrap of scrapInventoryCache){
     let film=scrap.product?.name||'Other Film';
-    if(!groups[film])groups[film]=[];
-    groups[film].push(scrap);
+    if(!filmGroups[film])filmGroups[film]=[];
+    filmGroups[film].push(scrap);
   }
 
-  let filmNames=Object.keys(groups).sort((a,b)=>{
+  let filmNames=Object.keys(filmGroups).sort((a,b)=>{
     let ai=priorityOrder.indexOf(a),bi=priorityOrder.indexOf(b);
     if(ai===-1)ai=999;if(bi===-1)bi=999;
     return ai-bi||a.localeCompare(b);
   });
 
   host.innerHTML=filmNames.map(film=>{
-    let pieces=groups[film].sort((a,b)=>{
-      if(a.status!==b.status)return a.status==='available'?-1:1;
-
-      let aw=Number(a.width_inches)||0, bw=Number(b.width_inches)||0,
-          ah=Number(a.height_inches)||0, bh=Number(b.height_inches)||0;
-
-      // Primary grouping: beginning/first measurement (width) descending.
-      // So all 34x... pieces stay together, then 33x..., 32x..., etc.
-      if(aw!==bw)return bw-aw;
-
-      // Within the same first measurement, sort the second measurement descending.
-      // Example: 34x40, 34x39, 34x29, 34x28...
-      if(ah!==bh)return bh-ah;
-
-      // Stable tie-breaker: larger area first, then record id.
-      let aa=Number(a.square_feet)||0, ba=Number(b.square_feet)||0;
-      if(aa!==ba)return ba-aa;
-      return String(a.id).localeCompare(String(b.id));
-    });
-    let groupSqft=pieces.reduce((s,x)=>s+Number(x.square_feet||0),0);
-    let groupAvailable=pieces.filter(x=>x.status==='available').length;
+    let filmPieces=filmGroups[film];
     let shortName=film.replace(' Tint Install','');
+    let filmSqft=filmPieces.reduce((s,x)=>s+Number(x.square_feet||0),0);
+    let filmAvailable=filmPieces.filter(x=>x.status==='available').length;
+    let filmReserved=filmPieces.filter(x=>x.status==='reserved').length;
 
-    return `<section class="scrap-film-group">
-      <div class="scrap-film-header">
+    // Group physical scrap records by exact WxH dimensions.
+    let sizeGroups={};
+    for(let s of filmPieces){
+      let w=Number(s.width_inches)||0,h=Number(s.height_inches)||0;
+      let key=`${w}|${h}`;
+      if(!sizeGroups[key])sizeGroups[key]={w,h,pieces:[]};
+      sizeGroups[key].pieces.push(s);
+    }
+
+    let sizes=Object.values(sizeGroups).sort((a,b)=>{
+      if(a.w!==b.w)return b.w-a.w;
+      if(a.h!==b.h)return b.h-a.h;
+      return 0;
+    });
+
+    return `<details class="scrap-film-group inventory-accordion">
+      <summary class="scrap-film-header">
         <div>
           <h3>${esc(shortName)}</h3>
-          <div class="muted">${groupAvailable} available • ${pieces.length-groupAvailable} reserved</div>
+          <div class="muted">${filmAvailable} available • ${filmReserved} reserved</div>
         </div>
-        <div class="scrap-film-total">${invFmt(groupSqft,2)}<small>sq ft scraps</small></div>
-      </div>
+        <div class="scrap-film-total">${invFmt(filmSqft,2)}<small>sq ft scraps</small></div>
+      </summary>
 
-      <div class="scrap-film-pieces">
-        ${pieces.map(s=>`
-          <label class="scrap-card ${s.status==='reserved'?'scrap-reserved':''}">
-            <div class="scrap-check-wrap">
-              <input type="checkbox" data-scrapused="${s.id}" aria-label="Mark scrap used">
-            </div>
-            <div class="scrap-main">
-              <div class="head" style="margin:0">
-                <div>
-                  <b>${Number(s.width_inches)}″ × ${Number(s.height_inches)}″</b>
-                  <div class="muted">${invFmt(s.square_feet,2)} sq ft</div>
-                </div>
-                <span class="pill ${s.status==='reserved'?'warn':''}">${s.status==='reserved'?'Reserved':'Available'}</span>
+      <div class="scrap-film-pieces inventory-accordion-body">
+        ${sizes.map(g=>{
+          let available=g.pieces.filter(x=>x.status==='available').length;
+          let reserved=g.pieces.filter(x=>x.status==='reserved').length;
+          let eachSqft=g.w*g.h/144;
+          return `<details class="scrap-size-group">
+            <summary class="scrap-size-summary">
+              <div>
+                <b>${g.w}″ × ${g.h}″</b>
+                <span class="scrap-qty">QTY ${g.pieces.length}</span>
               </div>
-              ${s.status==='reserved'?`<div class="muted"><b>Reserved for optimized job.</b></div>`:''}
-              ${s.label?`<div class="muted">${esc(s.label)}</div>`:''}
-              ${s.notes?`<div class="muted">${esc(s.notes)}</div>`:''}
-              ${s.status==='reserved'?`<button class="btn mini" type="button" data-scraprelease="${s.id}">Release Reservation</button>`:''}
+              <div class="scrap-size-meta">
+                <span>${available} available${reserved?` • ${reserved} reserved`:''}</span>
+                <b>${invFmt(eachSqft,2)} sq ft ea.</b>
+              </div>
+            </summary>
+
+            <div class="scrap-size-items">
+              ${g.pieces
+                .sort((a,b)=>a.status===b.status?String(a.id).localeCompare(String(b.id)):(a.status==='available'?-1:1))
+                .map((s,idx)=>`
+                <label class="scrap-card ${s.status==='reserved'?'scrap-reserved':''}">
+                  <div class="scrap-check-wrap">
+                    <input type="checkbox" data-scrapused="${s.id}" aria-label="Mark scrap ${idx+1} used">
+                  </div>
+                  <div class="scrap-main">
+                    <div class="head" style="margin:0">
+                      <div>
+                        <b>Piece ${idx+1}</b>
+                        <div class="muted">${g.w}″ × ${g.h}″ • ${invFmt(s.square_feet,2)} sq ft</div>
+                      </div>
+                      <span class="pill ${s.status==='reserved'?'warn':''}">${s.status==='reserved'?'Reserved':'Available'}</span>
+                    </div>
+                    ${s.status==='reserved'?`<div class="muted"><b>Reserved for optimized job.</b></div>`:''}
+                    ${s.notes?`<div class="muted">${esc(s.notes)}</div>`:''}
+                    ${s.status==='reserved'?`<button class="btn mini" type="button" data-scraprelease="${s.id}">Release Reservation</button>`:''}
+                  </div>
+                  <button class="btn danger mini" type="button" data-scrapdelete="${s.id}">×</button>
+                </label>`).join('')}
             </div>
-            <button class="btn danger mini" type="button" data-scrapdelete="${s.id}">×</button>
-          </label>`).join('')}
+          </details>`
+        }).join('')}
       </div>
-    </section>`;
+    </details>`;
   }).join('');
 
   host.querySelectorAll('[data-scrapused]').forEach(c=>c.onchange=()=>{if(c.checked)markScrapUsed(c.dataset.scrapused)});
   host.querySelectorAll('[data-scraprelease]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();releaseScrapReservation(b.dataset.scraprelease)});
   host.querySelectorAll('[data-scrapdelete]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();deleteScrap(b.dataset.scrapdelete)});
 }
-
 async function addScrapFromQuickEntry(){
   let text=$('scrapQuickEntry').value.trim();
   if(!text)return toast('Enter a scrap size, for example: 34x28 25c');
@@ -400,13 +414,73 @@ function populateInventoryProductSelects(products=inventoryProductCache){
 }
 function renderInventory(){
   let status=$('inventoryStatusList'),rolls=$('inventoryRollList');
-  if(status)status.innerHTML=inventoryStatusCache.length?inventoryStatusCache.map(x=>{let projected=Number(x.projected_sqft)||0,threshold=Number(x.reorder_threshold_sqft)||75,low=projected<=threshold;return `<div class="inventory-product-card ${low?'inventory-low':''}"><div class="head"><div><h2>${esc(x.product_name)}</h2><div class="muted">${invFmt(x.default_roll_width_inches,0)}″ standard width • reorder at ${invFmt(threshold,0)} sq ft</div></div><span class="pill ${low?'warn':''}">${low?'ORDER SOON':'Stocked'}</span></div><div class="inventory-metrics"><div><span>Physical On Hand</span><b>${invFmt(x.on_hand_sqft)}</b><small>sq ft</small></div><div><span>Scheduled / Reserved</span><b>${invFmt(x.reserved_sqft)}</b><small>sq ft</small></div><div class="${low?'inventory-danger':''}"><span>Projected Available</span><b>${invFmt(x.projected_sqft)}</b><small>sq ft</small></div><div><span>Active Rolls</span><b>${Number(x.active_roll_count)||0}</b><small>${Number(x.reserved_job_count)||0} scheduled job${Number(x.reserved_job_count)===1?'':'s'}</small></div></div><div class="actions"><button class="btn" data-invthreshold="${x.product_id}" data-current="${threshold}">Change Reorder Level</button><button class="btn" data-invaddroll="${x.product_id}">Add Roll</button></div></div>`}).join(''):'<div class="card muted">No film types yet.</div>';
-  if(rolls)rolls.innerHTML=inventoryRollCache.length?inventoryRollCache.map(r=>`<div class="inventory-roll-card"><div><b>${esc(r.product?.name||'Film')}</b><div class="muted">${esc(r.label||'Roll')} • ${invFmt(r.roll_width_inches,0)}″ wide</div></div><div class="inventory-roll-balance"><b>${invFmt(invFeet(r.remaining_length_inches),1)} ft</b><small>${invFmt(invSqft(r.roll_width_inches,r.remaining_length_inches),1)} sq ft remaining</small></div><div class="actions"><button class="btn primary" data-invpullroll="${r.id}">Pull Film</button><button class="btn" data-invadjustroll="${r.id}">Set Remaining</button><button class="btn danger" data-invdeleteroll="${r.id}">Remove</button></div></div>`).join(''):'<div class="card muted">No rolls entered yet.</div>';
-  document.querySelectorAll('[data-invthreshold]').forEach(b=>b.onclick=()=>changeInventoryThreshold(b.dataset.invthreshold,Number(b.dataset.current)));
-  document.querySelectorAll('[data-invaddroll]').forEach(b=>b.onclick=()=>{$('inventoryRollProduct').value=b.dataset.invaddroll;$('inventoryRollCard')?.scrollIntoView({behavior:'smooth',block:'center'});$('inventoryRollLength')?.focus()});
-  document.querySelectorAll('[data-invpullroll]').forEach(b=>b.onclick=()=>openManualFilmPull(b.dataset.invpullroll));
-  document.querySelectorAll('[data-invadjustroll]').forEach(b=>b.onclick=()=>adjustInventoryRoll(b.dataset.invadjustroll));
-  document.querySelectorAll('[data-invdeleteroll]').forEach(b=>b.onclick=()=>deleteInventoryRoll(b.dataset.invdeleteroll))
+
+  if(status){
+    status.innerHTML=inventoryStatusCache.length?inventoryStatusCache.map(x=>{
+      let projected=Number(x.projected_sqft)||0,
+          threshold=Number(x.reorder_threshold_sqft)||75,
+          low=projected<=threshold,
+          onHand=Number(x.on_hand_sqft)||0,
+          reserved=Number(x.reserved_sqft)||0;
+
+      return `<details class="inventory-product-card inventory-accordion ${low?'inventory-low':''}">
+        <summary class="inventory-product-summary">
+          <div class="inventory-summary-name">
+            <b>${esc(x.product_name)}</b>
+            <span class="muted">${Number(x.active_roll_count)||0} active roll${Number(x.active_roll_count)===1?'':'s'}</span>
+          </div>
+          <div class="inventory-summary-balance ${low?'inventory-danger':''}">
+            <b>${invFmt(projected,1)} sq ft</b>
+            <small>projected available</small>
+          </div>
+          <span class="pill ${low?'warn':''}">${low?'ORDER SOON':'IN STOCK'}</span>
+        </summary>
+
+        <div class="inventory-accordion-body">
+          <div class="inventory-metrics">
+            <div><span>Physical On Hand</span><b>${invFmt(onHand)}</b><small>sq ft</small></div>
+            <div><span>Scheduled / Reserved</span><b>${invFmt(reserved)}</b><small>sq ft</small></div>
+            <div class="${low?'inventory-danger':''}"><span>Projected Available</span><b>${invFmt(projected)}</b><small>sq ft</small></div>
+            <div><span>Reorder Level</span><b>${invFmt(threshold,0)}</b><small>sq ft</small></div>
+          </div>
+          <div class="muted">${invFmt(x.default_roll_width_inches,0)}″ standard roll width • ${Number(x.reserved_job_count)||0} scheduled job${Number(x.reserved_job_count)===1?'':'s'} reserving material</div>
+          <div class="actions">
+            <button class="btn" data-invthreshold="${x.product_id}" data-current="${threshold}">Change Reorder Level</button>
+            <button class="btn" data-invaddroll="${x.product_id}">Add Roll</button>
+          </div>
+        </div>
+      </details>`
+    }).join(''):'<div class="card muted">No film types yet.</div>';
+  }
+
+  if(rolls){
+    rolls.innerHTML=inventoryRollCache.length?inventoryRollCache.map(r=>`
+      <details class="inventory-roll-card inventory-accordion">
+        <summary class="inventory-roll-summary">
+          <div>
+            <b>${esc(r.product?.name||'Film')}</b>
+            <div class="muted">${esc(r.label||'Roll')} • ${invFmt(r.roll_width_inches,0)}″ wide</div>
+          </div>
+          <div class="inventory-roll-balance">
+            <b>${invFmt(invSqft(r.roll_width_inches,r.remaining_length_inches),1)} sq ft</b>
+            <small>${invFmt(invFeet(r.remaining_length_inches),1)} linear ft</small>
+          </div>
+        </summary>
+        <div class="inventory-accordion-body">
+          <div class="actions">
+            <button class="btn primary" data-invpullroll="${r.id}">Pull Film</button>
+            <button class="btn" data-invadjustroll="${r.id}">Set Remaining</button>
+            <button class="btn danger" data-invdeleteroll="${r.id}">Remove</button>
+          </div>
+        </div>
+      </details>`).join(''):'<div class="card muted">No rolls entered yet.</div>';
+  }
+
+  document.querySelectorAll('[data-invthreshold]').forEach(b=>b.onclick=e=>{e.preventDefault();changeInventoryThreshold(b.dataset.invthreshold,Number(b.dataset.current))});
+  document.querySelectorAll('[data-invaddroll]').forEach(b=>b.onclick=e=>{e.preventDefault();$('inventoryRollProduct').value=b.dataset.invaddroll;$('inventoryAddRollSection')?.setAttribute('open','');$('inventoryRollCard')?.scrollIntoView({behavior:'smooth',block:'center'});$('inventoryRollLength')?.focus()});
+  document.querySelectorAll('[data-invpullroll]').forEach(b=>b.onclick=e=>{e.preventDefault();openManualFilmPull(b.dataset.invpullroll)});
+  document.querySelectorAll('[data-invadjustroll]').forEach(b=>b.onclick=e=>{e.preventDefault();adjustInventoryRoll(b.dataset.invadjustroll)});
+  document.querySelectorAll('[data-invdeleteroll]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteInventoryRoll(b.dataset.invdeleteroll)})
 }
 async function addInventoryProduct(){
   let name=$('inventoryProductName').value.trim(),width=Number($('inventoryProductWidth').value)||72,threshold=Number($('inventoryProductThreshold').value)||75;if(!name)return toast('Enter a film name.');

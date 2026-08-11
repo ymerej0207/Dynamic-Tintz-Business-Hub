@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.7.3-optimizer-quantity-fix
+ * Release: 6.8.0-mobile-inventory-accordion
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.7.3-";
-const CACHE_NAME = `${CACHE_PREFIX}optimizer-quantity-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.8.0-";
+const CACHE_NAME = `${CACHE_PREFIX}mobile-inventory-accordion`; 
 
 const APP_SHELL = [
   "./",
