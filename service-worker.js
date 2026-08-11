@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.5.0-dashboard-leads-operations
+ * Release: 6.6.0-manual-film-pull
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.5.0-";
-const CACHE_NAME = `${CACHE_PREFIX}dashboard-leads-operations`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.6.0-";
+const CACHE_NAME = `${CACHE_PREFIX}manual-film-pull`; 
 
 const APP_SHELL = [
   "./",
