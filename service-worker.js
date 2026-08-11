@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.4.1-quotes-scheduled-default
+ * Release: 6.4.2-inventory-forecast-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.4.1-";
-const CACHE_NAME = `${CACHE_PREFIX}quotes-scheduled-default`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.4.2-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-forecast-fix`; 
 
 const APP_SHELL = [
   "./",
