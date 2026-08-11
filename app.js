@@ -204,21 +204,85 @@ async function loadScrapInventory(){
 
 function renderScrapInventory(){
   let host=$('scrapInventoryList');if(!host)return;
+
   let total=scrapInventoryCache.reduce((s,x)=>s+Number(x.square_feet||0),0);
-  let availableCount=scrapInventoryCache.filter(x=>x.status==='available').length,reservedCount=scrapInventoryCache.filter(x=>x.status==='reserved').length;
-  if($('scrapInventorySummary'))$('scrapInventorySummary').textContent=`${availableCount} available • ${reservedCount} reserved • ${invFmt(total,2)} sq ft tracked`;
-  host.innerHTML=scrapInventoryCache.length?scrapInventoryCache.map((s)=>`
-    <label class="scrap-card">
-      <div class="scrap-check-wrap"><input type="checkbox" data-scrapused="${s.id}" aria-label="Mark scrap used"></div>
-      <div class="scrap-main">
-        <div class="head" style="margin:0"><div><b>${Number(s.width_inches)}″ × ${Number(s.height_inches)}″</b><div class="muted">${esc(s.product?.name||'Film')} • ${invFmt(s.square_feet,2)} sq ft</div></div><span class="pill ${s.status==='reserved'?'warn':''}">${s.status==='reserved'?'Reserved':'Available'}</span></div>
-        ${s.status==='reserved'?`<div class="muted"><b>Reserved for optimized job.</b></div>`:''}
-        ${s.label?`<div class="muted">${esc(s.label)}</div>`:''}
-        ${s.notes?`<div class="muted">${esc(s.notes)}</div>`:''}
-        ${s.status==='reserved'?`<button class="btn mini" type="button" data-scraprelease="${s.id}">Release Reservation</button>`:''}
+  let availableCount=scrapInventoryCache.filter(x=>x.status==='available').length,
+      reservedCount=scrapInventoryCache.filter(x=>x.status==='reserved').length;
+
+  if($('scrapInventorySummary')){
+    $('scrapInventorySummary').textContent=`${availableCount} available • ${reservedCount} reserved • ${invFmt(total,2)} sq ft tracked`;
+  }
+
+  if(!scrapInventoryCache.length){
+    host.innerHTML='<div class="card muted">No available or reserved scrap cutoffs.</div>';
+    return;
+  }
+
+  const priorityOrder=[
+    '25% Ceramic Tint Install',
+    '35% Ceramic Tint Install',
+    '45% Ceramic Tint Install',
+    '15% Ceramic Tint Install',
+    '2 Mil Security Film',
+    'Blackout Tint Install',
+    'Budget Friendly Solar Control'
+  ];
+
+  let groups={};
+  for(let scrap of scrapInventoryCache){
+    let film=scrap.product?.name||'Other Film';
+    if(!groups[film])groups[film]=[];
+    groups[film].push(scrap);
+  }
+
+  let filmNames=Object.keys(groups).sort((a,b)=>{
+    let ai=priorityOrder.indexOf(a),bi=priorityOrder.indexOf(b);
+    if(ai===-1)ai=999;if(bi===-1)bi=999;
+    return ai-bi||a.localeCompare(b);
+  });
+
+  host.innerHTML=filmNames.map(film=>{
+    let pieces=groups[film].sort((a,b)=>{
+      if(a.status!==b.status)return a.status==='available'?-1:1;
+      return Number(b.square_feet||0)-Number(a.square_feet||0);
+    });
+    let groupSqft=pieces.reduce((s,x)=>s+Number(x.square_feet||0),0);
+    let groupAvailable=pieces.filter(x=>x.status==='available').length;
+    let shortName=film.replace(' Tint Install','');
+
+    return `<section class="scrap-film-group">
+      <div class="scrap-film-header">
+        <div>
+          <h3>${esc(shortName)}</h3>
+          <div class="muted">${groupAvailable} available • ${pieces.length-groupAvailable} reserved</div>
+        </div>
+        <div class="scrap-film-total">${invFmt(groupSqft,2)}<small>sq ft scraps</small></div>
       </div>
-      <button class="btn danger mini" type="button" data-scrapdelete="${s.id}">×</button>
-    </label>`).join(''):'<div class="card muted">No available scrap cutoffs.</div>';
+
+      <div class="scrap-film-pieces">
+        ${pieces.map(s=>`
+          <label class="scrap-card ${s.status==='reserved'?'scrap-reserved':''}">
+            <div class="scrap-check-wrap">
+              <input type="checkbox" data-scrapused="${s.id}" aria-label="Mark scrap used">
+            </div>
+            <div class="scrap-main">
+              <div class="head" style="margin:0">
+                <div>
+                  <b>${Number(s.width_inches)}″ × ${Number(s.height_inches)}″</b>
+                  <div class="muted">${invFmt(s.square_feet,2)} sq ft</div>
+                </div>
+                <span class="pill ${s.status==='reserved'?'warn':''}">${s.status==='reserved'?'Reserved':'Available'}</span>
+              </div>
+              ${s.status==='reserved'?`<div class="muted"><b>Reserved for optimized job.</b></div>`:''}
+              ${s.label?`<div class="muted">${esc(s.label)}</div>`:''}
+              ${s.notes?`<div class="muted">${esc(s.notes)}</div>`:''}
+              ${s.status==='reserved'?`<button class="btn mini" type="button" data-scraprelease="${s.id}">Release Reservation</button>`:''}
+            </div>
+            <button class="btn danger mini" type="button" data-scrapdelete="${s.id}">×</button>
+          </label>`).join('')}
+      </div>
+    </section>`;
+  }).join('');
 
   host.querySelectorAll('[data-scrapused]').forEach(c=>c.onchange=()=>{if(c.checked)markScrapUsed(c.dataset.scrapused)});
   host.querySelectorAll('[data-scraprelease]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();releaseScrapReservation(b.dataset.scraprelease)});

@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.6.0-manual-film-pull
+ * Release: 6.7.0-scrap-grouping
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.6.0-";
-const CACHE_NAME = `${CACHE_PREFIX}manual-film-pull`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.7.0-";
+const CACHE_NAME = `${CACHE_PREFIX}scrap-grouping`; 
 
 const APP_SHELL = [
   "./",
