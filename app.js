@@ -1059,34 +1059,74 @@ function parseOptimizerInput(text){
   const pieces=[];
   let pendingLabel='';
   let pendingDimension=null;
+
   const push=(label,w,h,qty=1)=>{
     w=Number(w);h=Number(h);qty=Math.max(1,Math.round(Number(qty)||1));
     if(w>0&&h>0)pieces.push({label:label||`Piece ${pieces.length+1}`,w,h,qty,rotatable:true});
   };
+
   for(let i=0;i<lines.length;i++){
     let line=lines[i];
+
+    // Dynamic Tintz OS generated format:
+    // "Windows bottom pane: 4 @ 34x39"
+    let labeledQty=line.match(/^\s*(.*?)\s*:\s*(\d+)\s*@\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*$/i);
+    if(labeledQty){
+      push(labeledQty[1].trim(),labeledQty[3],labeledQty[4],labeledQty[2]);
+      pendingDimension=null;
+      continue;
+    }
+
+    // Quantity-first pasted format:
+    // "4 @ 34x39 Bedroom"
     let direct=line.match(/^\s*(\d+)\s*(?:@|pcs?\s*@?|pieces?\s*@?)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)(?:\s*(.*))?$/i);
-    if(direct){push((direct[4]||pendingLabel).trim(),direct[2],direct[3],direct[1]);pendingDimension=null;continue}
+    if(direct){
+      push((direct[4]||pendingLabel).trim(),direct[2],direct[3],direct[1]);
+      pendingDimension=null;
+      continue;
+    }
+
     let qtyTail=line.match(/^(.+?)\s+qty\s*[:=]?\s*(\d+)\s*$/i);
-    if(qtyTail&&pendingDimension){push(pendingLabel,pendingDimension.w,pendingDimension.h,qtyTail[2]);pendingDimension=null;continue}
+    if(qtyTail&&pendingDimension){
+      push(pendingLabel,pendingDimension.w,pendingDimension.h,qtyTail[2]);
+      pendingDimension=null;
+      continue;
+    }
+
     let dimension=line.match(/(?:^|\s)(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)(?:\s|$)/i);
     if(dimension){
       let before=line.slice(0,dimension.index).replace(/[-:]+$/,'').trim();
+
+      // Recognize a quantity immediately before @ even when a room label precedes it:
+      // "Bedroom: 4 @ 34x39"
+      let embeddedQty=before.match(/^(.*?)\s*:?\s*(\d+)\s*@\s*$/i);
       let qtyBefore=line.match(/^\s*(\d+)\s*(?:@|pcs?|pieces?)\s*/i);
       let qtyAfter=line.match(/(?:qty|quantity)\s*[:=]?\s*(\d+)/i);
-      let qty=qtyBefore?.[1]||qtyAfter?.[1]||1;
-      let label=before.replace(/^\d+\s*(?:@|pcs?|pieces?)\s*/i,'').trim()||pendingLabel;
+
+      let qty=embeddedQty?.[2]||qtyBefore?.[1]||qtyAfter?.[1]||1;
+      let label=embeddedQty
+        ? embeddedQty[1].replace(/:$/,'').trim()
+        : before.replace(/^\d+\s*(?:@|pcs?|pieces?)\s*/i,'').trim()||pendingLabel;
+
       let next=lines[i+1]||'';
       let nextQty=next.match(/^qty\s*[:=]?\s*(\d+)$/i);
       if(nextQty){qty=nextQty[1];i++}
+
       push(label,dimension[1],dimension[2],qty);
       pendingDimension=null;
       continue;
     }
+
     let qtyOnly=line.match(/^qty\s*[:=]?\s*(\d+)$/i);
-    if(qtyOnly&&pendingDimension){push(pendingLabel,pendingDimension.w,pendingDimension.h,qtyOnly[1]);pendingDimension=null;continue}
+    if(qtyOnly&&pendingDimension){
+      push(pendingLabel,pendingDimension.w,pendingDimension.h,qtyOnly[1]);
+      pendingDimension=null;
+      continue;
+    }
+
     pendingLabel=line.replace(/:$/,'').trim();
   }
+
   return pieces;
 }
 

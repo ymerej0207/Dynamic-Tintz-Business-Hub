@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.7.2-scrap-dimension-sort
+ * Release: 6.7.3-optimizer-quantity-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.7.2-";
-const CACHE_NAME = `${CACHE_PREFIX}scrap-dimension-sort`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.7.3-";
+const CACHE_NAME = `${CACHE_PREFIX}optimizer-quantity-fix`; 
 
 const APP_SHELL = [
   "./",
