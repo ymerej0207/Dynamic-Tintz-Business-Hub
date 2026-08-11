@@ -1129,33 +1129,80 @@ function rebuildGroupsAfterScrap(groups,matches){
 }
 
 async function optimizerScrapFirst(groups,quote,settings){
-  if(!quote||$('optimizerUseScrap')?.checked===false)return {groups,matches:[]};
+  if(!quote||$('optimizerUseScrap')?.checked===false)return {groups,matches:[],diagnostics:null};
   let filmName=String(quote.square_catalog_item_name||'').trim();
-  if(!filmName)return {groups,matches:[]};
+  if(!filmName)return {groups,matches:[],diagnostics:{reason:'Quote has no film type selected.'}};
 
-  let{data:product}=await sb.from('film_inventory_products').select('id,name').eq('name',filmName).maybeSingle();
-  if(!product)return {groups,matches:[]};
+  let{data:product,error:productError}=await sb.from('film_inventory_products').select('id,name').eq('name',filmName).maybeSingle();
+  if(productError||!product)return {groups,matches:[],diagnostics:{reason:'No matching inventory film record.',filmName}};
 
   let{data:scraps,error}=await sb.from('film_scrap_inventory')
-    .select('*,product:film_inventory_products(name)')
-    .eq('product_id',product.id).eq('status','available').order('square_feet',{ascending:true});
-  if(error||!scraps?.length)return {groups,matches:[]};
+    .select('id,product_id,width_inches,height_inches,square_feet,status,reserved_quote_id,product:film_inventory_products(name)')
+    .eq('product_id',product.id)
+    .in('status',['available','reserved'])
+    .order('square_feet',{ascending:true});
+  if(error)return {groups,matches:[],diagnostics:{reason:error.message}};
 
-  let instances=expandOptimizerPieces(groups).sort((a,b)=>(b.w*b.h)-(a.w*a.h)),available=[...scraps],matches=[];
+  // A scrap already reserved to THIS quote is still eligible when the optimizer is rerun.
+  // Scraps reserved to another quote are excluded.
+  let eligible=(scraps||[]).filter(s=>s.status==='available'||(s.status==='reserved'&&s.reserved_quote_id===quote.id));
+
+  let instances=expandOptimizerPieces(groups);
+
+  // Most constrained / largest windows first. This prevents a small window from
+  // consuming a large cutoff that is the only possible fit for a larger window.
+  instances.sort((a,b)=>{
+    let aFits=eligible.filter(s=>scrapFitsPiece(s,a,settings.allowRotation)).length;
+    let bFits=eligible.filter(s=>scrapFitsPiece(s,b,settings.allowRotation)).length;
+    return aFits-bFits || (b.w*b.h)-(a.w*a.h) || Math.max(b.w,b.h)-Math.max(a.w,a.h);
+  });
+
+  let available=[...eligible],matches=[];
   for(let piece of instances){
-    let candidates=available.map(scrap=>({scrap,fit:scrapFitsPiece(scrap,piece,settings.allowRotation)}))
-      .filter(x=>x.fit).sort((a,b)=>a.fit.wasteArea-b.fit.wasteArea||Number(a.scrap.square_feet)-Number(b.scrap.square_feet));
+    let candidates=available
+      .map(scrap=>({scrap,fit:scrapFitsPiece(scrap,piece,settings.allowRotation)}))
+      .filter(x=>x.fit)
+      .sort((a,b)=>
+        a.fit.wasteArea-b.fit.wasteArea ||
+        Math.abs(Number(a.scrap.width_inches)-Number(piece.w))-Math.abs(Number(b.scrap.width_inches)-Number(piece.w)) ||
+        Math.abs(Number(a.scrap.height_inches)-Number(piece.h))-Math.abs(Number(b.scrap.height_inches)-Number(piece.h)) ||
+        String(a.scrap.id).localeCompare(String(b.scrap.id))
+      );
     if(!candidates.length)continue;
+
     let best=candidates[0];
     matches.push({
-      scrap_id:best.scrap.id,scrap_width:Number(best.scrap.width_inches),scrap_height:Number(best.scrap.height_inches),
-      scrap_sqft:Number(best.scrap.square_feet),piece_id:piece.id,group:piece.group,label:piece.label,
-      piece_width:piece.w,piece_height:piece.h,piece_sqft:piece.w*piece.h/144,rotated:best.fit.rotated,
-      leftover_scrap_sqft:Math.max(0,best.fit.wasteArea/144),film_name:filmName
+      scrap_id:best.scrap.id,
+      scrap_width:Number(best.scrap.width_inches),
+      scrap_height:Number(best.scrap.height_inches),
+      scrap_sqft:Number(best.scrap.square_feet),
+      scrap_status:best.scrap.status,
+      piece_id:piece.id,
+      group:piece.group,
+      label:piece.label,
+      piece_width:piece.w,
+      piece_height:piece.h,
+      piece_sqft:piece.w*piece.h/144,
+      rotated:best.fit.rotated,
+      leftover_scrap_sqft:Math.max(0,best.fit.wasteArea/144),
+      film_name:filmName
     });
     available=available.filter(s=>s.id!==best.scrap.id);
   }
-  return {groups:rebuildGroupsAfterScrap(groups,matches),matches};
+
+  return {
+    groups:rebuildGroupsAfterScrap(groups,matches),
+    matches,
+    diagnostics:{
+      filmName,
+      totalPieces:instances.length,
+      scrapRecordsFound:(scraps||[]).length,
+      eligibleScraps:eligible.length,
+      matched:matches.length,
+      unmatched:Math.max(0,instances.length-matches.length),
+      excludedReserved:(scraps||[]).filter(s=>s.status==='reserved'&&s.reserved_quote_id!==quote.id).length
+    }
+  };
 }
 
 function emptyOptimizerResult(groups,settings){
@@ -1411,7 +1458,10 @@ async function runRollOptimizer(){
     let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===rollOptimizerQuoteId);
     message.textContent='Checking scrap inventory before cutting fresh roll…';
     let scrapPlan=await optimizerScrapFirst(groups,q,settings);
-    message.textContent=scrapPlan.matches.length?`${scrapPlan.matches.length} scrap match${scrapPlan.matches.length===1?'':'es'} found. Optimizing remaining fresh-roll cuts…`:'No usable scrap matches. Comparing fresh-roll cutting layouts…';
+    let sd=scrapPlan.diagnostics;
+    message.textContent=scrapPlan.matches.length
+      ?`${scrapPlan.matches.length} scrap match${scrapPlan.matches.length===1?'':'es'} found from ${sd?.eligibleScraps??'?'} eligible cutoff${(sd?.eligibleScraps??0)===1?'':'s'}. Optimizing remaining fresh-roll cuts…`
+      :`No usable scrap matches${sd?` (${sd.eligibleScraps} eligible scraps checked for ${sd.totalPieces} pieces)`:''}. Comparing fresh-roll cutting layouts…`;
     await new Promise(r=>setTimeout(r,30));
 
     let originalTotalArea=groups.reduce((s,g)=>s+Number(g.w)*Number(g.h)*Number(g.qty||1),0);
@@ -1447,8 +1497,10 @@ async function saveRollOptimizerPlan(){
   }
   let matches=rollOptimizerResult.scrapMatches||[];
   if(matches.length&&rollOptimizerQuoteId){
-    let ids=matches.map(m=>m.scrap_id);
-    let{error:scrapError}=await sb.from('film_scrap_inventory').update({status:'reserved',reserved_quote_id:rollOptimizerQuoteId,reserved_at:new Date().toISOString()}).in('id',ids).eq('status','available');
+    let ids=[...new Set(matches.map(m=>m.scrap_id))];
+    let{error:scrapError}=await sb.from('film_scrap_inventory').update({
+      status:'reserved',reserved_quote_id:rollOptimizerQuoteId,reserved_at:new Date().toISOString()
+    }).in('id',ids);
     if(scrapError)return toast('Plan saved, but scrap reservation failed: '+scrapError.message);
   }
   toast(matches.length?`Optimization saved and ${matches.length} scrap piece${matches.length===1?'':'s'} reserved.`:'Optimization plan saved to cloud.');

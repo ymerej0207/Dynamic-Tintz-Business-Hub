@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.7.0-scrap-grouping
+ * Release: 6.7.1-scrap-match-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.7.0-";
-const CACHE_NAME = `${CACHE_PREFIX}scrap-grouping`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.7.1-";
+const CACHE_NAME = `${CACHE_PREFIX}scrap-match-fix`; 
 
 const APP_SHELL = [
   "./",
