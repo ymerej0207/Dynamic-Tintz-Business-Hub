@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.8.0-mobile-inventory-accordion
+ * Release: 6.8.1-calendar-status-policy
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.8.0-";
-const CACHE_NAME = `${CACHE_PREFIX}mobile-inventory-accordion`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.8.1-";
+const CACHE_NAME = `${CACHE_PREFIX}calendar-status-policy`; 
 
 const APP_SHELL = [
   "./",
