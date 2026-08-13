@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 6.8.1-calendar-status-policy
+ * Release: 6.9.0-customer-safe-square-responses
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v6.8.1-";
-const CACHE_NAME = `${CACHE_PREFIX}calendar-status-policy`; 
+const CACHE_PREFIX = "dynamic-tintz-v6.9.0-";
+const CACHE_NAME = `${CACHE_PREFIX}customer-safe-square-responses`; 
 
 const APP_SHELL = [
   "./",
