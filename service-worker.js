@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.3.0-navigation-leads-fix
+ * Release: 7.4.0-inventory-modal-flow
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.3.0-";
-const CACHE_NAME = `${CACHE_PREFIX}navigation-leads-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.4.0-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-modal-flow`; 
 
 const APP_SHELL = [
   "./",

@@ -126,9 +126,11 @@ function optimizerWasteSqft(plan,glassSqft=0){return Math.max(0,optimizerMateria
 function invFeet(inches){return (Number(inches)||0)/12}
 function invFmt(value,digits=1){let n=Number(value)||0;return n.toLocaleString(undefined,{minimumFractionDigits:digits,maximumFractionDigits:digits})}
 function stockAvailabilityPct(row){
-  let onHand=Math.max(0,Number(row?.on_hand_sqft)||0),projected=Math.max(0,Number(row?.projected_sqft)||0);
-  if(onHand<=0)return 0;
-  return Math.max(0,Math.min(100,Math.round(projected/onHand*100)));
+  let projected=Math.max(0,Number(row?.projected_sqft)||0),
+      threshold=Math.max(1,Number(row?.reorder_threshold_sqft)||75);
+  // Ring communicates useful stock health, not "projected as a percentage of itself".
+  // 0 sq ft = 0%; reorder threshold = 50%; 2× reorder threshold or more = 100%.
+  return Math.max(0,Math.min(100,Math.round(projected/(threshold*2)*100)));
 }
 function inventoryRing(percent,size='md'){
   let p=Math.max(0,Math.min(100,Number(percent)||0));
@@ -589,7 +591,7 @@ function renderInventory(){
             <span class="app-inline-stock ${low?'low':''}">${low?'ORDER SOON':'IN STOCK'}</span>
           </div>
           ${inventoryRing(stockAvailabilityPct(x),'md')}
-          <span class="app-chevron">›</span>
+          <button type="button" class="film-edit-button" data-editfilm="${x.product_id}" aria-label="Edit film inventory">Edit</button>
         </summary>
 
         <div class="inventory-accordion-body">
@@ -664,9 +666,10 @@ function renderInventory(){
     }
   }
 
+  document.querySelectorAll('[data-editfilm]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openInventoryMetricEditor(b.dataset.editfilm,'projected')});
   document.querySelectorAll('[data-invmetric]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openInventoryMetricEditor(b.dataset.productid,b.dataset.invmetric)});
   document.querySelectorAll('[data-invthreshold]').forEach(b=>b.onclick=e=>{e.preventDefault();changeInventoryThreshold(b.dataset.invthreshold,Number(b.dataset.current))});
-  document.querySelectorAll('[data-invaddroll]').forEach(b=>b.onclick=e=>{e.preventDefault();$('inventoryRollProduct').value=b.dataset.invaddroll;$('inventoryAddRollSection')?.setAttribute('open','');$('inventoryRollCard')?.scrollIntoView({behavior:'smooth',block:'center'});$('inventoryRollLength')?.focus()});
+  document.querySelectorAll('[data-invaddroll]').forEach(b=>b.onclick=e=>{e.preventDefault();openAddRollModal(b.dataset.invaddroll)});
   document.querySelectorAll('[data-invpullroll]').forEach(b=>b.onclick=e=>{e.preventDefault();openManualFilmPull(b.dataset.invpullroll)});
   document.querySelectorAll('[data-invadjustroll]').forEach(b=>b.onclick=e=>{e.preventDefault();adjustInventoryRoll(b.dataset.invadjustroll)});
   document.querySelectorAll('[data-invdeleteroll]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteInventoryRoll(b.dataset.invdeleteroll)})
@@ -768,24 +771,48 @@ async function saveInventoryMetricEditor(){
 function metricEditorAddRoll(){
   if(!inventoryMetricProductId)return;
   $('inventoryMetricModal').classList.remove('show');
-  show('inventory').then(()=>{
-    $('inventoryRollProduct').value=inventoryMetricProductId;
-    $('inventoryAddRollSection')?.setAttribute('open','');
-    setTimeout(()=>$('inventoryRollLength')?.focus(),80);
-  });
+  openAddRollModal(inventoryMetricProductId);
+}
+
+
+function openAddRollModal(productId=null){
+  if(productId&&$('inventoryRollProduct'))$('inventoryRollProduct').value=productId;
+  $('inventoryAddRollModal')?.classList.add('show');
+  setTimeout(()=>$('inventoryRollLength')?.focus(),40);
+}
+function openAddFilmTypeModal(){
+  $('inventoryAddFilmModal')?.classList.add('show');
+  setTimeout(()=>$('inventoryProductName')?.focus(),40);
+}
+function openPullFromMetricFilm(){
+  if(!inventoryMetricProductId)return;
+  let rolls=inventoryRollCache.filter(r=>r.product_id===inventoryMetricProductId&&Number(r.remaining_length_inches)>0);
+  if(!rolls.length)return toast('No active roll is available for this film. Add a roll first.');
+  if(rolls.length===1){
+    $('inventoryMetricModal')?.classList.remove('show');
+    openManualFilmPull(rolls[0].id);
+    return;
+  }
+  let names=rolls.map((r,i)=>`${i+1}. ${r.label||'Roll'} — ${invFmt(invSqft(r.roll_width_inches,r.remaining_length_inches),1)} sq ft`).join('\n');
+  let pick=prompt(`Choose a roll to pull from:\n\n${names}`,'1');
+  if(pick===null)return;
+  let idx=Number(pick)-1;
+  if(!Number.isInteger(idx)||idx<0||idx>=rolls.length)return toast('Choose a valid roll number.');
+  $('inventoryMetricModal')?.classList.remove('show');
+  openManualFilmPull(rolls[idx].id);
 }
 
 async function addInventoryProduct(){
   let name=$('inventoryProductName').value.trim(),width=Number($('inventoryProductWidth').value)||72,threshold=Number($('inventoryProductThreshold').value)||75;if(!name)return toast('Enter a film name.');
   let{error}=await sb.from('film_inventory_products').insert({name,default_roll_width_inches:width,reorder_threshold_sqft:threshold});if(error)return toast(error.message);
-  $('inventoryProductName').value='';toast('Film type added.');await loadInventory()
+  $('inventoryProductName').value='';$('inventoryAddFilmModal')?.classList.remove('show');toast('Film type added.');await loadInventory();await dashboard()
 }
 async function addInventoryRoll(){
   let productId=$('inventoryRollProduct').value,width=Number($('inventoryRollWidth').value)||0,lengthFt=Number($('inventoryRollLength').value)||0,label=$('inventoryRollLabel').value.trim(),notes=$('inventoryRollNotes').value.trim(),receivedDate=$('inventoryRollReceivedDate')?.value||new Date().toISOString().slice(0,10);
   if(!productId||lengthFt<=0)return toast('Select the film and enter the remaining roll length.');
   let p=inventoryProductCache.find(x=>x.id===productId);if(width<=0)width=Number(p?.default_roll_width_inches)||72;let inches=lengthFt*12;
   let{error}=await sb.from('film_inventory_rolls').insert({product_id:productId,label:label||`${lengthFt} ft roll`,roll_width_inches:width,starting_length_inches:inches,remaining_length_inches:inches,received_date:receivedDate,notes});if(error)return toast(error.message);
-  $('inventoryRollLength').value='';$('inventoryRollLabel').value='';$('inventoryRollNotes').value='';if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);toast('Roll added to inventory.');await loadInventory();dashboard()
+  $('inventoryRollLength').value='';$('inventoryRollLabel').value='';$('inventoryRollNotes').value='';if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);$('inventoryAddRollModal')?.classList.remove('show');toast('Roll added to inventory.');await loadInventory();await dashboard()
 }
 
 let manualPullRollId=null,manualPullJobs=[];
@@ -2067,7 +2094,7 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
 bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
