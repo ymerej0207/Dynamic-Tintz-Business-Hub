@@ -889,3 +889,11 @@ button.app-kpi-card{cursor:pointer}
 .quote-save-dock{position:sticky;bottom:calc(74px + env(safe-area-inset-bottom));z-index:42;padding:12px 0 4px;margin-top:8px;background:linear-gradient(transparent,rgba(2,6,6,.98) 35%)}
 .quote-save-dock .btn{width:100%;min-height:50px;font-size:14px;box-shadow:0 0 0 1px rgba(34,212,207,.12),0 8px 30px rgba(0,0,0,.35)}
 @media(min-width:801px){.quote-save-dock{position:static;background:none}}
+
+/* v7.5.3 — resilient quote autosave */
+.quote-autosave-status{min-height:14px;margin-top:4px;font-size:9px;font-weight:750;color:var(--app-muted)}
+.quote-autosave-status[data-state="saving"]{color:#d6b84d}
+.quote-autosave-status[data-state="saved"]{color:#58cfd0}
+.quote-autosave-status[data-state="cloud"]{color:#43df86}
+.quote-autosave-status[data-state="recovered"]{color:#58a9ff}
+.quote-autosave-status[data-state="warning"]{color:#ffb55d}

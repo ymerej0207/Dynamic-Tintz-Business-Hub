@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.5.2-quote-save-restore
+ * Release: 7.5.3-quote-autosave
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.5.2-";
-const CACHE_NAME = `${CACHE_PREFIX}quote-save-restore`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.5.3-";
+const CACHE_NAME = `${CACHE_PREFIX}quote-autosave`; 
 
 const APP_SHELL = [
   "./",
