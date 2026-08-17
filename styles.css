@@ -1001,3 +1001,11 @@ button.app-kpi-card{cursor:pointer}
   .home-week-event{grid-template-columns:62px minmax(0,1fr) auto 8px!important}
   .home-week-event .app-status-pill{max-width:64px;font-size:7px!important}
 }
+
+/* v7.6.4 — native calendar day detail + all-jobs default */
+.operations-selected-day{margin-top:10px!important;border-color:rgba(34,212,207,.55)!important}
+.operations-selected-day-head h3{font-size:18px!important}
+.selected-day-description{white-space:normal!important;line-height:1.35!important;margin-top:4px!important}
+#refreshOperations.is-refreshing{animation:dtScheduleSpin .75s linear infinite}
+@keyframes dtScheduleSpin{to{transform:rotate(360deg)}}
+.operations-agenda-section{padding-bottom:10px}

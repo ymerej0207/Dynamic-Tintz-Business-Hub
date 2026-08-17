@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.6.3-home-week-schedule
+ * Release: 7.6.4-native-day-all-default
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.6.3-";
-const CACHE_NAME = `${CACHE_PREFIX}home-week-schedule`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.6.4-";
+const CACHE_NAME = `${CACHE_PREFIX}native-day-all-default`; 
 
 const APP_SHELL = [
   "./",
