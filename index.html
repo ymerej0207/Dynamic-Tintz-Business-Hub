@@ -1,15 +1,77 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
 <div id="auth" class="auth card"><div class="brand"><img src="logo.png"><div><h1>Dynamic Tintz OS</h1><p>Secure team access</p></div></div><div class="field"><label>Email</label><input id="email" type="email"></div><div class="field"><label>Password</label><input id="password" type="password"></div><button id="login" class="btn primary wide">Sign In</button><button id="reset" class="btn" style="margin-top:10px">Send Password Reset</button><p id="message" class="muted"></p></div>
 <div id="app" class="shell hidden"><div class="brand app-topbar"><button id="mobileMenuBrand" class="app-menu-glyph" type="button" aria-label="Open menu">☰</button><img src="logo.png"><div><h1>Dynamic Tintz</h1><p id="userline"></p></div><span class="topbar-spacer"></span></div>
-<main id="owner" class="view"><div class="head"><h2>Owner Command Center</h2><span class="pill">Owner</span></div><div class="grid dashboard-grid"><div class="card metric"><b id="newLeads">0</b><span>New Leads</span></div><div class="card metric"><b id="dueLeads">0</b><span>Follow-Ups Due</span></div><div class="card metric"><b id="clocked">0</b><span>Clocked In</span></div><div class="card metric"><b id="pendingQuotes">0</b><span>Pending Quotes</span></div><div class="card metric"><b id="scheduledJobs">0</b><span>Scheduled Jobs</span></div><div class="card metric"><b id="completedMonth">0</b><span>Completed This Month</span></div></div><div class="card"><h3>Today's Mission</h3><div id="mission" class="muted"></div><div class="actions"><button class="btn primary" data-go="shortcuts">Quick Responses</button><button class="btn" data-go="leads">Work Leads</button><button class="btn" data-go="quotes">Create Quote</button><button class="btn" data-go="operations">Operations Board</button></div></div><div class="card inventory-home-card"><div class="head" style="margin-top:0"><div><h3>Film Inventory Forecast</h3><div class="muted">Physical stock minus material reserved for active scheduled jobs.</div></div><button class="btn" data-go="inventory">Manage Inventory</button></div><div id="inventoryHomeAlerts"><div class="muted">Loading inventory forecast…</div></div></div><div class="card"><h3>Live Job Operations</h3><div id="liveJobs" class="muted">Loading job statuses…</div></div><div class="card"><h3>Quote Pipeline</h3><div id="pipelineSnapshot" class="pipeline-bars"></div></div></main>
+<main id="owner" class="view app-dashboard">
+  <div class="app-screen-title">
+    <div><span class="eyebrow">DYNAMIC TINTZ OS</span><h2>Dashboard</h2></div>
+    <button class="app-round-action" data-go="quotes" aria-label="New quote">+</button>
+  </div>
+
+  <div class="app-kpi-row">
+    <button class="app-kpi-card" data-go="quotes"><span>QUOTES</span><b id="pendingQuotes">0</b><small>active</small></button>
+    <button class="app-kpi-card" data-go="operations"><span>JOBS</span><b id="scheduledJobs">0</b><small>scheduled</small></button>
+    <div class="app-kpi-card"><span>COMPLETED</span><b id="completedMonth">0</b><small>this month</small></div>
+  </div>
+
+  <section class="app-section">
+    <div class="app-section-head"><h3>Today's Schedule</h3><button data-go="operations">View All</button></div>
+    <div id="liveJobs" class="app-schedule-list"><div class="muted">Loading today's jobs…</div></div>
+  </section>
+
+  <section class="app-section">
+    <div class="app-section-head"><h3>Recent Quotes</h3><button data-go="quotes">View All</button></div>
+    <div id="recentQuotes" class="app-recent-list"><div class="muted">Loading recent quotes…</div></div>
+  </section>
+
+  <section class="app-section inventory-home-card">
+    <div class="app-section-head"><h3>Inventory Snapshot</h3><button data-go="inventory">View All</button></div>
+    <div id="inventoryHomeAlerts"><div class="muted">Loading inventory forecast…</div></div>
+  </section>
+
+  <details class="app-dashboard-more">
+    <summary>Business Attention & Pipeline</summary>
+    <div class="app-attention-grid">
+      <div><b id="newLeads">0</b><span>New Leads</span></div>
+      <div><b id="dueLeads">0</b><span>Follow-Ups</span></div>
+      <div><b id="clocked">0</b><span>Clocked In</span></div>
+    </div>
+    <div id="mission" class="muted app-mission"></div>
+    <div id="pipelineSnapshot" class="pipeline-bars"></div>
+    <div class="actions">
+      <button class="btn" data-go="leads">Work Leads</button>
+      <button class="btn" data-go="shortcuts">Responses</button>
+      <button class="btn" data-go="quotes">New Quote</button>
+    </div>
+  </details>
+</main>
 <main id="employee" class="view"><div class="head"><h2>Installer Dashboard</h2><span class="pill">Installer</span></div><div id="employeeClock" class="card"></div><div class="card"><h3>Assigned Jobs</h3><div id="jobs" class="muted">No assigned jobs yet.</div></div></main>
 <main id="leads" class="view"><div class="head"><h2>Lead Center</h2><button id="addOrganicLeadBtn" class="btn primary">Add Organic Lead</button><button id="addLead" class="btn primary">+ Add Angi Lead</button></div><div class="card"><div class="grid2"><div class="field"><label>Search Leads</label><input id="leadSearch" placeholder="Name, phone, city, service..."></div><div class="field"><label>Pipeline Status</label><select id="leadStatusFilter"><option value="">All Leads</option><option value="new" selected>New</option><option value="no_answer">No Answer</option><option value="voicemail">Voicemail</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div></div></div><div id="leadList"></div></main>
 <main id="followups" class="view"><div class="head"><h2>Follow-Up Center</h2><span class="pill warn">Angi Cadence</span></div><div class="card muted">Immediate call, voicemail, and text → same evening → next morning → 3 days → final at 7 days.</div><div class="grid2"><div class="card metric"><b id="overdueFollowups">0</b><span>Due Now</span></div><div class="card metric"><b id="upcomingFollowups">0</b><span>Upcoming 7 Days</span></div></div><div class="head"><h2>Due Now</h2></div><div id="followList"></div><div class="head"><h2>Upcoming</h2></div><div id="upcomingFollowList"></div></main>
 
-<main id="quotes" class="view">
-<div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Built for rapid room-by-room estimating</div></div><button id="newQuote" class="btn primary">New Quote</button></div>
+<main id="quotes" class="view app-quotes-screen">
+  <div class="app-screen-title">
+    <div><span class="eyebrow">CUSTOMERS & ESTIMATES</span><h2>Quotes</h2></div>
+    <button id="newQuoteTop" class="app-round-action" aria-label="New quote">+</button>
+  </div>
 
-<div id="quoteEditor" class="quote-layout">
+  <section class="app-quote-list-panel">
+    <div class="head"><h2>Saved Quotes</h2></div>
+<div class="card">
+<div class="grid2">
+<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
+<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option selected>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
+</div>
+<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
+</div>
+<div id="savedQuotes"></div>
+
+  </section>
+
+  <details id="quoteBuilderPanel" class="app-builder-sheet">
+    <summary><span>Quote Builder</span><small>Tap to open / close</small></summary>
+    <div class="app-builder-inner">
+      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div></div><button id="newQuote" class="btn primary">New Quote</button></div>
+      <div id="quoteEditor" class="quote-layout">
 <section class="quote-main">
 <div class="card">
 <div class="grid2">
@@ -70,18 +132,8 @@
 <div class="mobile-quote-bar">
 <button id="mobileAddWindow" class="btn">+ Window</button>
 <div><span id="mobileSqft">0.00 sq ft</span><b id="mobilePrice">$0.00</b></div>
-<button id="mobileSaveQuote" class="btn primary">Save</button>
-</div>
-
-<div class="head"><h2>Saved Quotes</h2></div>
-<div class="card">
-<div class="grid2">
-<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
-<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option selected>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-</div>
-<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
-</div>
-<div id="savedQuotes"></div>
+    </div>
+  </details>
 </main>
 
 <main id="optimizer" class="view">
@@ -303,4 +355,4 @@
 <div id="organicLeadModal" class="modal"><div class="modal-card"><div class="head"><div><h2>Add Organic Lead</h2><div class="muted">Google, Facebook, Nextdoor, referrals, repeat customers, word of mouth, etc.</div></div><button class="btn" data-close="organicLeadModal">Close</button></div><div class="grid2"><div class="field"><label>First Name</label><input id="organicFirstName"></div><div class="field"><label>Last Name</label><input id="organicLastName"></div></div><div class="grid2"><div class="field"><label>Phone</label><input id="organicPhone"></div><div class="field"><label>Email</label><input id="organicEmail"></div></div><div class="field"><label>Lead Source</label><select id="organicSource"><option>Google</option><option>Facebook</option><option>Nextdoor</option><option>Referral</option><option>Repeat Customer</option><option>Word of Mouth</option><option>Website</option><option>Other Organic</option></select></div><div class="field"><label>Service Address</label><input id="organicAddress"></div><div class="field"><label>Notes</label><textarea id="organicNotes" rows="3"></textarea></div><div id="organicLeadMessage" class="muted"></div><div class="actions"><button id="saveOrganicLeadBtn" class="btn primary">Save Organic Lead</button></div></div></div><div id="scheduleJobModal" class="modal"><div class="panel"><div class="head"><div><h2>Schedule & Assign Job</h2><div id="scheduleQuoteName" class="muted"></div></div><button class="btn" data-close="scheduleJobModal">Close</button></div><input id="scheduleQuoteId" type="hidden"><div class="field"><label>Assign Installers</label><div id="scheduleInstallers" class="installer-picker"></div></div><div class="grid2"><div class="field"><label>Start Date & Time</label><input id="scheduleStart" type="datetime-local"></div><div class="field"><label>Estimated End</label><input id="scheduleEnd" type="datetime-local"></div></div><div class="field"><label>Job Title</label><input id="scheduleTitle" placeholder="Smith Residence — Window Film Installation"></div><div class="field"><label>Installer Notes</label><textarea id="scheduleNotes" placeholder="Entry instructions, parking, scaffolding, film selection, priority rooms..."></textarea></div><div class="card job-material-card"><div class="head" style="margin-top:0"><div><h3>Film Material Plan</h3><div class="muted">Used for inventory forecasting and final deduction.</div></div><span class="pill">Inventory</span></div><div class="field"><label>Film / Shade</label><select id="scheduleFilmProduct"><option value="">Select film…</option></select></div><div class="grid2"><div class="field"><label>Planned Material Used (sq ft)</label><input id="scheduleMaterialLinearFt" type="number" min="0" step="0.01" placeholder="Auto-filled from Roll Optimizer including waste"></div><div class="field"><label>Actual Material Used (sq ft, optional)</label><input id="scheduleMaterialActualFt" type="number" min="0" step="0.01" placeholder="Leave blank to use planned amount"></div></div><div id="scheduleMaterialHint" class="muted"></div><div id="scheduleMaterialProjection" class="inventory-material-projection"></div></div><div class="field"><label>Job Status</label><select id="scheduleStatus"><option>Scheduled</option><option>Confirmed</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><button id="saveScheduledJob" class="btn primary wide">Save & Assign Job</button><div id="scheduleMessage" class="muted" style="margin-top:10px"></div></div></div>
 <div id="jobDetailModal" class="modal"><div class="modal-panel"><div class="head"><div><h2 id="jobDetailTitle">Job Details</h2><div id="jobDetailMeta" class="muted"></div></div><button class="btn" data-close="jobDetailModal">Close</button></div><div class="field"><label>Job Status</label><select id="jobStatusSelect"><option>Scheduled</option><option>En Route</option><option>In Progress</option><option>Completed</option></select></div><div class="field"><label>Installer Notes</label><textarea id="jobInstallerNotes" placeholder="Access issues, film notes, customer requests, completion notes..."></textarea></div><button id="saveInstallerJobUpdate" class="btn primary clock-button">Save Job Update</button><div class="head"><h2>Rooms & Dimensions</h2></div><div id="jobDimensionList"></div></div></div>
 <div id="leadModal" class="modal"><div class="panel"><div class="head"><h2>New Angi Lead</h2><button data-close="leadModal" class="btn">Close</button></div><div class="field"><label>First Name</label><input id="lfn"></div><div class="field"><label>Last Name</label><input id="lln"></div><div class="field"><label>Phone</label><input id="lphone"></div><div class="field"><label>Email</label><input id="lemail"></div><div class="field"><label>City</label><input id="lcity"></div><div class="field"><label>Service Requested</label><input id="lservice"></div><div class="field"><label>Original Message</label><textarea id="lmessage"></textarea></div><button id="saveLead" class="btn primary wide">Save Lead</button></div></div>
-<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=7.0.0"></script></body></html>
+<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=7.1.0"></script></body></html>

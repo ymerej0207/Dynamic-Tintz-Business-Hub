@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.0.0-native-app-ui
+ * Release: 7.1.0-true-app-ui
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.0.0-";
-const CACHE_NAME = `${CACHE_PREFIX}native-app-ui`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.1.0-";
+const CACHE_NAME = `${CACHE_PREFIX}true-app-ui`; 
 
 const APP_SHELL = [
   "./",

@@ -615,3 +615,110 @@ textarea{min-height:96px}
   .view>.head:first-child h2{font-size:21px}
   .grid2{grid-template-columns:1fr!important}
 }
+
+/* ============================================================
+   v7.1.0 — ACTUAL approved app UI component reconstruction
+   ============================================================ */
+.app-screen-title{display:flex;align-items:center;justify-content:space-between;margin:12px 2px 16px}
+.app-screen-title .eyebrow{display:block;font-size:9px;font-weight:800;letter-spacing:.13em;color:var(--app-accent);margin-bottom:3px}
+.app-screen-title h2{font-size:27px;margin:0;letter-spacing:-.035em}
+.app-round-action{width:42px;height:42px;border-radius:50%;border:0;background:var(--app-accent);color:#001313;font-size:28px;line-height:1;font-weight:400;display:grid;place-items:center}
+
+.app-kpi-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:20px}
+.app-kpi-card{min-height:106px;border:1px solid var(--app-line);border-radius:16px;background:linear-gradient(160deg,#0f1719,#090f10);color:#fff;padding:13px 12px;text-align:left;display:flex;flex-direction:column;justify-content:center}
+button.app-kpi-card{cursor:pointer}
+.app-kpi-card span{font-size:10px;font-weight:800;color:#d7dede;letter-spacing:.04em}
+.app-kpi-card b{font-size:30px;line-height:1.05;margin:5px 0;color:var(--app-accent);letter-spacing:-.04em}
+.app-kpi-card small{font-size:10px;color:var(--app-muted)}
+
+.app-section{margin:18px 0}
+.app-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 3px 9px}
+.app-section-head h3{font-size:14px;text-transform:uppercase;letter-spacing:.035em;margin:0}
+.app-section-head button{border:0;background:transparent;color:var(--app-accent);font-size:11px;font-weight:700}
+
+.app-schedule-list,.app-recent-list,.app-inventory-snapshot{display:grid;gap:7px}
+.app-schedule-item,.app-recent-row,.app-inventory-snapshot-card{
+  width:100%;border:1px solid var(--app-line);border-radius:14px;background:linear-gradient(160deg,#101719,#0a1011);
+  color:#fff;display:grid;align-items:center;text-align:left
+}
+.app-schedule-item{grid-template-columns:64px minmax(0,1fr) auto 10px;gap:10px;padding:8px}
+.app-time-tile{min-height:52px;border-radius:10px;background:linear-gradient(135deg,#0b8d89,var(--app-accent));color:white;display:grid;place-items:center;text-align:center;font-size:14px;font-weight:850;padding:4px}
+.app-schedule-copy,.app-recent-main,.app-stock-copy{display:flex;flex-direction:column;min-width:0}
+.app-schedule-copy b,.app-recent-main b,.app-stock-copy b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-schedule-copy small,.app-recent-main small,.app-stock-copy small{font-size:10px;color:var(--app-muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-status-pill{font-size:9px;padding:5px 7px;border-radius:7px;background:#08233a;color:#43a6ff;white-space:nowrap}
+.app-status-pill.status-confirmed{background:#07341c;color:#49e889}
+.app-status-pill.status-in-progress{background:#392e06;color:#ffd447}
+.app-chevron{font-size:23px;color:#abb7b9;font-weight:300}
+
+.app-recent-row{grid-template-columns:minmax(0,1fr) auto auto 10px;gap:8px;padding:12px}
+.app-recent-row strong{font-size:12px}
+.app-status-text{font-size:10px;color:var(--app-accent)}
+
+.inventory-ring{
+  --ring-pct:0;position:relative;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  background:conic-gradient(var(--app-accent) calc(var(--ring-pct)*1%),#263033 0)
+}
+.inventory-ring::before{content:"";position:absolute;inset:6px;border-radius:50%;background:#0b1112}
+.inventory-ring span{position:relative;z-index:1;color:#fff;font-weight:850;letter-spacing:-.04em}
+.inventory-ring.sm{width:62px;height:62px}.inventory-ring.sm span{font-size:15px}
+.inventory-ring.md{width:70px;height:70px}.inventory-ring.md span{font-size:16px}
+
+.app-inventory-snapshot-card{grid-template-columns:minmax(0,1fr) 62px 10px;gap:10px;padding:12px}
+.app-stock-copy em{width:max-content;margin-top:7px;font-size:8px;font-style:normal;font-weight:900;letter-spacing:.05em;color:#39e486;background:#06321c;padding:4px 7px;border-radius:999px}
+.app-inventory-snapshot-card.is-low .app-stock-copy em{color:#ffd85f;background:#342a07}
+.app-low-stock{margin-top:8px;border:1px solid #342f20;border-radius:12px;padding:8px 10px;font-size:10px;color:var(--app-muted)}
+.app-low-stock>div{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--app-line)}
+
+.app-dashboard-more{border:1px solid var(--app-line);border-radius:14px;background:#081011;padding:0 12px;margin:18px 0}
+.app-dashboard-more>summary{padding:13px 0;font-size:11px;font-weight:800;color:var(--app-muted);cursor:pointer}
+.app-attention-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding-bottom:10px}
+.app-attention-grid>div{padding:10px;background:#0e1719;border-radius:10px;text-align:center}
+.app-attention-grid b{display:block;color:var(--app-accent);font-size:20px}.app-attention-grid span{font-size:9px;color:var(--app-muted)}
+.app-mission{margin:6px 0 12px}
+.app-empty{padding:14px;border:1px solid var(--app-line);border-radius:13px;color:var(--app-muted);font-size:11px}
+
+/* Main film inventory exactly like app mockup: name/stock + real ring + chevron */
+.app-film-summary{grid-template-columns:minmax(0,1fr) 70px 12px!important;padding:13px 12px!important}
+.app-film-summary .inventory-summary-name b{font-size:15px}
+.app-inline-stock{font-size:8px;color:#36e47e;font-weight:850;margin-top:5px}
+.app-inline-stock.low{color:#ffd35b}
+.app-film-summary>.app-chevron{align-self:center}
+
+/* Quotes are now list-first, not a giant form-first webpage */
+.app-quotes-screen>.app-quote-list-panel>.head:first-child{display:none}
+.app-quote-list-panel>.card{padding:10px!important;margin-bottom:9px!important}
+.app-quote-list-panel .grid2{grid-template-columns:minmax(0,1fr) 130px!important}
+.app-quote-list-panel .grid3{margin-top:8px}
+#savedQuotes{display:grid;gap:7px}
+.quote-card.app-quote-card{padding:12px!important;margin:0!important;border-radius:14px!important}
+.quote-card.app-quote-card .head{margin:0 0 7px!important}
+.quote-card.app-quote-card h2{font-size:15px!important}
+.quote-card.app-quote-card>.muted{font-size:10px!important;line-height:1.55}
+.quote-card.app-quote-card .actions{margin-top:9px}
+.app-builder-sheet{border:1px solid var(--app-line);border-radius:16px;background:#081011;margin:16px 0;overflow:hidden}
+.app-builder-sheet>summary{padding:14px 15px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-weight:850;list-style:none}
+.app-builder-sheet>summary::-webkit-details-marker{display:none}
+.app-builder-sheet>summary small{font-size:9px;color:var(--app-muted);font-weight:600}
+.app-builder-inner{padding:0 10px 12px}
+.app-builder-inner .quote-layout{margin-top:0}
+
+/* Schedule / Operations visually matches appointment cards */
+.app-operation-card{padding:10px!important}
+.app-operation-top{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:10px;align-items:center;margin-bottom:10px}
+.app-operation-copy{min-width:0}.app-operation-copy h2{font-size:14px;margin:0 0 3px}.app-operation-copy .muted{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-operation-card .compact-grid{border-top:1px solid var(--app-line);padding-top:9px}
+
+/* Make the overall screen feel like a phone app even on mobile browser/PWA */
+@media(max-width:600px){
+  .app-kpi-card{min-height:94px;padding:11px 9px}.app-kpi-card b{font-size:25px}
+  .app-schedule-item{grid-template-columns:57px minmax(0,1fr) auto 8px;gap:7px}
+  .app-time-tile{min-height:49px;font-size:12px}
+  .app-status-pill{max-width:70px;overflow:hidden;text-overflow:ellipsis}
+  .app-recent-row{grid-template-columns:minmax(0,1fr) auto 8px}
+  .app-recent-row .app-status-text{display:none}
+  .app-quote-list-panel .grid2{grid-template-columns:1fr 112px!important}
+  .quote-card.app-quote-card .actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .quote-card.app-quote-card .actions .btn{width:100%;padding:7px!important;font-size:10px}
+  .app-operation-top{grid-template-columns:57px minmax(0,1fr) auto}
+}
