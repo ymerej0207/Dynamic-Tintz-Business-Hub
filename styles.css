@@ -425,3 +425,193 @@ input,select,textarea,button{
   .scrap-size-summary{padding:10px}
   .scrap-size-meta{font-size:10px}
 }
+
+/* =========================================================
+   v7.0.0 — Dynamic Tintz native-app interface
+   Presentation layer only. Existing view IDs/functionality retained.
+   ========================================================= */
+:root{
+  --app-bg:#020606;
+  --app-panel:#0a1112;
+  --app-panel-2:#0d1517;
+  --app-panel-3:#101a1c;
+  --app-line:#1b292c;
+  --app-text:#f5f8f8;
+  --app-muted:#8da0a4;
+  --app-accent:#22d4cf;
+  --app-accent-2:#36ece6;
+  --app-green:#2bd477;
+  --app-warn:#f0c744;
+}
+html,body{background:var(--app-bg)!important}
+body{overscroll-behavior-y:none}
+.shell{
+  max-width:100%!important;
+  min-height:100dvh;
+  padding:0 14px calc(92px + env(safe-area-inset-bottom))!important;
+  background:
+    radial-gradient(circle at 50% -10%,rgba(34,212,207,.07),transparent 28rem),
+    var(--app-bg)!important;
+}
+.app-topbar{
+  position:sticky;top:0;z-index:45;
+  min-height:70px;
+  margin:0 -14px 10px!important;
+  padding:calc(8px + env(safe-area-inset-top)) 16px 10px!important;
+  display:grid!important;
+  grid-template-columns:38px auto minmax(0,1fr) 38px;
+  align-items:center;gap:10px;
+  background:rgba(2,6,6,.94)!important;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  backdrop-filter:blur(18px);
+}
+.app-topbar img{width:46px!important;height:46px!important;object-fit:contain}
+.app-topbar h1{font-size:18px!important;line-height:1.05;margin:0;color:#fff!important}
+.app-topbar p{font-size:11px!important;margin:3px 0 0;color:var(--app-muted)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-menu-glyph{
+  width:36px;height:36px;border:0;background:transparent;color:var(--app-accent);
+  font-size:24px;padding:0;display:flex;align-items:center;justify-content:center
+}
+.topbar-spacer{width:36px;height:36px}
+.view{padding-top:2px}
+.view>.head:first-child{margin:8px 2px 14px}
+.view>.head:first-child h2{font-size:24px;letter-spacing:-.03em}
+.card,.inventory-section-accordion,.inventory-product-card.inventory-accordion,
+.inventory-roll-card.inventory-accordion,.scrap-film-group.inventory-accordion,.scrap-size-group{
+  background:linear-gradient(180deg,var(--app-panel-2),var(--app-panel))!important;
+  border:1px solid var(--app-line)!important;
+  box-shadow:none!important;
+}
+.card{border-radius:16px!important}
+.btn{
+  min-height:42px;border-radius:13px!important;
+  border-color:#203336!important;background:#102023!important;color:var(--app-text)!important;
+  font-weight:750!important
+}
+.btn.primary{
+  background:linear-gradient(135deg,var(--app-accent-2),var(--app-accent))!important;
+  color:#001313!important;border-color:transparent!important;
+}
+.btn.danger{background:#261214!important;color:#ff9d9d!important;border-color:#4a2529!important}
+.pill{border-radius:999px!important}
+input,select,textarea{
+  background:#071012!important;border:1px solid #223034!important;color:#fff!important;
+  border-radius:13px!important;min-height:44px
+}
+textarea{min-height:96px}
+.field label{font-size:11px!important;letter-spacing:.06em;text-transform:uppercase;color:var(--app-muted)!important}
+
+/* Dashboard becomes app-like cards instead of a web dashboard */
+#owner .dashboard-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:8px!important;
+}
+#owner .dashboard-grid .metric{
+  padding:14px 8px!important;min-height:92px;
+  align-items:flex-start!important;text-align:left!important
+}
+#owner .dashboard-grid .metric b{font-size:26px!important;color:var(--app-accent)}
+#owner .dashboard-grid .metric span{font-size:10px!important;line-height:1.2}
+#owner>.card{margin:10px 0!important}
+#owner #liveJobs .job-row,#owner .pipeline-row{border-color:var(--app-line)!important}
+
+/* Quotes / operations cards */
+#quoteList .card,#operationsList .card,#leadList .card,#followList .card,#upcomingFollowList .card{
+  border-radius:15px!important;margin:8px 0!important;
+}
+.quote-head{position:relative}
+#quotes .quote-layout{gap:10px!important}
+#operations>.card:first-of-type{margin-bottom:10px}
+
+/* Bottom native tab bar */
+.bottom{
+  position:fixed!important;
+  left:0!important;right:0!important;bottom:0!important;
+  z-index:60!important;
+  height:calc(72px + env(safe-area-inset-bottom))!important;
+  padding:6px 10px env(safe-area-inset-bottom)!important;
+  display:grid!important;
+  border-top:1px solid #172326!important;
+  background:rgba(2,6,6,.96)!important;
+  backdrop-filter:blur(22px)!important;
+  box-shadow:0 -10px 30px rgba(0,0,0,.3)!important;
+}
+.bottom button{
+  border:0!important;background:transparent!important;color:#829194!important;
+  min-width:0!important;padding:5px 2px 3px!important;border-radius:12px!important;
+  display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;
+  font-size:10px!important;font-weight:650!important
+}
+.bottom button .nav-icon{width:23px;height:23px;display:block}
+.bottom button .nav-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.bottom button.active{color:var(--app-accent)!important}
+.bottom button.active .nav-icon{filter:drop-shadow(0 0 7px rgba(34,212,207,.25))}
+
+/* More = native bottom sheet */
+.more-sheet{position:fixed;inset:0;z-index:120;pointer-events:none;visibility:hidden}
+.more-sheet.show{pointer-events:auto;visibility:visible}
+.more-sheet-backdrop{position:absolute;inset:0;border:0;background:rgba(0,0,0,.65);opacity:0;transition:.2s}
+.more-sheet.show .more-sheet-backdrop{opacity:1}
+.more-sheet-panel{
+  position:absolute;left:0;right:0;bottom:0;
+  padding:8px 14px calc(22px + env(safe-area-inset-bottom));
+  border-radius:24px 24px 0 0;background:#091012;border:1px solid #213033;
+  transform:translateY(105%);transition:transform .22s ease
+}
+.more-sheet.show .more-sheet-panel{transform:translateY(0)}
+.more-sheet-handle{width:42px;height:4px;border-radius:99px;background:#425054;margin:2px auto 12px}
+.more-sheet-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.more-sheet-title>div{display:flex;flex-direction:column}
+.more-sheet-title b{font-size:22px}.more-sheet-title span{font-size:11px;color:var(--app-muted)}
+.more-close{width:36px;height:36px;border-radius:50%;border:1px solid #26383b;background:#111c1e;color:#fff;font-size:23px}
+.more-menu-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.more-menu-grid button{
+  min-height:82px;border:1px solid var(--app-line);border-radius:16px;background:#0d1618;color:#fff;
+  display:grid;grid-template-columns:32px 1fr;text-align:left;align-items:center;padding:12px;column-gap:8px
+}
+.more-menu-grid button>span{grid-row:1/3;font-size:23px;color:var(--app-accent)}
+.more-menu-grid button b{font-size:14px}.more-menu-grid button small{font-size:10px;color:var(--app-muted)}
+
+/* Inventory mobile hierarchy */
+#inventory .inventory-section-accordion>summary{min-height:58px}
+.inventory-product-summary,.inventory-roll-summary{min-height:66px}
+.inventory-summary-balance b,.inventory-roll-balance b{color:var(--app-accent)!important}
+.inventory-priority-number{color:var(--app-accent)}
+.scrap-film-header h3{font-size:16px}
+.scrap-size-summary{min-height:54px}
+.scrap-qty{background:rgba(34,212,207,.08);border-color:rgba(34,212,207,.3)!important}
+
+/* Multi-select scrap action bar */
+.scrap-bulk-actions{
+  position:sticky;top:76px;z-index:12;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 10px;margin:0 0 8px;border:1px solid var(--app-line);border-radius:13px;
+  background:rgba(8,17,18,.94);backdrop-filter:blur(12px)
+}
+.scrap-bulk-actions>span{font-size:11px;color:var(--app-muted);font-weight:700}
+.scrap-bulk-actions>div{display:flex;gap:6px}
+.scrap-bulk-actions .btn{min-height:34px!important;padding:6px 9px!important}
+.scrap-bulk-actions.has-selection{border-color:rgba(34,212,207,.5)}
+.scrap-card:has(input:checked){border-color:var(--app-accent)!important;background:rgba(34,212,207,.07)!important}
+.scrap-check-wrap input{accent-color:var(--app-accent)!important}
+
+/* Modal = app sheet on mobile */
+.modal{background:rgba(0,0,0,.7)!important}
+.modal-card{background:#091113!important;border:1px solid #243438!important;border-radius:22px!important}
+
+/* Desktop keeps app shell centered but not artificially phone-sized */
+@media(min-width:900px){
+  .shell{max-width:1180px!important;margin:0 auto!important}
+  .bottom{left:50%!important;right:auto!important;width:min(1180px,100%)!important;transform:translateX(-50%)}
+  .more-sheet-panel{left:50%;right:auto;width:min(560px,100%);transform:translate(-50%,105%)}
+  .more-sheet.show .more-sheet-panel{transform:translate(-50%,0)}
+}
+@media(max-width:600px){
+  .shell{padding-left:10px!important;padding-right:10px!important}
+  .app-topbar{margin-left:-10px!important;margin-right:-10px!important}
+  #owner .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  #owner .dashboard-grid .metric{min-height:82px;padding:11px 7px!important}
+  #owner .dashboard-grid .metric b{font-size:22px!important}
+  .view>.head:first-child h2{font-size:21px}
+  .grid2{grid-template-columns:1fr!important}
+}
