@@ -884,3 +884,8 @@ button.app-kpi-card{cursor:pointer}
 /* v7.5.1 — hard view isolation after markup repair */
 .view{display:none!important}
 .view.active{display:block!important}
+
+/* v7.5.2 — emergency quote-save visibility repair */
+.quote-save-dock{position:sticky;bottom:calc(74px + env(safe-area-inset-bottom));z-index:42;padding:12px 0 4px;margin-top:8px;background:linear-gradient(transparent,rgba(2,6,6,.98) 35%)}
+.quote-save-dock .btn{width:100%;min-height:50px;font-size:14px;box-shadow:0 0 0 1px rgba(34,212,207,.12),0 8px 30px rgba(0,0,0,.35)}
+@media(min-width:801px){.quote-save-dock{position:static;background:none}}
