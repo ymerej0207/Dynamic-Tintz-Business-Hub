@@ -764,3 +764,36 @@ button.app-kpi-card{cursor:pointer}
   .metric-editor-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
   .metric-roll-editor,.metric-reservation-editor{grid-template-columns:1fr 120px}
 }
+
+/* v7.3.0 — Lead Center + navigation reliability */
+.lead-top-actions{display:flex;justify-content:flex-end;margin:-7px 0 10px}
+.lead-filter-bar{
+  display:grid;grid-template-columns:minmax(0,1fr) 145px;gap:8px;
+  padding:9px;border:1px solid var(--app-line);border-radius:14px;background:#081011;margin-bottom:10px
+}
+.lead-filter-bar .field{margin:0}
+.lead-card-list{display:grid;gap:8px}
+.lead-app-card{
+  border:1px solid var(--app-line)!important;border-radius:16px!important;
+  background:linear-gradient(160deg,#101819,#081011)!important;padding:13px!important;margin:0!important
+}
+.lead-card-head{margin:0 0 8px!important}
+.lead-card-head h2{font-size:17px!important;margin:0}
+.lead-contact-line{display:flex;flex-wrap:wrap;gap:5px 10px;font-size:11px;color:var(--app-muted);margin-bottom:9px}
+.lead-contact-line a{color:var(--app-accent);font-weight:750;text-decoration:none}
+.lead-request-block,.lead-description-block{
+  border:1px solid #1a2b2e;border-radius:12px;background:#0b1416;padding:10px 11px;margin:7px 0
+}
+.lead-request-block{border-left:3px solid var(--app-accent)}
+.lead-request-block b{display:block;font-size:13px;line-height:1.35;margin-top:4px}
+.lead-description-block div{font-size:12px;line-height:1.45;color:#e7eeee;white-space:pre-wrap;word-break:break-word;margin-top:5px}
+.lead-description-block.is-empty div{color:#6f8589;font-style:italic}
+.lead-detail-label{font-size:8px;color:var(--app-accent);font-weight:900;letter-spacing:.09em}
+.lead-attempt-line{font-size:9px;color:var(--app-muted);margin:9px 2px 2px}
+.lead-actions{margin-top:9px!important}
+#nav button[data-v="leads"].active{color:var(--app-accent)!important}
+@media(max-width:600px){
+  .lead-filter-bar{grid-template-columns:minmax(0,1fr) 112px}
+  .lead-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .lead-actions .btn{width:100%;font-size:10px;padding:7px!important}
+}

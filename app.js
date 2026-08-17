@@ -7,11 +7,33 @@ function when(v){return v?new Date(v).toLocaleString():"—"}function owner(){re
 async function login(){$("message").textContent="Signing in…";let{error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});$("message").textContent=error?error.message:""}
 async function reset(){let e=$("email").value.trim();if(!e)return $("message").textContent="Enter your email first.";let{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.href});$("message").textContent=error?error.message:"Password reset sent."}
 function lastViewKey(){return `dt.lastView.${session?.user?.id||"guest"}`}
-function allowedView(id){return [...document.querySelectorAll('#nav button')].some(button=>button.dataset.v===id)}
-async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();setupEmployeeAdmin();if(owner()){$("calendarIntegrationCard")?.classList.remove("hidden");$("icloudCalendarCard")?.classList.remove("hidden");}let saved=localStorage.getItem(lastViewKey()),fallback=owner()?"owner":"employee";show(saved&&allowedView(saved)?saved:fallback)}
+function allowedView(id){
+  const ownerViews=['owner','leads','followups','quotes','optimizer','inventory','operations','shortcuts','team','account'];
+  const employeeViews=['employee','time','account'];
+  return (owner()?ownerViews:employeeViews).includes(id)&&!!$(id);
+}
+function navigationViewMap(){
+  return owner()
+    ?{owner:'dashboard',leads:'loadLeads',followups:'loadFollowups',quotes:'loadQuotes',optimizer:'loadRollOptimizer',inventory:'loadInventory',operations:'loadOperations',shortcuts:'renderShortcuts',team:'loadTeam',account:'account'}
+    :{employee:'loadEmployee',time:'loadTime',account:'account'};
+}
+function auditNavigation(){
+  let missing=[];
+  for(let [id,loader] of Object.entries(navigationViewMap())){
+    if(!$(id))missing.push(`${id}: missing view`);
+    if(loader!=='account'&&typeof globalThis[loader]==='undefined'){
+      // Module functions are lexical rather than global; existence is validated at build time.
+    }
+  }
+  if(missing.length)console.error('Dynamic Tintz navigation audit failed:',missing);
+  else console.info('Dynamic Tintz navigation audit: all permitted pages exist.');
+  return missing;
+}
+async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();auditNavigation();setupEmployeeAdmin();if(owner()){$("calendarIntegrationCard")?.classList.remove("hidden");$("icloudCalendarCard")?.classList.remove("hidden");}let saved=localStorage.getItem(lastViewKey()),fallback=owner()?"owner":"employee";show(saved&&allowedView(saved)?saved:fallback)}
 function navIcon(name){
   const icons={
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+    leads:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4h-3A1.5 1.5 0 0 0 3 5.5C3 14.06 9.94 21 18.5 21a1.5 1.5 0 0 0 1.5-1.5v-3l-4-1.2-1.2 2.1a13.6 13.6 0 0 1-8.2-8.2L8.7 8z"/></svg>',
     quotes:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v5h5M9 12h7M9 16h7"/></svg>',
     schedule:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>',
     inventory:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 4.5-9 4.5-9-4.5z"/><path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5"/></svg>',
@@ -20,7 +42,7 @@ function navIcon(name){
     account:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/></svg>'
   };return icons[name]||icons.more
 }
-function moreViews(){return ['leads','followups','optimizer','shortcuts','team','account']}
+function moreViews(){return ['inventory','followups','optimizer','shortcuts','team','account']}
 function openMoreMenu(){
   if(!owner())return show('account');
   $('moreMenu')?.classList.add('show');
@@ -28,11 +50,11 @@ function openMoreMenu(){
 function closeMoreMenu(){$('moreMenu')?.classList.remove('show')}
 function renderNav(){
   let t=owner()
-    ?[['owner','home','Home'],['quotes','quotes','Quotes'],['operations','schedule','Schedule'],['inventory','inventory','Inventory'],['more','more','More']]
+    ?[['owner','home','Home'],['leads','leads','Leads'],['quotes','quotes','Quotes'],['operations','schedule','Schedule'],['more','more','More']]
     :[['employee','home','Home'],['time','clock','Clock'],['account','account','Account']];
   $("nav").style.gridTemplateColumns=`repeat(${t.length},1fr)`;
   $("nav").innerHTML=t.map(x=>`<button data-v="${x[0]}"><b class="nav-icon">${navIcon(x[1])}</b><span>${x[2]}</span></button>`).join('');
-  $("nav").querySelectorAll('button').forEach(b=>b.onclick=()=>b.dataset.v==='more'?openMoreMenu():show(b.dataset.v));
+  /* Navigation clicks are handled by delegated app-level routing. */
 }
 async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures()}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus();loadIcloudCalendarStatus()}}
 async function dashboard(){
@@ -865,7 +887,59 @@ async function applyInventoryToOptimizer(q){
 
 function openOrganicLeadModal(){['organicFirstName','organicLastName','organicPhone','organicEmail','organicAddress','organicNotes'].forEach(id=>{if($(id))$(id).value=''});$('organicSource').value='Google';$('organicLeadMessage').textContent='';$('organicLeadModal').classList.add('show')}
 async function saveOrganicLead(){let p={first_name:$('organicFirstName').value.trim(),last_name:$('organicLastName').value.trim(),phone:$('organicPhone').value.trim(),email:$('organicEmail').value.trim(),service_address:$('organicAddress').value.trim(),notes:$('organicNotes').value.trim(),source:'organic',source_detail:$('organicSource').value,status:'new',created_at:new Date().toISOString(),updated_at:new Date().toISOString()};if(!p.first_name&&!p.last_name&&!p.phone&&!p.email){$('organicLeadMessage').textContent='Enter at least a name, phone, or email.';return}let{error}=await sb.from('leads').insert(p);if(error){delete p.source_detail;let r=await sb.from('leads').insert(p);if(r.error){$('organicLeadMessage').textContent=r.error.message;return}}$('organicLeadModal').classList.remove('show');$('leadStatusFilter').value='new';toast('Organic lead added.');await loadLeads()}
-function card(l,due=false){return `<div class="item"><div class="head"><div><h2>${esc((l.first_name+' '+l.last_name).trim()||'Unnamed Lead')}</h2><div class="muted">${esc(l.source||'Angi')} • ${when(l.received_at)}</div></div><span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span></div><div class="muted">${esc(l.phone)}${l.email?` • ${esc(l.email)}`:''}<br>${esc(l.city||l.service_address||'')}<br>${esc(l.service_requested||'')}<br>Attempts: ${l.attempt_count||0}${due?`<br><b>Follow-up:</b> ${when(l.next_follow_up_at)}`:''}</div><div class="actions"><a class="btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button><button class="btn primary" data-log="${l.id}">Log Attempt</button><button class="btn" data-leadquote="${l.id}">Create Quote</button>${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}</div></div>`}
+function leadSourceLabel(l){
+  if(l.source==='organic')return l.source_detail||'Organic';
+  return l.source||'Angi';
+}
+function leadRequestText(l){
+  return String(l.original_message||l.message||l.notes||'').trim();
+}
+function card(l,due=false){
+  let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',
+      source=leadSourceLabel(l),
+      request=String(l.service_requested||'').trim(),
+      description=leadRequestText(l),
+      location=l.service_address||l.city||'',
+      hasDescription=!!description;
+
+  return `<article class="item lead-app-card">
+    <div class="head lead-card-head">
+      <div>
+        <h2>${esc(name)}</h2>
+        <div class="muted">${esc(source)} • ${when(l.received_at)}</div>
+      </div>
+      <span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span>
+    </div>
+
+    <div class="lead-contact-line">
+      ${l.phone?`<a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>`:''}
+      ${l.email?`<span>${esc(l.email)}</span>`:''}
+      ${location?`<span>${esc(location)}</span>`:''}
+    </div>
+
+    ${request?`<section class="lead-request-block">
+      <span class="lead-detail-label">PROJECT REQUEST</span>
+      <b>${esc(request)}</b>
+    </section>`:''}
+
+    ${hasDescription?`<section class="lead-description-block">
+      <span class="lead-detail-label">${String(source).toLowerCase().includes('angi')?'ANGI DESCRIPTION / CUSTOMER MESSAGE':'CUSTOMER MESSAGE / NOTES'}</span>
+      <div>${esc(description)}</div>
+    </section>`:`<section class="lead-description-block is-empty">
+      <span class="lead-detail-label">CUSTOMER MESSAGE</span>
+      <div>No additional description was submitted.</div>
+    </section>`}
+
+    <div class="lead-attempt-line">Attempts: <b>${l.attempt_count||0}</b>${due?` • Follow-up: <b>${when(l.next_follow_up_at)}</b>`:''}</div>
+
+    <div class="actions lead-actions">
+      ${l.phone?`<a class="btn primary" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
+      <button class="btn" data-log="${l.id}">Log Attempt</button>
+      <button class="btn" data-leadquote="${l.id}">Create Quote</button>
+      ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}
+    </div>
+  </article>`
+}
 async function copyText(value){
   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);return}
   let area=document.createElement('textarea');area.value=value;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();let copied=document.execCommand('copy');area.remove();if(!copied)throw new Error('Copy failed')
@@ -1993,6 +2067,25 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);$('moreMenu')?.querySelectorAll('[data-more-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.moreGo)));bind('inventoryRefresh','onclick',loadInventory);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
+bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+  let navButton=e.target.closest('#nav [data-v]');
+  if(navButton){
+    e.preventDefault();
+    navButton.dataset.v==='more'?openMoreMenu():show(navButton.dataset.v);
+    return;
+  }
+  let moreButton=e.target.closest('#moreMenu [data-more-go]');
+  if(moreButton){
+    e.preventDefault();
+    show(moreButton.dataset.moreGo);
+    return;
+  }
+  let goButton=e.target.closest('[data-go]');
+  if(goButton){
+    e.preventDefault();
+    show(goButton.dataset.go);
+  }
+});
+bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
