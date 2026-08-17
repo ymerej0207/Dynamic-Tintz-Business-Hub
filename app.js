@@ -1458,9 +1458,40 @@ let icloudViewEventsCache=[];
 async function loadIcloudViewEvents(){
   let ids=getIcloudViewCalendarIds();
   if(!ids.length){icloudViewEventsCache=[];return}
-  let y=operationsCalendarDate.getFullYear(),m=operationsCalendarDate.getMonth(),
-      start=new Date(y,m,1),end=new Date(y,m+1,1);
-  start.setDate(start.getDate()-7);end.setDate(end.getDate()+7);
+
+  let range=$('operationRange')?.value||'7',
+      selected=operationsSelectedDate,
+      now=new Date(),
+      start,end;
+
+  if(selected){
+    let [y,m,d]=selected.split('-').map(Number);
+    start=new Date(y,m-1,d,0,0,0,0);
+    end=new Date(y,m-1,d+1,0,0,0,0);
+  }else if(range==='today'){
+    start=new Date(now);start.setHours(0,0,0,0);
+    end=new Date(start.getTime()+86400000);
+  }else if(range==='7'){
+    start=new Date(now);start.setHours(0,0,0,0);
+    end=new Date(start.getTime()+7*86400000);
+  }else if(range==='30'){
+    start=new Date(now);start.setHours(0,0,0,0);
+    end=new Date(start.getTime()+30*86400000);
+  }else if(range==='month'){
+    let b=operationsMonthBounds();start=b.start;end=b.end;
+  }else{
+    // "All" should behave like all schedule data, not just the displayed month.
+    // Span the full job history plus one year forward so personal events remain useful.
+    let jobDates=operationsCache.map(operationDisplayDate).filter(Boolean).map(x=>new Date(x)).filter(x=>!Number.isNaN(x.getTime()));
+    let earliest=jobDates.length?new Date(Math.min(...jobDates.map(x=>x.getTime()))):new Date(now.getFullYear()-1,now.getMonth(),1);
+    let latest=jobDates.length?new Date(Math.max(...jobDates.map(x=>x.getTime()))):now;
+    start=new Date(Math.min(earliest.getTime(),new Date(now.getFullYear()-1,now.getMonth(),1).getTime()));
+    start.setDate(start.getDate()-31);
+    end=new Date(Math.max(latest.getTime(),now.getTime()));
+    end.setFullYear(end.getFullYear()+1);
+    end.setDate(end.getDate()+31);
+  }
+
   try{
     let{data,error}=await sb.functions.invoke('icloud-calendar-events',{body:{
       calendar_ids:ids,start:start.toISOString(),end:end.toISOString()
@@ -1578,9 +1609,50 @@ function renderOperationsCalendar(){
     </button>`);
   }
   grid.innerHTML=cells.join('');
-  grid.querySelectorAll('[data-opdate]').forEach(b=>b.onclick=()=>{
-    operationsSelectedDate=b.dataset.opdate;$('operationRange').value='all';renderOperations();
+  grid.querySelectorAll('[data-opdate]').forEach(b=>b.onclick=async()=>{
+    operationsSelectedDate=b.dataset.opdate;
+    if($('operationView'))$('operationView').value='all';
+    if($('operationStatus'))$('operationStatus').value='';
+    if($('operationRange'))$('operationRange').value='all';
+    await loadIcloudViewEvents();
+    renderOperations();
+    setTimeout(()=>$('operationsSelectedDayPanel')?.scrollIntoView({behavior:'smooth',block:'nearest'}),30);
   });
+}
+
+function renderOperationsSelectedDay(jobs,external){
+  let panel=$('operationsSelectedDayPanel'),title=$('operationsSelectedDayTitle'),host=$('operationsSelectedDayItems');
+  if(!panel||!host)return;
+  if(!operationsSelectedDate){
+    panel.classList.add('hidden');host.innerHTML='';return;
+  }
+
+  let [yy,mm,dd]=operationsSelectedDate.split('-').map(Number),d=new Date(yy,mm-1,dd),
+      entries=[
+        ...jobs.map(j=>({kind:'job',date:operationDisplayDate(j),value:j})),
+        ...external.map(e=>({kind:'external',date:e.start,value:e}))
+      ].sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+
+  title.textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});
+  panel.classList.remove('hidden');
+
+  host.innerHTML=entries.length?entries.map(entry=>{
+    if(entry.kind==='external'){
+      let e=entry.value,s=e.start?new Date(e.start):null,time=e.all_day?'All Day':s?.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})||'—';
+      return `<div class="selected-day-row external">
+        <span class="selected-day-time">${esc(time)}</span>
+        <div><b>${esc(e.summary||'Calendar Event')}</b><small>${esc(e.calendar_name||'iCloud')} • VIEW ONLY${e.location?' • '+esc(e.location):''}</small></div>
+        <span class="selected-day-type">PERSONAL</span>
+      </div>`;
+    }
+    let j=entry.value,s=j.scheduled_start?new Date(j.scheduled_start):null,time=s?.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})||'—',
+        customer=j.quote?.customer?`${j.quote.customer.first_name||''} ${j.quote.customer.last_name||''}`.trim():'';
+    return `<div class="selected-day-row">
+      <span class="selected-day-time">${esc(time)}</span>
+      <div><b>${esc(customer||j.title||j.quote?.project_name||'Installation')}</b><small>${esc(j.service_address||j.title||'Dynamic Tintz Job')}</small></div>
+      <span class="selected-day-type job">${esc(j.status||'Scheduled')}</span>
+    </div>`;
+  }).join(''):'<div class="app-empty">Nothing is scheduled on this date.</div>';
 }
 
 function renderOperations(){
@@ -1595,6 +1667,8 @@ function renderOperations(){
     jobs=jobs.filter(j=>operationLocalDateKey(operationDisplayDate(j))===operationsSelectedDate);
     external=external.filter(e=>operationLocalDateKey(e.start)===operationsSelectedDate);
   }
+
+  renderOperationsSelectedDay(jobs,external);
 
   let agenda=[
     ...jobs.map(j=>({kind:'job',value:j,date:operationDisplayDate(j)})),
@@ -2468,10 +2542,31 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',()=>{operationsSelectedDate=null;renderOperations()});bind('operationSearch','oninput',renderOperations);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('operationsPrevMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()-1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
+bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+  operationsSelectedDate=null;
+  if($('operationView').value==='all'){
+    if($('operationStatus'))$('operationStatus').value='';
+    if($('operationRange'))$('operationRange').value='all';
+  }
+  await loadIcloudViewEvents();
+  renderOperations();
+});bind('operationSearch','oninput',renderOperations);bind('operationStatus','onchange',async()=>{
+  operationsSelectedDate=null;
+  if($('operationStatus').value){
+    if($('operationView'))$('operationView').value='all';
+    if($('operationRange'))$('operationRange').value='all';
+  }
+  await loadIcloudViewEvents();
+  renderOperations();
+});bind('operationRange','onchange',async()=>{
+  operationsSelectedDate=null;
+  await loadIcloudViewEvents();
+  renderOperations();
+});bind('operationsPrevMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()-1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
 bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
 bind('operationsToday','onclick',()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());loadIcloudViewEvents().then(renderOperations)});
-bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperations()});bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+bind('operationsClearDate','onclick',async()=>{operationsSelectedDate=null;await loadIcloudViewEvents();renderOperations()});
+bind('operationsSelectedDayClose','onclick',async()=>{operationsSelectedDate=null;await loadIcloudViewEvents();renderOperations()});bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
     e.preventDefault();

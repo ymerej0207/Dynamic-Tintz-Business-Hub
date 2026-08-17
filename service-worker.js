@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.6.0-icloud-viewonly-quote-dock
+ * Release: 7.6.1-schedule-filter-day-view
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.6.0-";
-const CACHE_NAME = `${CACHE_PREFIX}icloud-viewonly-quote-dock`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.6.1-";
+const CACHE_NAME = `${CACHE_PREFIX}schedule-filter-day-view`; 
 
 const APP_SHELL = [
   "./",
