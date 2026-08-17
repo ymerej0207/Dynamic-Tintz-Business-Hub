@@ -1339,7 +1339,176 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
 }
 async function loadOperations(){let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));let jobs=data||[],jobIds=jobs.map(j=>j.id),plans=[];if(jobIds.length){let pr=await sb.from('job_material_plans').select('job_id,planned_linear_inches,actual_linear_inches,source,product:film_inventory_products(name)').in('job_id',jobIds);plans=pr.data||[]}let planMap=Object.fromEntries(plans.map(p=>[p.job_id,p]));operationsCache=jobs.map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean),material_plan:planMap[j.id]||null}));renderOperations()}
 function ensureArchiveControls(){let host=$('operations')?.querySelector('.card');if(!host||$('operationView'))return;let controls=document.createElement('div');controls.className='grid2';controls.style.marginTop='12px';controls.innerHTML=`<div class="field"><label>Board View</label><select id="operationView"><option value="active">Active Jobs</option><option value="archive">Archived Jobs</option></select></div><div class="field"><label>Search Jobs</label><input id="operationSearch" placeholder="Customer, address, installer, project..."></div>`;host.appendChild(controls);$('operationView').onchange=renderOperations;$('operationSearch').oninput=renderOperations}
-function renderOperations(){ensureArchiveControls();let view=$('operationView')?.value||'active',status=$('operationStatus')?.value||'',range=$('operationRange')?.value||'today',search=($('operationSearch')?.value||'').toLowerCase(),now=new Date(),start=new Date(now);start.setHours(0,0,0,0);let end=new Date(start);if(range==='today')end.setDate(end.getDate()+1);else if(range==='7')end.setDate(end.getDate()+7);else if(range==='30')end.setDate(end.getDate()+30);else end=null;let items=operationsCache.filter(j=>{let archived=j.status==='Completed'||!!j.archived_at;if(view==='active'&&archived)return false;if(view==='archive'&&!archived)return false;if(status&&j.status!==status)return false;let dateValue=view==='archive'?(j.archived_at||j.updated_at):j.scheduled_start;if(end&&(!dateValue||new Date(dateValue)<start||new Date(dateValue)>=end))return false;if(search&&!JSON.stringify(j).toLowerCase().includes(search))return false;return true});$('operationsList').innerHTML=items.length?items.map(j=>{let archived=j.status==='Completed'||!!j.archived_at;let opTime=j.scheduled_start?new Date(j.scheduled_start).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—';return `<div class="operation-card app-operation-card"><div class="app-operation-top">${archived?'':`<span class="app-time-tile">${esc(opTime)}</span>`}<div class="app-operation-copy"><h2>${esc(j.title||j.quote?.project_name||'Installation')}</h2><div class="muted">${archived?`Archived ${when(j.archived_at||j.updated_at)}`:`${esc(j.service_address||'')}`}</div></div><span class="app-status-pill">${archived?'Archived':esc(j.status||'Scheduled')}</span></div><div class="grid2 compact-grid"><div><span class="muted">Installers</span><b>${esc(j.installer_names?.join(', ')||j.assignee?.full_name||j.assignee?.email||'Unassigned')}</b></div><div><span class="muted">Glass Area</span><b>${Number(j.quote?.total_sqft||0).toFixed(2)} sq ft</b></div></div>${j.notes?`<div class="operation-notes"><b>Field Notes:</b> ${esc(j.notes)}</div>`:''}${j.material_plan?`<div class="operation-notes"><b>Film Plan:</b> ${esc(j.material_plan.product?.name||'Film')} • ${invFmt(invFeet(j.material_plan.planned_linear_inches),1)} linear ft planned${j.material_plan.actual_linear_inches!=null?` • ${invFmt(invFeet(j.material_plan.actual_linear_inches),1)} ft actual`:''} • ${esc(j.material_plan.source||'manual')}</div>`:''}<div class="actions">${archived?`<button class="btn warn" data-restorejob="${j.id}">Restore Job</button>`:`<button class="btn primary" data-opsedit="${j.quote_id}">Edit Assignment</button><button class="btn" data-jobid="${j.id}" data-opsstatus="En Route">En Route</button><button class="btn" data-jobid="${j.id}" data-opsstatus="In Progress">In Progress</button><button class="btn" data-jobid="${j.id}" data-opsstatus="Completed">Complete</button><a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>`}</div></div>`}).join(''):`<div class="card muted">${view==='archive'?'No archived jobs match the selected filters.':'No active jobs match the selected filters.'}</div>`;$('operationsList').querySelectorAll('[data-opsedit]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.opsedit));$('operationsList').querySelectorAll('[data-opsstatus]').forEach(b=>b.onclick=()=>ownerUpdateJobStatus(b.dataset.jobid,b.dataset.opsstatus));$('operationsList').querySelectorAll('[data-restorejob]').forEach(b=>b.onclick=()=>restoreArchivedJob(b.dataset.restorejob))}
+let operationsCalendarDate=new Date(),operationsSelectedDate=null;
+
+function operationDisplayDate(j){
+  return j.scheduled_start||j.archived_at||j.updated_at||j.created_at||null;
+}
+function operationLocalDateKey(value){
+  if(!value)return '';
+  let d=new Date(value);
+  if(Number.isNaN(d.getTime()))return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function operationsMonthBounds(){
+  let y=operationsCalendarDate.getFullYear(),m=operationsCalendarDate.getMonth();
+  return {
+    start:new Date(y,m,1,0,0,0,0),
+    end:new Date(y,m+1,1,0,0,0,0)
+  };
+}
+function operationMatchesBaseFilters(j,{ignoreRange=false}={}){
+  let view=$('operationView')?.value||'active',
+      status=$('operationStatus')?.value||'',
+      range=$('operationRange')?.value||'7',
+      search=($('operationSearch')?.value||'').toLowerCase(),
+      archived=j.status==='Completed'||!!j.archived_at;
+
+  if(view==='active'&&archived)return false;
+  if(view==='archive'&&!archived)return false;
+  if(status&&j.status!==status)return false;
+  if(search&&!JSON.stringify(j).toLowerCase().includes(search))return false;
+
+  if(!ignoreRange){
+    let now=new Date(),start=new Date(now);start.setHours(0,0,0,0);
+    let end=null,dateValue=view==='archive'?(j.archived_at||j.updated_at):j.scheduled_start;
+    if(range==='today')end=new Date(start.getTime()+86400000);
+    else if(range==='7')end=new Date(start.getTime()+7*86400000);
+    else if(range==='30')end=new Date(start.getTime()+30*86400000);
+    else if(range==='month'){
+      let b=operationsMonthBounds();start=b.start;end=b.end;
+    }
+    if(end&&(!dateValue||new Date(dateValue)<start||new Date(dateValue)>=end))return false;
+  }
+  return true;
+}
+
+function renderOperationsCalendar(){
+  let grid=$('operationsCalendarGrid'),label=$('operationsMonthLabel'),summary=$('operationsMonthSummary');
+  if(!grid||!label)return;
+
+  let y=operationsCalendarDate.getFullYear(),m=operationsCalendarDate.getMonth();
+  let monthStart=new Date(y,m,1),monthEnd=new Date(y,m+1,1);
+  label.textContent=monthStart.toLocaleDateString([],{month:'long',year:'numeric'});
+
+  let filtered=operationsCache.filter(j=>operationMatchesBaseFilters(j,{ignoreRange:true}));
+  let byDate={};
+  filtered.forEach(j=>{
+    let key=operationLocalDateKey(operationDisplayDate(j));
+    if(!key)return;
+    (byDate[key]??=[]).push(j);
+  });
+
+  let monthJobs=filtered.filter(j=>{
+    let d=operationDisplayDate(j);if(!d)return false;
+    d=new Date(d);return d>=monthStart&&d<monthEnd;
+  });
+  let completed=monthJobs.filter(j=>j.status==='Completed'||j.archived_at).length;
+  if(summary)summary.textContent=`${monthJobs.length} job${monthJobs.length===1?'':'s'} • ${completed} completed`;
+
+  let firstDay=monthStart.getDay();
+  let daysInMonth=new Date(y,m+1,0).getDate();
+  let prevDays=new Date(y,m,0).getDate();
+  let cells=[];
+
+  for(let i=0;i<42;i++){
+    let dayNum=i-firstDay+1,cellDate,muted=false;
+    if(dayNum<1){cellDate=new Date(y,m-1,prevDays+dayNum);muted=true}
+    else if(dayNum>daysInMonth){cellDate=new Date(y,m+1,dayNum-daysInMonth);muted=true}
+    else cellDate=new Date(y,m,dayNum);
+
+    let key=operationLocalDateKey(cellDate),
+        jobs=(byDate[key]||[]).sort((a,b)=>new Date(operationDisplayDate(a)||0)-new Date(operationDisplayDate(b)||0)),
+        todayKey=operationLocalDateKey(new Date()),
+        selected=operationsSelectedDate===key;
+
+    cells.push(`<button class="operations-day-cell ${muted?'outside-month':''} ${key===todayKey?'is-today':''} ${selected?'is-selected':''}" data-opdate="${key}">
+      <span class="day-number">${cellDate.getDate()}</span>
+      <span class="day-job-count">${jobs.length?`${jobs.length} job${jobs.length===1?'':'s'}`:''}</span>
+      <span class="day-dots">${jobs.slice(0,4).map(j=>`<i class="status-dot dot-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}"></i>`).join('')}</span>
+      ${jobs[0]?`<span class="day-preview">${esc(jobs[0].title||jobs[0].quote?.project_name||'Installation')}</span>`:''}
+    </button>`);
+  }
+  grid.innerHTML=cells.join('');
+  grid.querySelectorAll('[data-opdate]').forEach(b=>b.onclick=()=>{
+    operationsSelectedDate=b.dataset.opdate;
+    $('operationRange').value='all';
+    renderOperations();
+  });
+}
+
+function renderOperations(){
+  ensureArchiveControls();
+  renderOperationsCalendar();
+
+  let view=$('operationView')?.value||'active',
+      items=operationsCache.filter(j=>operationMatchesBaseFilters(j));
+
+  if(operationsSelectedDate){
+    items=items.filter(j=>operationLocalDateKey(operationDisplayDate(j))===operationsSelectedDate);
+  }
+
+  items.sort((a,b)=>{
+    let ad=new Date(operationDisplayDate(a)||0),bd=new Date(operationDisplayDate(b)||0);
+    return view==='archive'?bd-ad:ad-bd;
+  });
+
+  let title=$('operationsAgendaTitle'),meta=$('operationsAgendaMeta'),clear=$('operationsClearDate');
+  if(operationsSelectedDate){
+    let [yy,mm,dd]=operationsSelectedDate.split('-').map(Number),
+        d=new Date(yy,mm-1,dd);
+    if(title)title.textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});
+    if(meta)meta.textContent=`${items.length} scheduled item${items.length===1?'':'s'} for this date`;
+    clear?.classList.remove('hidden');
+  }else{
+    if(title)title.textContent=view==='archive'?'Completed Jobs':'Upcoming Jobs';
+    if(meta)meta.textContent=`${items.length} matching job${items.length===1?'':'s'}`;
+    clear?.classList.add('hidden');
+  }
+
+  $('operationsList').innerHTML=items.length?items.map(j=>{
+    let archived=j.status==='Completed'||!!j.archived_at,
+        start=j.scheduled_start?new Date(j.scheduled_start):null,
+        opTime=start?start.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—',
+        opDate=start?start.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}):'',
+        customer=j.quote?.customer?`${j.quote.customer.first_name||''} ${j.quote.customer.last_name||''}`.trim():'',
+        film=j.material_plan?.product?.name||j.quote?.square_catalog_item_name||'';
+
+    return `<div class="operation-card app-operation-card calendar-agenda-card">
+      <div class="app-operation-top">
+        ${archived?`<span class="app-time-tile completed-tile">DONE</span>`:`<span class="app-time-tile"><small>${esc(opDate)}</small>${esc(opTime)}</span>`}
+        <div class="app-operation-copy">
+          <h2>${esc(customer||j.title||j.quote?.project_name||'Installation')}</h2>
+          <div class="muted">${esc(j.title||j.quote?.project_name||'Window Film Installation')}<br>${esc(j.service_address||'')}</div>
+        </div>
+        <span class="app-status-pill status-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}">${archived?'Completed':esc(j.status||'Scheduled')}</span>
+      </div>
+
+      <div class="calendar-job-facts">
+        <div><span>Installer</span><b>${esc(j.installer_names?.join(', ')||j.assignee?.full_name||j.assignee?.email||'Unassigned')}</b></div>
+        <div><span>Glass</span><b>${Number(j.quote?.total_sqft||0).toFixed(2)} sq ft</b></div>
+        ${film?`<div><span>Film</span><b>${esc(film.replace(' Tint Install',''))}</b></div>`:''}
+      </div>
+
+      ${j.notes?`<div class="operation-notes"><b>Field Notes:</b> ${esc(j.notes)}</div>`:''}
+      ${j.material_plan?`<div class="operation-notes"><b>Film Plan:</b> ${esc(j.material_plan.product?.name||'Film')} • ${invFmt(invFeet(j.material_plan.planned_linear_inches),1)} linear ft planned${j.material_plan.actual_linear_inches!=null?` • ${invFmt(invFeet(j.material_plan.actual_linear_inches),1)} ft actual`:''} • ${esc(j.material_plan.source||'manual')}</div>`:''}
+
+      <div class="actions">
+        ${archived
+          ?`<button class="btn warn" data-restorejob="${j.id}">Restore Job</button>`
+          :`<button class="btn primary" data-opsedit="${j.quote_id}">Edit Assignment</button>
+             <button class="btn" data-jobid="${j.id}" data-opsstatus="En Route">En Route</button>
+             <button class="btn" data-jobid="${j.id}" data-opsstatus="In Progress">In Progress</button>
+             <button class="btn" data-jobid="${j.id}" data-opsstatus="Completed">Complete</button>
+             <a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>`}
+      </div>
+    </div>`
+  }).join(''):`<div class="app-empty">${view==='archive'?'No completed jobs match these filters.':'No jobs match the selected filters.'}</div>`;
+
+  $('operationsList').querySelectorAll('[data-opsedit]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.opsedit));
+  $('operationsList').querySelectorAll('[data-opsstatus]').forEach(b=>b.onclick=()=>ownerUpdateJobStatus(b.dataset.jobid,b.dataset.opsstatus));
+  $('operationsList').querySelectorAll('[data-restorejob]').forEach(b=>b.onclick=()=>restoreArchivedJob(b.dataset.restorejob));
+}
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'&&!confirm('Mark this job completed and move it to the archive?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
 async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;$('qLead').value=q.customer?.lead_source||'';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();scrollTo({top:0,behavior:'smooth'});toast('Quote loaded from cloud.')}
@@ -2096,7 +2265,10 @@ async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calenda
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
 if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);bind('saveQuote','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',()=>{operationsSelectedDate=null;renderOperations()});bind('operationSearch','oninput',renderOperations);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('operationsPrevMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()-1,1);operationsSelectedDate=null;renderOperations()});
+bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;renderOperations()});
+bind('operationsToday','onclick',()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());renderOperations()});
+bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperations()});bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
     e.preventDefault();

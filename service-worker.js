@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.4.0-inventory-modal-flow
+ * Release: 7.5.0-operations-calendar
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.4.0-";
-const CACHE_NAME = `${CACHE_PREFIX}inventory-modal-flow`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.5.0-";
+const CACHE_NAME = `${CACHE_PREFIX}operations-calendar`; 
 
 const APP_SHELL = [
   "./",

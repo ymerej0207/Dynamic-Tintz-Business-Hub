@@ -813,3 +813,70 @@ button.app-kpi-card{cursor:pointer}
   .metric-editor-quick-actions{grid-template-columns:1fr}
   .app-film-summary{grid-template-columns:minmax(0,1fr) 62px 46px!important}
 }
+
+/* v7.5.0 — Operations calendar-first schedule */
+.operations-calendar-shell{
+  border:1px solid var(--app-line);border-radius:18px;background:linear-gradient(160deg,#0e1719,#071011);
+  overflow:hidden;margin-bottom:10px
+}
+.operations-calendar-toolbar{
+  display:grid;grid-template-columns:40px auto minmax(0,1fr) 40px;gap:7px;align-items:center;
+  padding:10px 11px;border-bottom:1px solid var(--app-line)
+}
+.calendar-nav-btn{
+  width:38px;height:38px;border-radius:12px;border:1px solid var(--app-line);background:#0b1517;color:var(--app-accent);font-size:25px
+}
+.operations-month-title{display:flex;flex-direction:column;text-align:center}
+.operations-month-title b{font-size:16px}.operations-month-title span{font-size:9px;color:var(--app-muted);margin-top:2px}
+.operations-weekdays{display:grid;grid-template-columns:repeat(7,1fr);padding:7px 7px 4px;gap:3px}
+.operations-weekdays span{text-align:center;font-size:8px;text-transform:uppercase;color:#73868a;font-weight:800}
+.operations-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;padding:3px 7px 9px}
+.operations-day-cell{
+  min-height:78px;border:1px solid transparent;border-radius:10px;background:#0b1315;color:#fff;padding:6px;
+  display:flex;flex-direction:column;align-items:flex-start;text-align:left;overflow:hidden
+}
+.operations-day-cell.outside-month{opacity:.36}
+.operations-day-cell.is-today{border-color:rgba(34,212,207,.45)}
+.operations-day-cell.is-selected{background:rgba(34,212,207,.12);border-color:var(--app-accent)}
+.day-number{font-size:11px;font-weight:850}
+.day-job-count{font-size:7px;color:var(--app-accent);margin-top:5px;font-weight:800}
+.day-dots{display:flex;gap:3px;margin-top:4px;min-height:5px}
+.status-dot{width:5px;height:5px;border-radius:50%;display:block;background:#4e7478}
+.dot-scheduled{background:#3ca7ff}.dot-confirmed{background:#38d978}.dot-en-route{background:#c485ff}.dot-in-progress{background:#ffd13f}.dot-completed{background:#23d2c8}.dot-canceled{background:#ff6363}.dot-rescheduled{background:#ff9f43}
+.day-preview{font-size:7px;color:#aebabc;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+
+.operations-filter-panel{border:1px solid var(--app-line);border-radius:15px;background:#081011;padding:9px;margin:10px 0}
+.operations-filter-row{display:grid;grid-template-columns:130px 150px 145px minmax(160px,1fr);gap:7px}
+.operations-filter-row .field{margin:0}
+.operations-agenda-section{margin-top:14px}
+.operations-agenda-section .app-section-head>div{display:flex;flex-direction:column}
+.calendar-agenda-card{margin:8px 0!important}
+.app-time-tile small{display:block;font-size:7px;font-weight:700;opacity:.9}
+.completed-tile{background:linear-gradient(135deg,#176b66,#20bdb5)!important;font-size:10px!important}
+.calendar-job-facts{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+  border-top:1px solid var(--app-line);border-bottom:1px solid var(--app-line);
+  padding:9px 0;margin:7px 0
+}
+.calendar-job-facts>div{display:flex;flex-direction:column;min-width:0}
+.calendar-job-facts span{font-size:8px;text-transform:uppercase;color:var(--app-muted)}
+.calendar-job-facts b{font-size:10px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media(max-width:720px){
+  .operations-filter-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .operations-search-field{grid-column:1/-1}
+  .operations-day-cell{min-height:61px;padding:5px 4px}
+  .day-preview{display:none}
+  .day-job-count{font-size:6px}
+}
+@media(max-width:430px){
+  .operations-calendar-toolbar{grid-template-columns:34px auto minmax(0,1fr) 34px;padding:8px 7px}
+  .calendar-nav-btn{width:32px;height:34px}
+  .operations-weekdays{padding-left:4px;padding-right:4px;gap:2px}
+  .operations-calendar-grid{padding:2px 4px 7px;gap:2px}
+  .operations-day-cell{min-height:55px;border-radius:8px}
+  .day-number{font-size:10px}
+  .day-job-count{font-size:6px}
+  .status-dot{width:4px;height:4px}
+  .calendar-job-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
