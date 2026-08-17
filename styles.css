@@ -722,3 +722,45 @@ button.app-kpi-card{cursor:pointer}
   .quote-card.app-quote-card .actions .btn{width:100%;padding:7px!important;font-size:10px}
   .app-operation-top{grid-template-columns:57px minmax(0,1fr) auto}
 }
+
+/* v7.2.0 — inventory source synchronization + editable metrics */
+.inventory-roll-group{margin:9px 0!important}
+.inventory-roll-group-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 13px;list-style:none;cursor:pointer}
+.inventory-roll-group-summary::-webkit-details-marker{display:none}
+.inventory-roll-group-summary>div{display:flex;flex-direction:column}
+.inventory-roll-group-summary>div:last-child{flex-direction:row;align-items:center;gap:9px}
+.inventory-roll-group-summary>div:last-child b{color:var(--app-accent);font-size:15px}
+.inventory-empty-rolls>summary{display:flex;justify-content:space-between;align-items:center;padding:12px;list-style:none;cursor:pointer}
+.empty-roll-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--app-line);font-size:10px;color:var(--app-muted)}
+
+.editable-metrics{gap:7px!important}
+.editable-metrics>button{
+  border:1px solid var(--app-line);border-radius:12px;background:#0a1315;color:#fff;
+  padding:10px;text-align:left;display:flex;flex-direction:column;cursor:pointer
+}
+.editable-metrics>button:active{transform:scale(.985)}
+.editable-metrics>button span{font-size:9px;color:var(--app-muted);text-transform:uppercase;letter-spacing:.04em}
+.editable-metrics>button b{font-size:20px;color:var(--app-accent);margin:3px 0}
+.editable-metrics>button small{font-size:8px;color:#6f8589}
+
+.inventory-metric-modal{max-width:680px!important}
+.metric-editor-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:10px 0 14px}
+.metric-editor-summary button{border:1px solid var(--app-line);border-radius:12px;background:#0b1416;color:#fff;padding:9px 6px;display:flex;flex-direction:column;text-align:center}
+.metric-editor-summary span{font-size:8px;color:var(--app-muted);text-transform:uppercase}.metric-editor-summary b{font-size:17px;color:var(--app-accent);margin:2px}.metric-editor-summary small{font-size:8px;color:var(--app-muted)}
+.inventory-metric-section{border:1px solid var(--app-line);border-radius:14px;background:#081011;padding:12px;margin:10px 0;transition:.2s}
+.inventory-metric-section.metric-focus{border-color:rgba(34,212,207,.65);box-shadow:0 0 0 1px rgba(34,212,207,.12) inset}
+.inventory-metric-section h3{margin:0 0 7px;font-size:14px}
+.metric-formula{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:6px;margin:9px 0;padding:9px;border-radius:10px;background:#0d1719;font-size:10px;text-align:center}
+.metric-formula b{color:var(--app-accent)}
+.metric-roll-editor,.metric-reservation-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(125px,.6fr);gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--app-line)}
+.metric-roll-editor:first-child,.metric-reservation-editor:first-child{border-top:0}
+.metric-roll-editor>div,.metric-reservation-editor>div{display:flex;flex-direction:column;min-width:0}
+.metric-roll-editor small,.metric-reservation-editor small{font-size:9px;color:var(--app-muted);margin-top:2px}
+.metric-roll-editor label,.metric-reservation-editor label{display:flex;flex-direction:column;gap:3px}.metric-roll-editor label span,.metric-reservation-editor label span{font-size:8px;color:var(--app-muted);text-transform:uppercase}
+.metric-roll-editor input,.metric-reservation-editor input{min-height:38px!important}
+.metric-editor-save{position:sticky;bottom:0;background:linear-gradient(transparent,#091113 35%);padding-top:18px}.metric-editor-save .btn{width:100%}
+
+@media(max-width:560px){
+  .metric-editor-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metric-roll-editor,.metric-reservation-editor{grid-template-columns:1fr 120px}
+}

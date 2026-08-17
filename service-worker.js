@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.1.0-true-app-ui
+ * Release: 7.2.0-inventory-sync-editable-metrics
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.1.0-";
-const CACHE_NAME = `${CACHE_PREFIX}true-app-ui`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.2.0-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-sync-editable-metrics`; 
 
 const APP_SHELL = [
   "./",
