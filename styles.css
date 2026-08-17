@@ -880,3 +880,7 @@ button.app-kpi-card{cursor:pointer}
   .status-dot{width:4px;height:4px}
   .calendar-job-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* v7.5.1 — hard view isolation after markup repair */
+.view{display:none!important}
+.view.active{display:block!important}

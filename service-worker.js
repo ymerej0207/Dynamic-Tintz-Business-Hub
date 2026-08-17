@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.5.0-operations-calendar
+ * Release: 7.5.1-stability-repair
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.5.0-";
-const CACHE_NAME = `${CACHE_PREFIX}operations-calendar`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.5.1-";
+const CACHE_NAME = `${CACHE_PREFIX}stability-repair`; 
 
 const APP_SHELL = [
   "./",
