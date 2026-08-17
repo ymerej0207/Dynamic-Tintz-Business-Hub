@@ -958,3 +958,46 @@ button.app-kpi-card{cursor:pointer}
   .selected-day-row{grid-template-columns:50px minmax(0,1fr)}
   .selected-day-type{grid-column:2;justify-self:start}
 }
+
+/* v7.6.3 — Home Monday-Sunday weekly schedule */
+.home-week-range{font-size:9px;margin-top:2px}
+.home-week-strip{
+  display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:0 0 9px
+}
+.home-week-day{
+  position:relative;min-height:58px;border:1px solid var(--app-line);border-radius:11px;background:#091214;color:#84979a;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5px 2px
+}
+.home-week-day>span{font-size:8px;font-weight:800;text-transform:uppercase}
+.home-week-day>b{font-size:15px;color:#dce4e5;margin-top:2px}
+.home-week-day>small{
+  position:absolute;right:4px;top:4px;min-width:14px;height:14px;border-radius:999px;
+  display:grid;place-items:center;font-size:7px;font-weight:900
+}
+.home-week-day.has-events{border-color:#294043}
+.home-week-day.has-events>small{background:var(--app-accent);color:#001313}
+.home-week-day.today{border-color:var(--app-accent);background:rgba(34,212,207,.08)}
+.home-week-day.today>b,.home-week-day.today>span{color:var(--app-accent)}
+
+.home-week-list{display:grid;gap:10px!important}
+.home-week-day-group{display:grid;gap:5px}
+.home-week-day-heading{
+  display:flex;align-items:baseline;justify-content:space-between;padding:0 3px 1px
+}
+.home-week-day-heading b{font-size:11px;text-transform:uppercase;letter-spacing:.045em}
+.home-week-day-heading span{font-size:9px;color:var(--app-muted)}
+.home-week-day-items{display:grid;gap:5px}
+.home-week-event .app-time-tile{
+  display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
+  line-height:1.05!important
+}
+.home-week-event .app-time-tile small{font-size:7px!important;margin-bottom:4px!important}
+.external-home-event{border-color:rgba(208,114,255,.25)!important}
+
+@media(max-width:430px){
+  .home-week-strip{gap:3px}
+  .home-week-day{min-height:52px;border-radius:9px}
+  .home-week-day>b{font-size:14px}
+  .home-week-event{grid-template-columns:62px minmax(0,1fr) auto 8px!important}
+  .home-week-event .app-status-pill{max-width:64px;font-size:7px!important}
+}

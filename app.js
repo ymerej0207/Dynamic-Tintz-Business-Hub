@@ -57,8 +57,107 @@ function renderNav(){
   /* Navigation clicks are handled by delegated app-level routing. */
 }
 async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus();loadIcloudCalendarStatus()}}
+function mondayWeekBounds(reference=new Date()){
+  let d=new Date(reference);d.setHours(0,0,0,0);
+  let day=d.getDay(),diff=day===0?-6:1-day;
+  let start=new Date(d);start.setDate(d.getDate()+diff);
+  let end=new Date(start);end.setDate(start.getDate()+7);
+  return {start,end};
+}
+function homeWeekDateKey(value){
+  if(!value)return '';
+  let d=new Date(value);
+  if(Number.isNaN(d.getTime()))return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+async function loadHomeWeekIcloudEvents(start,end){
+  let ids=typeof getIcloudViewCalendarIds==='function'?getIcloudViewCalendarIds():[];
+  if(!ids.length)return [];
+  try{
+    let{data,error}=await sb.functions.invoke('icloud-calendar-events',{body:{
+      calendar_ids:ids,start:start.toISOString(),end:end.toISOString()
+    }});
+    if(error||data?.ok===false)throw new Error(error?.message||data?.error||'Could not load view-only iCloud events.');
+    return (data.events||[]).map(e=>({...e,_external:true}));
+  }catch(e){
+    console.warn('Home week iCloud events:',e);
+    return [];
+  }
+}
+function renderHomeWeekSchedule(jobs,external,start,end){
+  let host=$('liveJobs'),strip=$('homeWeekStrip'),range=$('homeWeekRange');
+  if(!host)return;
+
+  if(range){
+    let endDisplay=new Date(end);endDisplay.setDate(endDisplay.getDate()-1);
+    range.textContent=`${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${endDisplay.toLocaleDateString([],{month:'short',day:'numeric'})}`;
+  }
+
+  let entries=[
+    ...(jobs||[]).map(j=>({kind:'job',date:j.scheduled_start,value:j})),
+    ...(external||[]).map(e=>({kind:'external',date:e.start,value:e}))
+  ].filter(x=>x.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  let byDate={};
+  entries.forEach(x=>(byDate[homeWeekDateKey(x.date)]??=[]).push(x));
+
+  let days=[];
+  for(let i=0;i<7;i++){
+    let d=new Date(start);d.setDate(start.getDate()+i);
+    let key=homeWeekDateKey(d),count=(byDate[key]||[]).length;
+    days.push({d,key,count});
+  }
+
+  if(strip)strip.innerHTML=days.map(({d,key,count})=>`
+    <button class="home-week-day ${homeWeekDateKey(new Date())===key?'today':''} ${count?'has-events':''}" data-homeweekdate="${key}" data-go="operations">
+      <span>${d.toLocaleDateString([],{weekday:'narrow'})}</span>
+      <b>${d.getDate()}</b>
+      <small>${count||''}</small>
+    </button>`).join('');
+
+  if(!entries.length){
+    host.innerHTML='<div class="app-empty">Nothing is scheduled this week.</div>';
+    return;
+  }
+
+  host.innerHTML=days.map(({d,key,count})=>{
+    if(!count)return '';
+    let dayEntries=byDate[key]||[];
+    return `<section class="home-week-day-group">
+      <div class="home-week-day-heading">
+        <b>${d.toLocaleDateString([],{weekday:'long'})}</b>
+        <span>${d.toLocaleDateString([],{month:'short',day:'numeric'})}</span>
+      </div>
+      <div class="home-week-day-items">
+        ${dayEntries.map(entry=>{
+          if(entry.kind==='external'){
+            let e=entry.value,dt=new Date(entry.date),
+                time=e.all_day?'All Day':dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+            return `<button class="app-schedule-item home-week-event external-home-event" data-go="operations">
+              <span class="app-time-tile external-time-tile"><small>${d.toLocaleDateString([],{weekday:'short'}).toUpperCase()} ${d.getDate()}</small>${esc(time)}</span>
+              <span class="app-schedule-copy"><b>${esc(e.summary||'Calendar Event')}</b><small>${esc(e.calendar_name||'iCloud')} • ${e.location?esc(e.location):'Personal / family calendar'}</small></span>
+              <span class="app-status-pill external-source-pill">PERSONAL</span>
+              <span class="app-chevron">›</span>
+            </button>`;
+          }
+          let j=entry.value,dt=new Date(entry.date),time=dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+          return `<button class="app-schedule-item home-week-event" data-go="operations">
+            <span class="app-time-tile"><small>${d.toLocaleDateString([],{weekday:'short'}).toUpperCase()} ${d.getDate()}</small>${esc(time)}</span>
+            <span class="app-schedule-copy"><b>${esc(j.title||'Window Film Installation')}</b><small>${esc(j.assignee?.full_name||j.assignee?.email||'Unassigned')} • ${esc(j.service_address||'')}</small></span>
+            <span class="app-status-pill status-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}">${esc(j.status||'Scheduled')}</span>
+            <span class="app-chevron">›</span>
+          </button>`;
+        }).join('')}
+      </div>
+    </section>`;
+  }).join('');
+
+  host.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+}
+
 async function dashboard(){
-  let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString();
+  let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString(),
+      week=mondayWeekBounds(now);
   let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult]=await Promise.all([
     sb.from('leads').select('*',{count:'exact',head:true}).eq('status','new'),
     sb.from('leads').select('*',{count:'exact',head:true}).lte('next_follow_up_at',iso).not('status','in','("approved","lost","do_not_contact","no_response")'),
@@ -66,7 +165,7 @@ async function dashboard(){
     sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved']),
     sb.from('jobs').select('*',{count:'exact',head:true}).in('status',['Scheduled','Confirmed','En Route','In Progress']),
     sb.from('jobs').select('*',{count:'exact',head:true}).eq('status','Completed').gte('updated_at',monthStart),
-    sb.from('jobs').select('id,title,status,service_address,scheduled_start,scheduled_end,assigned_to,assignee:profiles!jobs_assigned_to_fkey(full_name,email)').in('status',['Scheduled','Confirmed','En Route','In Progress']).order('scheduled_start'),
+    sb.from('jobs').select('id,title,status,service_address,scheduled_start,scheduled_end,assigned_to,assignee:profiles!jobs_assigned_to_fkey(full_name,email)').in('status',['Scheduled','Confirmed','En Route','In Progress']).gte('scheduled_start',week.start.toISOString()).lt('scheduled_start',week.end.toISOString()).order('scheduled_start'),
     sb.from('quotes').select('id,status,project_name,ceramic_price,created_at,customer:customers(first_name,last_name)').order('created_at',{ascending:false}).limit(20)
   ]);
 
@@ -83,20 +182,9 @@ async function dashboard(){
   if(pending.count)tasks.push(`${pending.count} active quote${pending.count===1?' remains':'s remain'} in the pipeline.`);
   $('mission').innerHTML=tasks.length?tasks.map(x=>`• ${x}`).join('<br>'):'Everything is caught up right now.';
 
-  let todayStart=new Date();todayStart.setHours(0,0,0,0);
-  let todayEnd=new Date(todayStart);todayEnd.setDate(todayEnd.getDate()+1);
-  let allJobs=jobsResult.data||[];
-  let todayJobs=allJobs.filter(j=>j.scheduled_start&&new Date(j.scheduled_start)>=todayStart&&new Date(j.scheduled_start)<todayEnd);
-  let displayJobs=todayJobs.length?todayJobs:allJobs.slice(0,3);
-  $('liveJobs').innerHTML=displayJobs.length?displayJobs.slice(0,4).map(j=>{
-    let d=new Date(j.scheduled_start),time=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-    return `<button class="app-schedule-item" data-go="operations">
-      <span class="app-time-tile">${esc(time)}</span>
-      <span class="app-schedule-copy"><b>${esc(j.title||'Window Film Installation')}</b><small>${esc(j.assignee?.full_name||j.assignee?.email||'Unassigned')} • ${esc(j.service_address||'')}</small></span>
-      <span class="app-status-pill status-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}">${esc(j.status||'Scheduled')}</span>
-      <span class="app-chevron">›</span>
-    </button>`
-  }).join(''):'<div class="app-empty">No active jobs right now.</div>';
+  let weekJobs=jobsResult.data||[],
+      weekExternal=await loadHomeWeekIcloudEvents(week.start,week.end);
+  renderHomeWeekSchedule(weekJobs,weekExternal,week.start,week.end);
 
   let recent=quotesResult.data||[];
   if($('recentQuotes'))$('recentQuotes').innerHTML=recent.length?recent.slice(0,3).map(q=>{

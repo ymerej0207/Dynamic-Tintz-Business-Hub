@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.6.2-icloud-sync-repair
+ * Release: 7.6.3-home-week-schedule
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.6.2-";
-const CACHE_NAME = `${CACHE_PREFIX}icloud-sync-repair`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.6.3-";
+const CACHE_NAME = `${CACHE_PREFIX}home-week-schedule`; 
 
 const APP_SHELL = [
   "./",
