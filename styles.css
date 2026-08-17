@@ -897,3 +897,36 @@ button.app-kpi-card{cursor:pointer}
 .quote-autosave-status[data-state="cloud"]{color:#43df86}
 .quote-autosave-status[data-state="recovered"]{color:#58a9ff}
 .quote-autosave-status[data-state="warning"]{color:#ffb55d}
+
+/* v7.6.0 — quote save dock must never cover window controls */
+.quote-save-dock{
+  position:static!important;
+  bottom:auto!important;
+  z-index:auto!important;
+  background:none!important;
+  padding:10px 0 2px!important;
+}
+.measurement-card{padding-bottom:14px!important}
+
+/* v7.6.0 — independent iCloud VIEW vs SYNC JOBS permissions */
+.icloud-calendar-picker{display:grid;gap:8px}
+.icloud-calendar-row{
+  display:grid;grid-template-columns:minmax(0,1fr) 120px 132px;gap:8px;align-items:center;
+  border:1px solid var(--app-line);border-radius:13px;background:#0a1315;padding:10px
+}
+.icloud-calendar-name{display:flex;flex-direction:column;min-width:0}
+.icloud-calendar-name b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icloud-calendar-name small{font-size:8px;color:var(--app-muted);margin-top:2px}
+.calendar-permission-toggle{display:flex;align-items:center;gap:7px;padding:7px;border:1px solid #213135;border-radius:10px;background:#0d181a}
+.calendar-permission-toggle input{width:18px;height:18px;min-height:0;accent-color:var(--app-accent)}
+.calendar-permission-toggle span{display:flex;flex-direction:column}.calendar-permission-toggle b{font-size:9px}.calendar-permission-toggle small{font-size:7px;color:var(--app-muted)}
+.calendar-permission-toggle.calendar-readonly{opacity:.48}
+.dot-external{background:#d072ff!important}
+.external-calendar-card{border-color:rgba(208,114,255,.28)!important}
+.external-time-tile{background:linear-gradient(135deg,#6b3085,#a951c7)!important}
+.external-source-pill{background:#32133f!important;color:#e8a8ff!important}
+.external-readonly-note{font-size:8px;color:#a986b4;margin:8px 2px 0}
+@media(max-width:620px){
+  .icloud-calendar-row{grid-template-columns:1fr 1fr}
+  .icloud-calendar-name{grid-column:1/-1}
+}

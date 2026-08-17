@@ -1451,9 +1451,45 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
   toast(calendarAction==='delete'?'Job saved and removed from calendar.':calendarAction==='sync'?'Job saved and calendar updated.':'Job saved. No calendar change for this status.');
   await loadQuotes();dashboard()
 }
-async function loadOperations(){let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));let jobs=data||[],jobIds=jobs.map(j=>j.id),plans=[];if(jobIds.length){let pr=await sb.from('job_material_plans').select('job_id,planned_linear_inches,actual_linear_inches,source,product:film_inventory_products(name)').in('job_id',jobIds);plans=pr.data||[]}let planMap=Object.fromEntries(plans.map(p=>[p.job_id,p]));operationsCache=jobs.map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean),material_plan:planMap[j.id]||null}));renderOperations()}
+async function loadOperations(){let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));let jobs=data||[],jobIds=jobs.map(j=>j.id),plans=[];if(jobIds.length){let pr=await sb.from('job_material_plans').select('job_id,planned_linear_inches,actual_linear_inches,source,product:film_inventory_products(name)').in('job_id',jobIds);plans=pr.data||[]}let planMap=Object.fromEntries(plans.map(p=>[p.job_id,p]));operationsCache=jobs.map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean),material_plan:planMap[j.id]||null}));await loadIcloudViewEvents();renderOperations()}
 function ensureArchiveControls(){let host=$('operations')?.querySelector('.card');if(!host||$('operationView'))return;let controls=document.createElement('div');controls.className='grid2';controls.style.marginTop='12px';controls.innerHTML=`<div class="field"><label>Board View</label><select id="operationView"><option value="active">Active Jobs</option><option value="archive">Archived Jobs</option></select></div><div class="field"><label>Search Jobs</label><input id="operationSearch" placeholder="Customer, address, installer, project..."></div>`;host.appendChild(controls);$('operationView').onchange=renderOperations;$('operationSearch').oninput=renderOperations}
 let operationsCalendarDate=new Date(),operationsSelectedDate=null;
+let icloudViewEventsCache=[];
+async function loadIcloudViewEvents(){
+  let ids=getIcloudViewCalendarIds();
+  if(!ids.length){icloudViewEventsCache=[];return}
+  let y=operationsCalendarDate.getFullYear(),m=operationsCalendarDate.getMonth(),
+      start=new Date(y,m,1),end=new Date(y,m+1,1);
+  start.setDate(start.getDate()-7);end.setDate(end.getDate()+7);
+  try{
+    let{data,error}=await sb.functions.invoke('icloud-calendar-events',{body:{
+      calendar_ids:ids,start:start.toISOString(),end:end.toISOString()
+    }});
+    if(error||data?.ok===false)throw new Error(error?.message||data?.error||'Could not load iCloud view calendars.');
+    icloudViewEventsCache=(data.events||[]).map(e=>({...e,_external:true}));
+  }catch(e){
+    console.warn('View-only iCloud calendar load:',e);
+    icloudViewEventsCache=[];
+  }
+}
+function externalCalendarEventMatches(e,{ignoreRange=false}={}){
+  let view=$('operationView')?.value||'active',
+      status=$('operationStatus')?.value||'',
+      range=$('operationRange')?.value||'7',
+      search=($('operationSearch')?.value||'').toLowerCase();
+  if(view==='archive'||status)return false;
+  if(search&&!JSON.stringify(e).toLowerCase().includes(search))return false;
+  if(!ignoreRange){
+    let now=new Date(),start=new Date(now);start.setHours(0,0,0,0),end=null,d=new Date(e.start);
+    if(range==='today')end=new Date(start.getTime()+86400000);
+    else if(range==='7')end=new Date(start.getTime()+7*86400000);
+    else if(range==='30')end=new Date(start.getTime()+30*86400000);
+    else if(range==='month'){let b=operationsMonthBounds();start=b.start;end=b.end}
+    if(end&&(d<start||d>=end))return false;
+  }
+  return true;
+}
+
 
 function operationDisplayDate(j){
   return j.scheduled_start||j.archived_at||j.updated_at||j.created_at||null;
@@ -1505,26 +1541,25 @@ function renderOperationsCalendar(){
   let monthStart=new Date(y,m,1),monthEnd=new Date(y,m+1,1);
   label.textContent=monthStart.toLocaleDateString([],{month:'long',year:'numeric'});
 
-  let filtered=operationsCache.filter(j=>operationMatchesBaseFilters(j,{ignoreRange:true}));
-  let byDate={};
+  let filtered=operationsCache.filter(j=>operationMatchesBaseFilters(j,{ignoreRange:true})),
+      external=icloudViewEventsCache.filter(e=>externalCalendarEventMatches(e,{ignoreRange:true})),
+      byDate={};
+
   filtered.forEach(j=>{
-    let key=operationLocalDateKey(operationDisplayDate(j));
-    if(!key)return;
-    (byDate[key]??=[]).push(j);
+    let key=operationLocalDateKey(operationDisplayDate(j));if(!key)return;
+    (byDate[key]??=[]).push({kind:'job',value:j,date:operationDisplayDate(j)});
+  });
+  external.forEach(e=>{
+    let key=operationLocalDateKey(e.start);if(!key)return;
+    (byDate[key]??=[]).push({kind:'external',value:e,date:e.start});
   });
 
-  let monthJobs=filtered.filter(j=>{
-    let d=operationDisplayDate(j);if(!d)return false;
-    d=new Date(d);return d>=monthStart&&d<monthEnd;
-  });
-  let completed=monthJobs.filter(j=>j.status==='Completed'||j.archived_at).length;
-  if(summary)summary.textContent=`${monthJobs.length} job${monthJobs.length===1?'':'s'} • ${completed} completed`;
+  let monthJobs=filtered.filter(j=>{let d=operationDisplayDate(j);if(!d)return false;d=new Date(d);return d>=monthStart&&d<monthEnd}),
+      monthExternal=external.filter(e=>{let d=new Date(e.start);return d>=monthStart&&d<monthEnd}),
+      completed=monthJobs.filter(j=>j.status==='Completed'||j.archived_at).length;
+  if(summary)summary.textContent=`${monthJobs.length} job${monthJobs.length===1?'':'s'} • ${monthExternal.length} personal/calendar • ${completed} completed`;
 
-  let firstDay=monthStart.getDay();
-  let daysInMonth=new Date(y,m+1,0).getDate();
-  let prevDays=new Date(y,m,0).getDate();
-  let cells=[];
-
+  let firstDay=monthStart.getDay(),daysInMonth=new Date(y,m+1,0).getDate(),prevDays=new Date(y,m,0).getDate(),cells=[];
   for(let i=0;i<42;i++){
     let dayNum=i-firstDay+1,cellDate,muted=false;
     if(dayNum<1){cellDate=new Date(y,m-1,prevDays+dayNum);muted=true}
@@ -1532,22 +1567,19 @@ function renderOperationsCalendar(){
     else cellDate=new Date(y,m,dayNum);
 
     let key=operationLocalDateKey(cellDate),
-        jobs=(byDate[key]||[]).sort((a,b)=>new Date(operationDisplayDate(a)||0)-new Date(operationDisplayDate(b)||0)),
-        todayKey=operationLocalDateKey(new Date()),
-        selected=operationsSelectedDate===key;
+        entries=(byDate[key]||[]).sort((a,b)=>new Date(a.date||0)-new Date(b.date||0)),
+        todayKey=operationLocalDateKey(new Date()),selected=operationsSelectedDate===key;
 
     cells.push(`<button class="operations-day-cell ${muted?'outside-month':''} ${key===todayKey?'is-today':''} ${selected?'is-selected':''}" data-opdate="${key}">
       <span class="day-number">${cellDate.getDate()}</span>
-      <span class="day-job-count">${jobs.length?`${jobs.length} job${jobs.length===1?'':'s'}`:''}</span>
-      <span class="day-dots">${jobs.slice(0,4).map(j=>`<i class="status-dot dot-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}"></i>`).join('')}</span>
-      ${jobs[0]?`<span class="day-preview">${esc(jobs[0].title||jobs[0].quote?.project_name||'Installation')}</span>`:''}
+      <span class="day-job-count">${entries.length?`${entries.length} item${entries.length===1?'':'s'}`:''}</span>
+      <span class="day-dots">${entries.slice(0,4).map(x=>x.kind==='external'?'<i class="status-dot dot-external"></i>':`<i class="status-dot dot-${String(x.value.status||'Scheduled').toLowerCase().replaceAll(' ','-')}"></i>`).join('')}</span>
+      ${entries[0]?`<span class="day-preview">${esc(entries[0].kind==='external'?(entries[0].value.summary||'Calendar Event'):(entries[0].value.title||entries[0].value.quote?.project_name||'Installation'))}</span>`:''}
     </button>`);
   }
   grid.innerHTML=cells.join('');
   grid.querySelectorAll('[data-opdate]').forEach(b=>b.onclick=()=>{
-    operationsSelectedDate=b.dataset.opdate;
-    $('operationRange').value='all';
-    renderOperations();
+    operationsSelectedDate=b.dataset.opdate;$('operationRange').value='all';renderOperations();
   });
 }
 
@@ -1556,32 +1588,55 @@ function renderOperations(){
   renderOperationsCalendar();
 
   let view=$('operationView')?.value||'active',
-      items=operationsCache.filter(j=>operationMatchesBaseFilters(j));
+      jobs=operationsCache.filter(j=>operationMatchesBaseFilters(j)),
+      external=icloudViewEventsCache.filter(e=>externalCalendarEventMatches(e));
 
   if(operationsSelectedDate){
-    items=items.filter(j=>operationLocalDateKey(operationDisplayDate(j))===operationsSelectedDate);
+    jobs=jobs.filter(j=>operationLocalDateKey(operationDisplayDate(j))===operationsSelectedDate);
+    external=external.filter(e=>operationLocalDateKey(e.start)===operationsSelectedDate);
   }
 
-  items.sort((a,b)=>{
-    let ad=new Date(operationDisplayDate(a)||0),bd=new Date(operationDisplayDate(b)||0);
+  let agenda=[
+    ...jobs.map(j=>({kind:'job',value:j,date:operationDisplayDate(j)})),
+    ...external.map(e=>({kind:'external',value:e,date:e.start}))
+  ];
+  agenda.sort((a,b)=>{
+    let ad=new Date(a.date||0),bd=new Date(b.date||0);
     return view==='archive'?bd-ad:ad-bd;
   });
 
   let title=$('operationsAgendaTitle'),meta=$('operationsAgendaMeta'),clear=$('operationsClearDate');
   if(operationsSelectedDate){
-    let [yy,mm,dd]=operationsSelectedDate.split('-').map(Number),
-        d=new Date(yy,mm-1,dd);
+    let [yy,mm,dd]=operationsSelectedDate.split('-').map(Number),d=new Date(yy,mm-1,dd);
     if(title)title.textContent=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'});
-    if(meta)meta.textContent=`${items.length} scheduled item${items.length===1?'':'s'} for this date`;
+    if(meta)meta.textContent=`${agenda.length} schedule item${agenda.length===1?'':'s'} for this date`;
     clear?.classList.remove('hidden');
   }else{
-    if(title)title.textContent=view==='archive'?'Completed Jobs':'Upcoming Jobs';
-    if(meta)meta.textContent=`${items.length} matching job${items.length===1?'':'s'}`;
+    if(title)title.textContent=view==='archive'?'Completed Jobs':'Upcoming Schedule';
+    if(meta)meta.textContent=`${jobs.length} job${jobs.length===1?'':'s'}${external.length?` • ${external.length} view-only calendar event${external.length===1?'':'s'}`:''}`;
     clear?.classList.add('hidden');
   }
 
-  $('operationsList').innerHTML=items.length?items.map(j=>{
-    let archived=j.status==='Completed'||!!j.archived_at,
+  $('operationsList').innerHTML=agenda.length?agenda.map(entry=>{
+    if(entry.kind==='external'){
+      let e=entry.value,start=e.start?new Date(e.start):null,
+          time=e.all_day?'All Day':start?.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})||'—',
+          date=start?.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})||'';
+      return `<div class="operation-card app-operation-card calendar-agenda-card external-calendar-card">
+        <div class="app-operation-top">
+          <span class="app-time-tile external-time-tile"><small>${esc(date)}</small>${esc(time)}</span>
+          <div class="app-operation-copy">
+            <h2>${esc(e.summary||'Calendar Event')}</h2>
+            <div class="muted">${e.location?esc(e.location):'Personal / external calendar event'}</div>
+          </div>
+          <span class="app-status-pill external-source-pill">${esc(e.calendar_name||'iCloud')} • VIEW</span>
+        </div>
+        ${e.description?`<div class="operation-notes">${esc(e.description)}</div>`:''}
+        <div class="external-readonly-note">Read-only from iCloud • Dynamic Tintz will not modify this event.</div>
+      </div>`;
+    }
+
+    let j=entry.value,archived=j.status==='Completed'||!!j.archived_at,
         start=j.scheduled_start?new Date(j.scheduled_start):null,
         opTime=start?start.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—',
         opDate=start?start.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}):'',
@@ -1597,32 +1652,29 @@ function renderOperations(){
         </div>
         <span class="app-status-pill status-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}">${archived?'Completed':esc(j.status||'Scheduled')}</span>
       </div>
-
       <div class="calendar-job-facts">
         <div><span>Installer</span><b>${esc(j.installer_names?.join(', ')||j.assignee?.full_name||j.assignee?.email||'Unassigned')}</b></div>
         <div><span>Glass</span><b>${Number(j.quote?.total_sqft||0).toFixed(2)} sq ft</b></div>
         ${film?`<div><span>Film</span><b>${esc(film.replace(' Tint Install',''))}</b></div>`:''}
       </div>
-
       ${j.notes?`<div class="operation-notes"><b>Field Notes:</b> ${esc(j.notes)}</div>`:''}
       ${j.material_plan?`<div class="operation-notes"><b>Film Plan:</b> ${esc(j.material_plan.product?.name||'Film')} • ${invFmt(invFeet(j.material_plan.planned_linear_inches),1)} linear ft planned${j.material_plan.actual_linear_inches!=null?` • ${invFmt(invFeet(j.material_plan.actual_linear_inches),1)} ft actual`:''} • ${esc(j.material_plan.source||'manual')}</div>`:''}
-
       <div class="actions">
-        ${archived
-          ?`<button class="btn warn" data-restorejob="${j.id}">Restore Job</button>`
-          :`<button class="btn primary" data-opsedit="${j.quote_id}">Edit Assignment</button>
-             <button class="btn" data-jobid="${j.id}" data-opsstatus="En Route">En Route</button>
-             <button class="btn" data-jobid="${j.id}" data-opsstatus="In Progress">In Progress</button>
-             <button class="btn" data-jobid="${j.id}" data-opsstatus="Completed">Complete</button>
-             <a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>`}
+        ${archived?`<button class="btn warn" data-restorejob="${j.id}">Restore Job</button>`:
+        `<button class="btn primary" data-opsedit="${j.quote_id}">Edit Assignment</button>
+         <button class="btn" data-jobid="${j.id}" data-opsstatus="En Route">En Route</button>
+         <button class="btn" data-jobid="${j.id}" data-opsstatus="In Progress">In Progress</button>
+         <button class="btn" data-jobid="${j.id}" data-opsstatus="Completed">Complete</button>
+         <a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>`}
       </div>
-    </div>`
-  }).join(''):`<div class="app-empty">${view==='archive'?'No completed jobs match these filters.':'No jobs match the selected filters.'}</div>`;
+    </div>`;
+  }).join(''):`<div class="app-empty">${view==='archive'?'No completed jobs match these filters.':'No schedule items match the selected filters.'}</div>`;
 
   $('operationsList').querySelectorAll('[data-opsedit]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.opsedit));
   $('operationsList').querySelectorAll('[data-opsstatus]').forEach(b=>b.onclick=()=>ownerUpdateJobStatus(b.dataset.jobid,b.dataset.opsstatus));
   $('operationsList').querySelectorAll('[data-restorejob]').forEach(b=>b.onclick=()=>restoreArchivedJob(b.dataset.restorejob));
 }
+
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'&&!confirm('Mark this job completed and move it to the archive?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
 async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;$('qLead').value=q.customer?.lead_source||'';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();scrollTo({top:0,behavior:'smooth'});toast('Quote loaded from cloud.')}
@@ -2336,39 +2388,71 @@ function bindOwnerCommandCenter(){
 function bind(id,event,handler){let el=$(id);if(el)el[event]=handler}
 
 
+function icloudViewCalendarKey(){return `dt.icloudViewCalendars.${session?.user?.id||'guest'}`}
+function getIcloudViewCalendarIds(){
+  try{let v=JSON.parse(localStorage.getItem(icloudViewCalendarKey())||'[]');return Array.isArray(v)?v:[]}catch{return []}
+}
+function setIcloudViewCalendarIds(ids){
+  localStorage.setItem(icloudViewCalendarKey(),JSON.stringify([...new Set(ids||[])]));
+}
 async function loadIcloudCalendarStatus(){
   let st=$('icloudCalendarStatus'),m=$('icloudCalendarMessage'),wrap=$('icloudCalendarPickerWrap'),test=$('testIcloudCalendar');
   if(!st)return;
   let{data,error}=await sb.functions.invoke('icloud-calendar-auth',{body:{action:'status'}});
   if(error||data?.ok===false){st.textContent='Needs setup';m.textContent=error?.message||data?.error||'Add the iCloud secrets and deploy the iCloud functions.';wrap?.classList.add('hidden');if(test)test.disabled=true;return}
   if(!data.configured){st.textContent='Not configured';m.textContent='Add ICLOUD_APPLE_ID and ICLOUD_APP_SPECIFIC_PASSWORD in Supabase Edge Function secrets.';wrap?.classList.add('hidden');if(test)test.disabled=true;return}
-  let selected=data.selected_calendars||[];
-  st.textContent=selected.length?`${selected.length} Selected`:'Connected';
-  m.textContent=`iCloud credentials verified${selected.length?' • '+selected.map(c=>c.name).join(', '):' • Choose calendars below'}`;
-  wrap?.classList.remove('hidden');if(test)test.disabled=!selected.length;
-  await loadIcloudCalendarChoices(selected);
+  let syncSelected=data.selected_calendars||[],viewIds=getIcloudViewCalendarIds();
+  st.textContent=`${viewIds.length} View • ${syncSelected.length} Sync`;
+  m.textContent='VIEW calendars appear read-only on the Operations schedule. SYNC JOBS calendars are the only calendars Dynamic Tintz may create, update, or remove job events on.';
+  wrap?.classList.remove('hidden');if(test)test.disabled=!syncSelected.length;
+  await loadIcloudCalendarChoices(syncSelected);
 }
-async function loadIcloudCalendarChoices(selected=[]){
+async function loadIcloudCalendarChoices(syncSelected=[]){
   let picker=$('icloudCalendarPicker'),m=$('icloudCalendarMessage');if(!picker)return;
   picker.innerHTML='<div class="muted">Loading iCloud calendars…</div>';
   let{data,error}=await sb.functions.invoke('icloud-calendar-auth',{body:{action:'calendars'}});
   if(error||data?.ok===false){picker.innerHTML='';m.textContent=error?.message||data?.error||'Could not load iCloud calendars.';return}
-  let selectedIds=new Set((selected.length?selected:data.selected_calendars||[]).map(c=>c.id));
-  picker.innerHTML=(data.calendars||[]).map(c=>`<label class="installer-option ${c.writable?'':'calendar-readonly'}"><input type="checkbox" value="${esc(c.id)}" ${selectedIds.has(c.id)?'checked':''} ${c.writable?'':'disabled'}><span>${esc(c.name)}<small>${c.writable?'Can sync jobs':'Read only'}</small></span></label>`).join('')||'<div class="muted">No iCloud calendars were found.</div>';
+  let syncIds=new Set((syncSelected.length?syncSelected:data.selected_calendars||[]).map(c=>c.id)),
+      viewIds=new Set(getIcloudViewCalendarIds());
+  picker.innerHTML=(data.calendars||[]).map(c=>`<div class="icloud-calendar-row">
+    <div class="icloud-calendar-name">
+      <b>${esc(c.name)}</b>
+      <small>${c.writable?'Writable calendar':'Read-only calendar'}</small>
+    </div>
+    <label class="calendar-permission-toggle">
+      <input type="checkbox" data-icloudview value="${esc(c.id)}" ${viewIds.has(c.id)?'checked':''}>
+      <span><b>VIEW</b><small>Show events in Operations</small></span>
+    </label>
+    <label class="calendar-permission-toggle ${c.writable?'':'calendar-readonly'}">
+      <input type="checkbox" data-icloudsync value="${esc(c.id)}" ${syncIds.has(c.id)?'checked':''} ${c.writable?'':'disabled'}>
+      <span><b>SYNC JOBS</b><small>${c.writable?'Allow Dynamic Tintz job writes':'Not writable'}</small></span>
+    </label>
+  </div>`).join('')||'<div class="muted">No iCloud calendars were found.</div>';
 }
 async function saveIcloudCalendarSelection(){
-  let ids=[...$('icloudCalendarPicker').querySelectorAll('input:checked')].map(x=>x.value),b=$('saveIcloudCalendarSelection'),m=$('icloudCalendarMessage');
-  if(!ids.length){m.textContent='Choose at least one writable iCloud calendar.';return}
-  b.disabled=true;m.textContent='Saving iCloud calendar selection…';
-  let{data,error}=await sb.functions.invoke('icloud-calendar-auth',{body:{action:'select',calendar_ids:ids}});b.disabled=false;
-  if(error||data?.ok===false){m.textContent=error?.message||data?.error||'Could not save iCloud calendar selection.';return}
-  toast(`${data.selected_calendars.length} iCloud calendar${data.selected_calendars.length===1?'':'s'} selected.`);await loadIcloudCalendarStatus();
+  let picker=$('icloudCalendarPicker'),b=$('saveIcloudCalendarSelection'),m=$('icloudCalendarMessage');
+  let viewIds=[...picker.querySelectorAll('[data-icloudview]:checked')].map(x=>x.value),
+      syncIds=[...picker.querySelectorAll('[data-icloudsync]:checked')].map(x=>x.value);
+  setIcloudViewCalendarIds(viewIds);
+  b.disabled=true;m.textContent='Saving iCloud calendar permissions…';
+  if(syncIds.length){
+    let{data,error}=await sb.functions.invoke('icloud-calendar-auth',{body:{action:'select',calendar_ids:syncIds}});
+    if(error||data?.ok===false){b.disabled=false;m.textContent=error?.message||data?.error||'View calendars were saved locally, but Sync Jobs selection could not be saved.';return}
+  }else{
+    m.textContent='View calendars saved. No calendar is currently selected for job syncing.';
+  }
+  b.disabled=false;
+  toast(`${viewIds.length} view-only calendar${viewIds.length===1?'':'s'} • ${syncIds.length} job-sync calendar${syncIds.length===1?'':'s'}.`);
+  await loadIcloudCalendarStatus();
+  if($('operations')?.classList.contains('active'))await loadOperations();
 }
 async function testIcloudCalendarConnection(){
-  let b=$('testIcloudCalendar'),m=$('icloudCalendarMessage'),st=$('icloudCalendarStatus');b.disabled=true;m.textContent='Testing selected iCloud calendars…';
+  let b=$('testIcloudCalendar'),m=$('icloudCalendarMessage'),st=$('icloudCalendarStatus');b.disabled=true;m.textContent='Testing calendars allowed to receive Dynamic Tintz jobs…';
   let{data,error}=await sb.functions.invoke('icloud-calendar-sync',{body:{test:true}});b.disabled=false;
-  if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'iCloud calendar test failed.';return}
-  st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`;
+  if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'iCloud job-sync calendar test failed.';return}
+  let viewCount=getIcloudViewCalendarIds().length;
+  st.textContent=`${viewCount} View • ${data.calendars.length} Sync`;
+  m.textContent=`Job sync connected to ${data.calendars.join(', ')}. View-only calendars remain read-only.`;
 }
 
 async function loadCalendarStatus(){let st=$('calendarStatus'),m=$('calendarMessage'),connect=$('connectCalendar'),disconnect=$('disconnectCalendar'),test=$('testCalendar'),wrap=$('calendarPickerWrap'),refresh=$('refreshCalendars');if(!st)return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'status'}});if(error||data?.ok===false){st.textContent='Needs setup';m.textContent=error?.message||data?.error||'Could not read calendar connection status.';connect?.classList.remove('hidden');disconnect?.classList.add('hidden');refresh?.classList.add('hidden');wrap?.classList.add('hidden');test.disabled=true;return}if(data.connected){let selected=data.selected_calendars||[];st.textContent=selected.length?`${selected.length} Selected`:'Connected';m.textContent=`${data.email||'Google account connected'}${selected.length?' • '+selected.map(c=>c.name).join(', '):' • Choose calendars below'}`;connect?.classList.add('hidden');disconnect?.classList.remove('hidden');refresh?.classList.remove('hidden');wrap?.classList.remove('hidden');test.disabled=!selected.length;await loadCalendarChoices(selected)}else{st.textContent='Not connected';m.textContent='Connect dynamictintzllc@gmail.com to choose which calendars receive scheduled jobs.';connect?.classList.remove('hidden');disconnect?.classList.add('hidden');refresh?.classList.add('hidden');wrap?.classList.add('hidden');test.disabled=true}}
@@ -2384,9 +2468,9 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',()=>{operationsSelectedDate=null;renderOperations()});bind('operationSearch','oninput',renderOperations);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('operationsPrevMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()-1,1);operationsSelectedDate=null;renderOperations()});
-bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;renderOperations()});
-bind('operationsToday','onclick',()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());renderOperations()});
+bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',()=>{operationsSelectedDate=null;renderOperations()});bind('operationSearch','oninput',renderOperations);bind('operationStatus','onchange',renderOperations);bind('operationRange','onchange',renderOperations);bind('operationsPrevMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()-1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
+bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
+bind('operationsToday','onclick',()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());loadIcloudViewEvents().then(renderOperations)});
 bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperations()});bind('refreshOperations','onclick',loadOperations);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
