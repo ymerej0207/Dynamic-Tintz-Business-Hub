@@ -1398,6 +1398,29 @@ async function applyCalendarStatus(jobId,status){
   return syncCalendarJob(jobId,action);
 }
 
+async function functionErrorDetail(error,fallback='Edge Function failed'){
+  try{
+    let ctx=error?.context;
+    if(ctx&&typeof ctx.clone==='function'){
+      let response=ctx.clone();
+      try{
+        let data=await response.json();
+        if(data?.error)return String(data.error);
+        if(data?.message)return String(data.message);
+        if(data&&typeof data==='object')return JSON.stringify(data);
+      }catch{}
+      try{
+        let text=await ctx.clone().text();
+        if(text?.trim())return text.trim().slice(0,1000);
+      }catch{}
+      if(ctx.status)return `${fallback} (HTTP ${ctx.status})`;
+    }
+    if(typeof error?.context?.responseBody==='string'&&error.context.responseBody.trim())return error.context.responseBody.trim();
+    if(typeof error?.context?.body==='string'&&error.context.body.trim())return error.context.body.trim();
+  }catch{}
+  return error?.message||fallback;
+}
+
 async function syncCalendarJob(jobId,action='sync'){
   let results=[],errors=[],providers=[];
   const checks=await Promise.allSettled([
@@ -1406,6 +1429,7 @@ async function syncCalendarJob(jobId,action='sync'){
   ]);
   const google=checks[0].status==='fulfilled'?checks[0].value:null;
   const icloud=checks[1].status==='fulfilled'?checks[1].value:null;
+
   if(!google?.error&&google?.data?.ok!==false&&google?.data?.connected&&(google.data.selected_calendars||[]).length){
     providers.push(['google-calendar-sync','Google']);
   }
@@ -1413,18 +1437,19 @@ async function syncCalendarJob(jobId,action='sync'){
     providers.push(['icloud-calendar-sync','iCloud']);
   }
   if(!providers.length)return {ok:true,providers:[],skipped:true};
+
   for(let [fn,label] of providers){
     try{
       let{data,error}=await sb.functions.invoke(fn,{body:{job_id:jobId,action}});
       if(error){
-        let detail=error?.context?.body||error?.context?.responseBody||'';
-        throw new Error(detail||error.message||`${label} calendar sync failed`);
+        let detail=await functionErrorDetail(error,`${label} calendar sync failed`);
+        throw new Error(detail);
       }
       if(data?.ok===false&&!data?.skipped)throw new Error(data.error||`${label} calendar sync failed`);
       if(!data?.skipped)results.push({provider:label,...data});
     }catch(e){
       let msg=e?.message||String(e);
-      if(/not connected|not configured|No calendars are selected|Function not found|404/i.test(msg))continue;
+      if(/not connected|not configured|No calendars are selected|No iCloud calendars selected|Function not found|404/i.test(msg))continue;
       errors.push(`${label}: ${msg}`);
     }
   }
@@ -1442,14 +1467,23 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
   let jobId=res.data?.id||existingJobId;try{await saveScheduleMaterialPlan(jobId)}catch(e){$('scheduleMessage').textContent='Job saved, but material plan failed: '+e.message;return}
   if(selectedStatus==='Completed'){let r=await sb.from('jobs').update({status:'Completed',archived_at:now,updated_at:now}).eq('id',jobId);if(r.error){$('scheduleMessage').textContent='Material plan saved, but completion failed: '+r.error.message;return}}
   let{error:qError}=await sb.from('quotes').update({status:selectedStatus==='Completed'?'Completed':selectedStatus==='Canceled'?'Approved':'Scheduled',assigned_to:assigned[0],updated_at:now}).eq('id',quoteId);if(qError){$('scheduleMessage').textContent='Job saved, but quote status update failed: '+qError.message;return}
-  let calendarAction=calendarActionForJobStatus(selectedStatus);
+  let calendarAction=calendarActionForJobStatus(selectedStatus),calendarWarning='';
   if(calendarAction){
     try{await applyCalendarStatus(jobId,selectedStatus)}
-    catch(e){$('scheduleMessage').textContent='Job saved, but calendar sync failed: '+e.message;return}
+    catch(e){
+      calendarWarning=e?.message||String(e);
+      console.warn('Calendar sync warning:',calendarWarning);
+    }
   }
   $('scheduleJobModal').classList.remove('show');
-  toast(calendarAction==='delete'?'Job saved and removed from calendar.':calendarAction==='sync'?'Job saved and calendar updated.':'Job saved. No calendar change for this status.');
-  await loadQuotes();dashboard()
+  if(calendarWarning){
+    toast('Job saved successfully. Calendar sync needs attention.');
+  }else{
+    toast(calendarAction==='delete'?'Job saved and removed from calendar.':calendarAction==='sync'?'Job saved and calendar updated.':'Job saved. No calendar change for this status.');
+  }
+  await loadQuotes();await dashboard();
+  if($('operations')?.classList.contains('active'))await loadOperations();
+  if(calendarWarning)setTimeout(()=>toast('Calendar: '+calendarWarning),350);
 }
 async function loadOperations(){let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));let jobs=data||[],jobIds=jobs.map(j=>j.id),plans=[];if(jobIds.length){let pr=await sb.from('job_material_plans').select('job_id,planned_linear_inches,actual_linear_inches,source,product:film_inventory_products(name)').in('job_id',jobIds);plans=pr.data||[]}let planMap=Object.fromEntries(plans.map(p=>[p.job_id,p]));operationsCache=jobs.map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean),material_plan:planMap[j.id]||null}));await loadIcloudViewEvents();renderOperations()}
 function ensureArchiveControls(){let host=$('operations')?.querySelector('.card');if(!host||$('operationView'))return;let controls=document.createElement('div');controls.className='grid2';controls.style.marginTop='12px';controls.innerHTML=`<div class="field"><label>Board View</label><select id="operationView"><option value="active">Active Jobs</option><option value="archive">Archived Jobs</option></select></div><div class="field"><label>Search Jobs</label><input id="operationSearch" placeholder="Customer, address, installer, project..."></div>`;host.appendChild(controls);$('operationView').onchange=renderOperations;$('operationSearch').oninput=renderOperations}
@@ -2523,7 +2557,11 @@ async function saveIcloudCalendarSelection(){
 async function testIcloudCalendarConnection(){
   let b=$('testIcloudCalendar'),m=$('icloudCalendarMessage'),st=$('icloudCalendarStatus');b.disabled=true;m.textContent='Testing calendars allowed to receive Dynamic Tintz jobs…';
   let{data,error}=await sb.functions.invoke('icloud-calendar-sync',{body:{test:true}});b.disabled=false;
-  if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'iCloud job-sync calendar test failed.';return}
+  if(error||data?.ok===false){
+    st.textContent='Needs attention';
+    m.textContent=error?await functionErrorDetail(error,'iCloud job-sync calendar test failed.'):data?.error||'iCloud job-sync calendar test failed.';
+    return
+  }
   let viewCount=getIcloudViewCalendarIds().length;
   st.textContent=`${viewCount} View • ${data.calendars.length} Sync`;
   m.textContent=`Job sync connected to ${data.calendars.join(', ')}. View-only calendars remain read-only.`;
