@@ -2879,9 +2879,36 @@ bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;ren
 });
 bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
 
+function routePushTarget(target){
+  let raw=typeof target==='string'?target:(target?.url||'./'),
+      hash=String(raw).includes('#')?String(raw).split('#')[1]:'',
+      route=hash.split('?')[0]||'home',
+      params=new URLSearchParams(hash.includes('?')?hash.split('?').slice(1).join('?'):'');
+  let allowed=['home','leads','followups','operations','inventory','quotes','account'];
+  if(!allowed.includes(route))route='home';
+  show(route);
+  // Keep the entity identifiers available for detail routing as those views evolve.
+  window.dynamicTintzPushContext={
+    route,
+    lead_id:params.get('lead_id')||target?.lead_id||null,
+    job_id:params.get('job_id')||target?.job_id||null,
+    product_id:params.get('product_id')||target?.product_id||null
+  };
+  if(route==='leads'&&typeof loadLeads==='function')loadLeads();
+  if(route==='followups'&&typeof loadFollowups==='function')loadFollowups();
+  if(route==='operations'&&typeof loadOperations==='function')loadOperations();
+  if(route==='inventory'&&typeof loadInventory==='function')loadInventory();
+}
 navigator.serviceWorker?.addEventListener?.('message',e=>{
-  if(e.data?.type==='OPEN_PUSH_TARGET'){
-    let url=String(e.data.url||'');
-    if(url.includes('#leads'))show('leads');
-  }
+  if(e.data?.type==='OPEN_PUSH_TARGET')routePushTarget(e.data);
 });
+function routeInitialPushHash(){
+  let h=location.hash||'';
+  if(/^#(leads|followups|operations|inventory|quotes|account)(\?|$)/.test(h)){
+    setTimeout(()=>routePushTarget('./'+h),250);
+  }
+}
+window.addEventListener('hashchange',routeInitialPushHash);
+
+
+window.addEventListener('load',routeInitialPushHash);

@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.8.0-full-free-notifications
+ * Release: 7.8.1-notification-identity-routing
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.8.0-";
-const CACHE_NAME = `${CACHE_PREFIX}full-free-notifications`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.8.1-";
+const CACHE_NAME = `${CACHE_PREFIX}notification-identity-routing`; 
 
 const APP_SHELL = [
   "./",
@@ -144,29 +144,42 @@ self.addEventListener("fetch", (event) => {
 
 
 self.addEventListener('push', event => {
-  let data={};
-  try{data=event.data?event.data.json():{}}catch{data={body:event.data?event.data.text():'New Dynamic Tintz notification'}}
-  const title=data.title||'Dynamic Tintz';
+  let payload={};
+  try{payload=event.data?event.data.json():{}}catch{payload={body:event.data?event.data.text():'Dynamic Tintz notification'}}
+  const type=payload.data?.type||'general';
+  const identity={
+    lead:{title:'NEW LEAD • DYNAMIC TINTZ',tag:'dt-lead'},
+    followup:{title:'FOLLOW-UP DUE • DYNAMIC TINTZ',tag:'dt-followup'},
+    assignment:{title:'JOB ASSIGNED • DYNAMIC TINTZ',tag:'dt-assignment'},
+    job_tomorrow:{title:'JOB TOMORROW • DYNAMIC TINTZ',tag:'dt-job-tomorrow'},
+    job_soon:{title:'JOB STARTING SOON • DYNAMIC TINTZ',tag:'dt-job-soon'},
+    schedule_change:{title:'SCHEDULE UPDATE • DYNAMIC TINTZ',tag:'dt-schedule'},
+    low_inventory:{title:'FILM REORDER ALERT • DYNAMIC TINTZ',tag:'dt-inventory'},
+    test:{title:'DYNAMIC TINTZ • TEST',tag:'dt-test'}
+  }[type]||{};
   const options={
-    body:data.body||'You have a new notification.',
+    body:payload.body||'You have a new notification.',
     icon:'./icons/icon-192.png',
     badge:'./icons/icon-192.png',
-    tag:data.tag||'dynamic-tintz',
+    tag:payload.tag||identity.tag||'dynamic-tintz',
     renotify:true,
-    data:data.data||{url:'./'}
+    requireInteraction:type==='lead',
+    vibrate:[180,80,180,80,320],
+    data:payload.data||{url:'./'}
   };
-  event.waitUntil(self.registration.showNotification(title,options));
+  event.waitUntil(self.registration.showNotification(payload.title||identity.title||'DYNAMIC TINTZ',options));
 });
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const target=event.notification?.data?.url||'./';
+  const data=event.notification?.data||{};
+  const target=data.url||'./';
   event.waitUntil((async()=>{
-    const clientsList=await clients.matchAll({type:'window',includeUncontrolled:true});
-    for(const client of clientsList){
+    const list=await clients.matchAll({type:'window',includeUncontrolled:true});
+    for(const client of list){
       if('focus' in client){
         await client.focus();
-        try{client.postMessage({type:'OPEN_PUSH_TARGET',url:target})}catch{}
+        try{client.postMessage({type:'OPEN_PUSH_TARGET',...data,url:target})}catch{}
         return;
       }
     }
