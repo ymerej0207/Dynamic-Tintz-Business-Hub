@@ -1009,3 +1009,22 @@ button.app-kpi-card{cursor:pointer}
 #refreshOperations.is-refreshing{animation:dtScheduleSpin .75s linear infinite}
 @keyframes dtScheduleSpin{to{transform:rotate(360deg)}}
 .operations-agenda-section{padding-bottom:10px}
+
+/* v7.6.5 — Dynamic Tintz-only upcoming schedule */
+.operations-upcoming-jobs{margin:14px 0 18px}
+#operationsUpcomingList{display:grid;gap:6px}
+.operations-upcoming-row{
+  width:100%;display:grid;grid-template-columns:82px minmax(0,1fr) auto 10px;gap:9px;align-items:center;
+  border:1px solid var(--app-line);border-radius:13px;background:linear-gradient(160deg,#0f181a,#081011);
+  color:#fff;padding:9px;text-align:left
+}
+.operations-upcoming-date{display:flex;flex-direction:column;justify-content:center;min-height:46px;border-radius:9px;background:#0a2224;padding:6px 7px}
+.operations-upcoming-date small{font-size:8px;color:var(--app-accent);font-weight:850;text-transform:uppercase}
+.operations-upcoming-date b{font-size:12px;margin-top:3px}
+.operations-upcoming-copy{display:flex;flex-direction:column;min-width:0}
+.operations-upcoming-copy>b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.operations-upcoming-copy>small{font-size:9px;color:var(--app-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+@media(max-width:500px){
+  .operations-upcoming-row{grid-template-columns:72px minmax(0,1fr) auto 8px;gap:6px}
+  .operations-upcoming-row .app-status-pill{font-size:7px;max-width:68px;overflow:hidden;text-overflow:ellipsis}
+}

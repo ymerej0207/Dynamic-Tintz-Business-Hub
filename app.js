@@ -1580,7 +1580,7 @@ async function loadOperations(){
     if($('operationRange'))$('operationRange').value='all';
     operationsDefaultsApplied=true;
   }
-  let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes,square_catalog_item_name,customer:customers(first_name,last_name)),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));let jobs=data||[],jobIds=jobs.map(j=>j.id),plans=[];if(jobIds.length){let pr=await sb.from('job_material_plans').select('job_id,planned_linear_inches,actual_linear_inches,source,product:film_inventory_products(name)').in('job_id',jobIds);plans=pr.data||[]}let planMap=Object.fromEntries(plans.map(p=>[p.job_id,p]));operationsCache=jobs.map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean),material_plan:planMap[j.id]||null}));await loadIcloudViewEvents();renderOperations()}
+  let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,total_sqft,measurements,status,notes,square_catalog_item_name,customer:customers(first_name,last_name)),assignee:profiles!jobs_assigned_to_fkey(full_name,email)').order('scheduled_start',{ascending:true});if(error)return toast(error.message);let ids=[...new Set((data||[]).flatMap(j=>j.assigned_installers||[]))],people=[];if(ids.length){let r=await sb.from('profiles').select('id,full_name,email').in('id',ids);people=r.data||[]}let map=Object.fromEntries(people.map(p=>[p.id,p]));let jobs=data||[],jobIds=jobs.map(j=>j.id),plans=[];if(jobIds.length){let pr=await sb.from('job_material_plans').select('job_id,planned_linear_inches,actual_linear_inches,source,product:film_inventory_products(name)').in('job_id',jobIds);plans=pr.data||[]}let planMap=Object.fromEntries(plans.map(p=>[p.job_id,p]));operationsCache=jobs.map(j=>({...j,installer_names:(j.assigned_installers||[]).map(id=>map[id]?.full_name||map[id]?.email).filter(Boolean),material_plan:planMap[j.id]||null}));try{await loadIcloudViewEvents()}catch(e){console.warn('Calendar view refresh warning:',e)}renderOperations()}
 async function refreshOperationsSchedule(){
   let b=$('refreshOperations');
   if(b){b.disabled=true;b.classList.add('is-refreshing')}
@@ -1602,42 +1602,51 @@ async function loadIcloudViewEvents(){
   let ids=getIcloudViewCalendarIds();
   if(!ids.length){icloudViewEventsCache=[];return}
 
-  let range=$('operationRange')?.value||'7',
+  let range=$('operationRange')?.value||'all',
       selected=operationsSelectedDate,
       now=new Date(),
-      start,end;
+      rangeStart=null,
+      rangeEnd=null;
 
   if(selected){
-    let [y,m,d]=selected.split('-').map(Number);
-    start=new Date(y,m-1,d,0,0,0,0);
-    end=new Date(y,m-1,d+1,0,0,0,0);
+    let parts=selected.split('-').map(Number);
+    rangeStart=new Date(parts[0],parts[1]-1,parts[2],0,0,0,0);
+    rangeEnd=new Date(parts[0],parts[1]-1,parts[2]+1,0,0,0,0);
   }else if(range==='today'){
-    start=new Date(now);start.setHours(0,0,0,0);
-    end=new Date(start.getTime()+86400000);
+    rangeStart=new Date(now);rangeStart.setHours(0,0,0,0);
+    rangeEnd=new Date(rangeStart.getTime()+86400000);
   }else if(range==='7'){
-    start=new Date(now);start.setHours(0,0,0,0);
-    end=new Date(start.getTime()+7*86400000);
+    rangeStart=new Date(now);rangeStart.setHours(0,0,0,0);
+    rangeEnd=new Date(rangeStart.getTime()+7*86400000);
   }else if(range==='30'){
-    start=new Date(now);start.setHours(0,0,0,0);
-    end=new Date(start.getTime()+30*86400000);
+    rangeStart=new Date(now);rangeStart.setHours(0,0,0,0);
+    rangeEnd=new Date(rangeStart.getTime()+30*86400000);
   }else if(range==='month'){
-    let b=operationsMonthBounds();start=b.start;end=b.end;
+    let bounds=operationsMonthBounds();
+    rangeStart=bounds.start;
+    rangeEnd=bounds.end;
   }else{
-    // "All" should behave like all schedule data, not just the displayed month.
-    // Span the full job history plus one year forward so personal events remain useful.
     let jobDates=operationsCache.map(operationDisplayDate).filter(Boolean).map(x=>new Date(x)).filter(x=>!Number.isNaN(x.getTime()));
     let earliest=jobDates.length?new Date(Math.min(...jobDates.map(x=>x.getTime()))):new Date(now.getFullYear()-1,now.getMonth(),1);
     let latest=jobDates.length?new Date(Math.max(...jobDates.map(x=>x.getTime()))):now;
-    start=new Date(Math.min(earliest.getTime(),new Date(now.getFullYear()-1,now.getMonth(),1).getTime()));
-    start.setDate(start.getDate()-31);
-    end=new Date(Math.max(latest.getTime(),now.getTime()));
-    end.setFullYear(end.getFullYear()+1);
-    end.setDate(end.getDate()+31);
+    rangeStart=new Date(Math.min(earliest.getTime(),new Date(now.getFullYear()-1,now.getMonth(),1).getTime()));
+    rangeStart.setDate(rangeStart.getDate()-31);
+    rangeEnd=new Date(Math.max(latest.getTime(),now.getTime()));
+    rangeEnd.setFullYear(rangeEnd.getFullYear()+1);
+    rangeEnd.setDate(rangeEnd.getDate()+31);
+  }
+
+  if(!(rangeStart instanceof Date)||Number.isNaN(rangeStart.getTime())||!(rangeEnd instanceof Date)||Number.isNaN(rangeEnd.getTime())){
+    console.warn('Invalid iCloud schedule range.',{range,selected,rangeStart,rangeEnd});
+    icloudViewEventsCache=[];
+    return;
   }
 
   try{
     let{data,error}=await sb.functions.invoke('icloud-calendar-events',{body:{
-      calendar_ids:ids,start:start.toISOString(),end:end.toISOString()
+      calendar_ids:ids,
+      start:rangeStart.toISOString(),
+      end:rangeEnd.toISOString()
     }});
     if(error||data?.ok===false)throw new Error(error?.message||data?.error||'Could not load iCloud view calendars.');
     icloudViewEventsCache=(data.events||[]).map(e=>({...e,_external:true}));
@@ -1649,14 +1658,22 @@ async function loadIcloudViewEvents(){
 async function loadSelectedDayIcloudEvents(dateKey){
   let ids=getIcloudViewCalendarIds();
   if(!ids.length)return [];
-  let [y,m,d]=String(dateKey||'').split('-').map(Number);
-  if(!y||!m||!d)return [];
-  let start=new Date(y,m-1,d,0,0,0,0),end=new Date(y,m-1,d+1,0,0,0,0);
+  let parts=String(dateKey||'').split('-').map(Number);
+  if(!parts[0]||!parts[1]||!parts[2])return [];
+  let dayStart=new Date(parts[0],parts[1]-1,parts[2],0,0,0,0),
+      dayEnd=new Date(parts[0],parts[1]-1,parts[2]+1,0,0,0,0);
   try{
-    let{data,error}=await sb.functions.invoke('icloud-calendar-events',{body:{calendar_ids:ids,start:start.toISOString(),end:end.toISOString()}});
+    let{data,error}=await sb.functions.invoke('icloud-calendar-events',{body:{
+      calendar_ids:ids,
+      start:dayStart.toISOString(),
+      end:dayEnd.toISOString()
+    }});
     if(error||data?.ok===false)throw new Error(error?.message||data?.error||'Could not load iCloud events for this date.');
     return (data.events||[]).map(e=>({...e,_external:true}));
-  }catch(e){console.warn('Selected-day iCloud load:',e);return []}
+  }catch(e){
+    console.warn('Selected-day iCloud load:',e);
+    return [];
+  }
 }
 function externalCalendarEventMatches(e,{ignoreRange=false}={}){
   let view=$('operationView')?.value||'active',
@@ -1805,8 +1822,46 @@ async function renderSelectedCalendarDate(){
   }).join(''):'<div class="app-empty">Nothing is scheduled on this date.</div>';
 }
 
+function renderUpcomingDynamicTintzJobs(){
+  let host=$('operationsUpcomingList'),meta=$('operationsUpcomingMeta');
+  if(!host)return;
+
+  let now=new Date(),
+      upcoming=operationsCache.filter(j=>{
+        if(!j.scheduled_start)return false;
+        let d=new Date(j.scheduled_start);
+        if(Number.isNaN(d.getTime())||d<now)return false;
+        return !['Completed','Canceled'].includes(String(j.status||''));
+      }).sort((a,b)=>new Date(a.scheduled_start)-new Date(b.scheduled_start));
+
+  if(meta)meta.textContent=`${upcoming.length} upcoming job${upcoming.length===1?'':'s'}`;
+
+  host.innerHTML=upcoming.length?upcoming.map(j=>{
+    let d=new Date(j.scheduled_start),
+        day=d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}),
+        time=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}),
+        customer=j.quote?.customer?`${j.quote.customer.first_name||''} ${j.quote.customer.last_name||''}`.trim():'',
+        film=j.material_plan?.product?.name||j.quote?.square_catalog_item_name||'';
+    return `<button class="operations-upcoming-row" data-opsupcoming="${j.quote_id||''}">
+      <span class="operations-upcoming-date"><small>${esc(day)}</small><b>${esc(time)}</b></span>
+      <span class="operations-upcoming-copy">
+        <b>${esc(customer||j.title||j.quote?.project_name||'Window Film Installation')}</b>
+        <small>${esc(j.service_address||'')}${film?` • ${esc(film.replace(' Tint Install',''))}`:''}</small>
+      </span>
+      <span class="app-status-pill status-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}">${esc(j.status||'Scheduled')}</span>
+      <span class="app-chevron">›</span>
+    </button>`;
+  }).join(''):'<div class="app-empty">No upcoming Dynamic Tintz jobs are currently scheduled.</div>';
+
+  host.querySelectorAll('[data-opsupcoming]').forEach(b=>b.onclick=()=>{
+    let qid=b.dataset.opsupcoming;
+    if(qid)openScheduleJob(qid);
+  });
+}
+
 function renderOperations(){
   ensureArchiveControls();
+  renderUpcomingDynamicTintzJobs();
   renderOperationsCalendar();
 
   let view=$('operationView')?.value||'active',
@@ -1816,8 +1871,7 @@ function renderOperations(){
   if(operationsSelectedDate){renderSelectedCalendarDate()}else{$('operationsSelectedDayPanel')?.classList.add('hidden')}
 
   let agenda=[
-    ...jobs.map(j=>({kind:'job',value:j,date:operationDisplayDate(j)})),
-    ...external.map(e=>({kind:'external',value:e,date:e.start}))
+    ...jobs.map(j=>({kind:'job',value:j,date:operationDisplayDate(j)}))
   ];
   agenda.sort((a,b)=>{
     let ad=new Date(a.date||0),bd=new Date(b.date||0);
@@ -1825,29 +1879,11 @@ function renderOperations(){
   });
 
   let title=$('operationsAgendaTitle'),meta=$('operationsAgendaMeta'),clear=$('operationsClearDate');
-  if(title)title.textContent=view==='archive'?'Completed Jobs':view==='all'?'All Jobs & Events':'Upcoming Schedule';
-  if(meta)meta.textContent=`${jobs.length} job${jobs.length===1?'':'s'}${external.length?` • ${external.length} view-only calendar event${external.length===1?'':'s'}`:''}`;
+  if(title)title.textContent=view==='archive'?'Completed Job Details':view==='all'?'All Dynamic Tintz Job Details':'Filtered Dynamic Tintz Jobs';
+  if(meta)meta.textContent=`${jobs.length} Dynamic Tintz job${jobs.length===1?'':'s'}`;
   if(operationsSelectedDate)clear?.classList.remove('hidden');else clear?.classList.add('hidden');
 
   $('operationsList').innerHTML=agenda.length?agenda.map(entry=>{
-    if(entry.kind==='external'){
-      let e=entry.value,start=e.start?new Date(e.start):null,
-          time=e.all_day?'All Day':start?.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})||'—',
-          date=start?.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'})||'';
-      return `<div class="operation-card app-operation-card calendar-agenda-card external-calendar-card">
-        <div class="app-operation-top">
-          <span class="app-time-tile external-time-tile"><small>${esc(date)}</small>${esc(time)}</span>
-          <div class="app-operation-copy">
-            <h2>${esc(e.summary||'Calendar Event')}</h2>
-            <div class="muted">${e.location?esc(e.location):'Personal / external calendar event'}</div>
-          </div>
-          <span class="app-status-pill external-source-pill">${esc(e.calendar_name||'iCloud')} • VIEW</span>
-        </div>
-        ${e.description?`<div class="operation-notes">${esc(e.description)}</div>`:''}
-        <div class="external-readonly-note">Read-only from iCloud • Dynamic Tintz will not modify this event.</div>
-      </div>`;
-    }
-
     let j=entry.value,archived=j.status==='Completed'||!!j.archived_at,
         start=j.scheduled_start?new Date(j.scheduled_start):null,
         opTime=start?start.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'—',
