@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.6.5-schedule-refresh-upcoming
+ * Release: 7.7.1-pg-net-push-trigger-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.6.5-";
-const CACHE_NAME = `${CACHE_PREFIX}schedule-refresh-upcoming`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.7.1-";
+const CACHE_NAME = `${CACHE_PREFIX}pg-net-push-trigger-fix`; 
 
 const APP_SHELL = [
   "./",
@@ -140,4 +140,36 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(cacheFirst(request));
+});
+
+
+self.addEventListener('push', event => {
+  let data={};
+  try{data=event.data?event.data.json():{}}catch{data={body:event.data?event.data.text():'New Dynamic Tintz notification'}}
+  const title=data.title||'Dynamic Tintz';
+  const options={
+    body:data.body||'You have a new notification.',
+    icon:'./icons/icon-192.png',
+    badge:'./icons/icon-192.png',
+    tag:data.tag||'dynamic-tintz',
+    renotify:true,
+    data:data.data||{url:'./'}
+  };
+  event.waitUntil(self.registration.showNotification(title,options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target=event.notification?.data?.url||'./';
+  event.waitUntil((async()=>{
+    const clientsList=await clients.matchAll({type:'window',includeUncontrolled:true});
+    for(const client of clientsList){
+      if('focus' in client){
+        await client.focus();
+        try{client.postMessage({type:'OPEN_PUSH_TARGET',url:target})}catch{}
+        return;
+      }
+    }
+    if(clients.openWindow)return clients.openWindow(target);
+  })());
 });

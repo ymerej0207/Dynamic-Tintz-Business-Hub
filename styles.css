@@ -1028,3 +1028,15 @@ button.app-kpi-card{cursor:pointer}
   .operations-upcoming-row{grid-template-columns:72px minmax(0,1fr) auto 8px;gap:6px}
   .operations-upcoming-row .app-status-pill{font-size:7px;max-width:68px;overflow:hidden;text-overflow:ellipsis}
 }
+
+/* v7.7.0 — free PWA push notifications */
+.notification-setting-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--app-line);border-radius:13px;background:#0a1315;padding:11px;margin:10px 0}
+.notification-setting-row>div{display:flex;flex-direction:column}
+.notification-setting-row b{font-size:12px}
+.notification-setting-row small{font-size:9px;color:var(--app-muted);margin-top:3px;line-height:1.35}
+.switch{position:relative;width:44px;height:25px}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;border-radius:999px;background:#263235;transition:.2s}
+.switch span:before{content:"";position:absolute;width:19px;height:19px;left:3px;top:3px;border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked+span{background:var(--app-accent)}
+.switch input:checked+span:before{transform:translateX(19px);background:#001313}

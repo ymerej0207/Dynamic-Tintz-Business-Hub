@@ -30,6 +30,93 @@ function auditNavigation(){
   return missing;
 }
 async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();auditNavigation();setupEmployeeAdmin();if(owner()){$("calendarIntegrationCard")?.classList.remove("hidden");$("icloudCalendarCard")?.classList.remove("hidden");}let saved=localStorage.getItem(lastViewKey()),fallback=owner()?"owner":"employee";show(saved&&allowedView(saved)?saved:fallback)}
+
+const VAPID_PUBLIC_KEY='BAVc1W5wH-ch_X7G_t2gwEzV5QQejck8Mc05JQj8ghLnx9pbD98QFoGB_M6DvtDXwDGruqXo33c2oLtmV8U-LoY';
+function base64UrlToUint8Array(value){
+  let padding='='.repeat((4-value.length%4)%4),base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+  let raw=atob(base64),out=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);
+  return out;
+}
+function pushSupported(){
+  return 'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window;
+}
+async function getPushSubscription(){
+  if(!pushSupported())return null;
+  let reg=await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+async function syncPushNotificationUI(){
+  let st=$('pushNotificationStatus'),msg=$('pushNotificationMessage'),enable=$('enablePushNotifications'),
+      disable=$('disablePushNotifications'),test=$('testPushNotification');
+  if(!st)return;
+  if(!pushSupported()){
+    st.textContent='Not Supported';msg.textContent='This browser/device does not support PWA push notifications.';enable.disabled=true;disable.disabled=true;test.disabled=true;return;
+  }
+  let sub=await getPushSubscription();
+  let permission=Notification.permission;
+  st.textContent=sub&&permission==='granted'?'Enabled':permission==='denied'?'Blocked':'Off';
+  enable.disabled=permission==='denied';
+  disable.disabled=!sub;
+  test.disabled=!sub;
+  if(permission==='denied')msg.textContent='Notifications are blocked in this device/browser settings.';
+  else if(sub)msg.textContent='This device is registered for free push notifications.';
+  else msg.textContent='Notifications are not enabled on this device yet.';
+}
+async function savePushSubscription(sub){
+  let json=sub.toJSON(),keys=json.keys||{};
+  let payload={
+    user_id:session.user.id,
+    endpoint:json.endpoint,
+    p256dh:keys.p256dh||'',
+    auth:keys.auth||'',
+    user_agent:navigator.userAgent,
+    active:true,
+    notify_new_leads:$('notifyNewLeads')?.checked!==false,
+    updated_at:new Date().toISOString()
+  };
+  let{error}=await sb.from('push_subscriptions').upsert(payload,{onConflict:'endpoint'});
+  if(error)throw error;
+}
+async function enablePushNotifications(){
+  if(!pushSupported())return toast('Push notifications are not supported on this device.');
+  try{
+    let permission=await Notification.requestPermission();
+    if(permission!=='granted'){await syncPushNotificationUI();return toast('Notification permission was not granted.')}
+    let reg=await navigator.serviceWorker.ready,sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64UrlToUint8Array(VAPID_PUBLIC_KEY)});
+    await savePushSubscription(sub);
+    await syncPushNotificationUI();
+    toast('Notifications enabled on this device.');
+  }catch(e){console.error('Enable push:',e);toast('Could not enable notifications: '+(e?.message||String(e)))}
+}
+async function disablePushNotifications(){
+  try{
+    let sub=await getPushSubscription();
+    if(sub){
+      await sb.from('push_subscriptions').update({active:false,updated_at:new Date().toISOString()}).eq('endpoint',sub.endpoint);
+      await sub.unsubscribe();
+    }
+    await syncPushNotificationUI();
+    toast('Notifications disabled on this device.');
+  }catch(e){toast('Could not disable notifications: '+(e?.message||String(e)))}
+}
+async function savePushPreferences(){
+  try{
+    let sub=await getPushSubscription();if(!sub)return;
+    await sb.from('push_subscriptions').update({notify_new_leads:$('notifyNewLeads').checked,updated_at:new Date().toISOString()}).eq('endpoint',sub.endpoint);
+    toast('Notification preference saved.');
+  }catch(e){console.warn('Push preference:',e)}
+}
+async function testPushNotification(){
+  try{
+    let{data,error}=await sb.functions.invoke('push-notify',{body:{action:'test'}});
+    if(error)throw error;
+    if(data?.ok===false)throw new Error(data.error||'Test notification failed.');
+    toast('Test notification sent.');
+  }catch(e){toast('Test notification failed: '+(e?.message||String(e)))}
+}
+
 function navIcon(name){
   const icons={
     home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5v8a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
@@ -56,7 +143,7 @@ function renderNav(){
   $("nav").innerHTML=t.map(x=>`<button data-v="${x[0]}"><b class="nav-icon">${navIcon(x[1])}</b><span>${x[2]}</span></button>`).join('');
   /* Navigation clicks are handled by delegated app-level routing. */
 }
-async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus();loadIcloudCalendarStatus()}}
+async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
 function mondayWeekBounds(reference=new Date()){
   let d=new Date(reference);d.setHours(0,0,0,0);
   let day=d.getDay(),diff=day===0?-6:1-day;
@@ -2744,7 +2831,7 @@ bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBt
 bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
 bind('operationsToday','onclick',async()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());renderOperationsCalendar();await renderSelectedCalendarDate();});
 bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});
-bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
     e.preventDefault();
@@ -2764,3 +2851,10 @@ bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;ren
   }
 });
 bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
+
+navigator.serviceWorker?.addEventListener?.('message',e=>{
+  if(e.data?.type==='OPEN_PUSH_TARGET'){
+    let url=String(e.data.url||'');
+    if(url.includes('#leads'))show('leads');
+  }
+});
