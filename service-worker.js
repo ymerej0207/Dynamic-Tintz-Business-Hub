@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.7.1-pg-net-push-trigger-fix
+ * Release: 7.8.0-full-free-notifications
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.7.1-";
-const CACHE_NAME = `${CACHE_PREFIX}pg-net-push-trigger-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.8.0-";
+const CACHE_NAME = `${CACHE_PREFIX}full-free-notifications`; 
 
 const APP_SHELL = [
   "./",

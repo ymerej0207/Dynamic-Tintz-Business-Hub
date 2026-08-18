@@ -55,6 +55,18 @@ async function syncPushNotificationUI(){
   }
   let sub=await getPushSubscription();
   let permission=Notification.permission;
+  if(sub){
+    let {data:prefs}=await sb.from('push_subscriptions').select('notify_new_leads,notify_followups,notify_assignments,notify_job_tomorrow,notify_job_soon,notify_schedule_changes,notify_low_inventory').eq('endpoint',sub.endpoint).maybeSingle();
+    if(prefs){
+      if($('notifyNewLeads'))$('notifyNewLeads').checked=prefs.notify_new_leads!==false;
+      if($('notifyFollowups'))$('notifyFollowups').checked=prefs.notify_followups!==false;
+      if($('notifyAssignments'))$('notifyAssignments').checked=prefs.notify_assignments!==false;
+      if($('notifyJobTomorrow'))$('notifyJobTomorrow').checked=prefs.notify_job_tomorrow!==false;
+      if($('notifyJobSoon'))$('notifyJobSoon').checked=prefs.notify_job_soon===true;
+      if($('notifyScheduleChanges'))$('notifyScheduleChanges').checked=prefs.notify_schedule_changes!==false;
+      if($('notifyLowInventory'))$('notifyLowInventory').checked=prefs.notify_low_inventory!==false;
+    }
+  }
   st.textContent=sub&&permission==='granted'?'Enabled':permission==='denied'?'Blocked':'Off';
   enable.disabled=permission==='denied';
   disable.disabled=!sub;
@@ -73,6 +85,12 @@ async function savePushSubscription(sub){
     user_agent:navigator.userAgent,
     active:true,
     notify_new_leads:$('notifyNewLeads')?.checked!==false,
+    notify_followups:$('notifyFollowups')?.checked!==false,
+    notify_assignments:$('notifyAssignments')?.checked!==false,
+    notify_job_tomorrow:$('notifyJobTomorrow')?.checked!==false,
+    notify_job_soon:$('notifyJobSoon')?.checked===true,
+    notify_schedule_changes:$('notifyScheduleChanges')?.checked!==false,
+    notify_low_inventory:$('notifyLowInventory')?.checked!==false,
     updated_at:new Date().toISOString()
   };
   let{error}=await sb.from('push_subscriptions').upsert(payload,{onConflict:'endpoint'});
@@ -104,7 +122,16 @@ async function disablePushNotifications(){
 async function savePushPreferences(){
   try{
     let sub=await getPushSubscription();if(!sub)return;
-    await sb.from('push_subscriptions').update({notify_new_leads:$('notifyNewLeads').checked,updated_at:new Date().toISOString()}).eq('endpoint',sub.endpoint);
+    await sb.from('push_subscriptions').update({
+      notify_new_leads:$('notifyNewLeads')?.checked!==false,
+      notify_followups:$('notifyFollowups')?.checked!==false,
+      notify_assignments:$('notifyAssignments')?.checked!==false,
+      notify_job_tomorrow:$('notifyJobTomorrow')?.checked!==false,
+      notify_job_soon:$('notifyJobSoon')?.checked===true,
+      notify_schedule_changes:$('notifyScheduleChanges')?.checked!==false,
+      notify_low_inventory:$('notifyLowInventory')?.checked!==false,
+      updated_at:new Date().toISOString()
+    }).eq('endpoint',sub.endpoint);
     toast('Notification preference saved.');
   }catch(e){console.warn('Push preference:',e)}
 }
@@ -2831,7 +2858,7 @@ bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBt
 bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
 bind('operationsToday','onclick',async()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());renderOperationsCalendar();await renderSelectedCalendarDate();});
 bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});
-bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('notifyFollowups','onchange',savePushPreferences);bind('notifyAssignments','onchange',savePushPreferences);bind('notifyJobTomorrow','onchange',savePushPreferences);bind('notifyJobSoon','onchange',savePushPreferences);bind('notifyScheduleChanges','onchange',savePushPreferences);bind('notifyLowInventory','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
     e.preventDefault();
