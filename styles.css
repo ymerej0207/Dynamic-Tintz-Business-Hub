@@ -1065,3 +1065,30 @@ button.app-kpi-card{cursor:pointer}
   font-size:7px;font-weight:900;letter-spacing:.07em;color:#8fa1a4;
   border:1px solid #2a3a3d;border-radius:999px;padding:3px 6px
 }
+
+/* v7.8.4 — projected inventory color levels
+   175+ sq ft = green / healthy
+   76–174.99 sq ft = yellow / watch
+   0–75 sq ft = red / reorder
+*/
+.inventory-sqft-display.stock-good b,
+.inventory-sqft-display.stock-good small{
+  color:#5ce078!important;
+}
+.inventory-sqft-display.stock-warning b,
+.inventory-sqft-display.stock-warning small{
+  color:#f2cc4d!important;
+}
+.inventory-sqft-display.stock-critical b,
+.inventory-sqft-display.stock-critical small{
+  color:#ff5d5d!important;
+}
+.inventory-sqft-display.stock-good,
+.inventory-sqft-display.stock-warning,
+.inventory-sqft-display.stock-critical{
+  border-radius:10px;
+  padding:5px 7px;
+}
+.inventory-sqft-display.stock-good{background:rgba(92,224,120,.07)}
+.inventory-sqft-display.stock-warning{background:rgba(242,204,77,.07)}
+.inventory-sqft-display.stock-critical{background:rgba(255,93,93,.08)}

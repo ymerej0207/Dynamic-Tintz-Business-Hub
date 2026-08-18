@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.8.3-per-film-low-stock-notifications
+ * Release: 7.8.5-inventory-color-thresholds
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.8.3-";
-const CACHE_NAME = `${CACHE_PREFIX}per-film-low-stock-notifications`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.8.5-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-color-thresholds`; 
 
 const APP_SHELL = [
   "./",
