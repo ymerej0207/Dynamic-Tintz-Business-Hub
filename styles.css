@@ -1057,3 +1057,11 @@ button.app-kpi-card{cursor:pointer}
 .inventory-sqft-display.md{min-width:78px}
 .inventory-sqft-display.md b{font-size:27px}
 .inventory-sqft-display.low b,.inventory-sqft-display.low small{color:#ffb45c}
+
+/* v7.8.3 — per-film low stock notification control */
+.inventory-film-alert-toggle{margin-top:10px}
+.inventory-alert-muted{
+  display:inline-flex;align-items:center;width:max-content;margin-top:5px;
+  font-size:7px;font-weight:900;letter-spacing:.07em;color:#8fa1a4;
+  border:1px solid #2a3a3d;border-radius:999px;padding:3px 6px
+}

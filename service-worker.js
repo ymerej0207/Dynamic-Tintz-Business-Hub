@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.8.2-inventory-sqft-display
+ * Release: 7.8.3-per-film-low-stock-notifications
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.8.2-";
-const CACHE_NAME = `${CACHE_PREFIX}inventory-sqft-display`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.8.3-";
+const CACHE_NAME = `${CACHE_PREFIX}per-film-low-stock-notifications`; 
 
 const APP_SHELL = [
   "./",

@@ -791,6 +791,7 @@ function renderInventory(){
             <b>${esc(x.product_name)}</b>
             <span class="muted">${Number(x.active_roll_count)||0} active roll${Number(x.active_roll_count)===1?'':'s'} • ${invFmt(projected,1)} sq ft available</span>
             <span class="app-inline-stock ${low?'low':''}">${low?'ORDER SOON':'IN STOCK'}</span>
+            ${inventoryProductCache.find(p=>p.id===x.product_id)?.notify_low_inventory===false?'<span class="inventory-alert-muted">LOW ALERT OFF</span>':''}
           </div>
           ${inventorySqftDisplay(projected,'md',low)}
           <button type="button" class="film-edit-button" data-editfilm="${x.product_id}" aria-label="Edit film inventory">Edit</button>
@@ -891,6 +892,12 @@ async function openInventoryMetricEditor(productId,focus='projected'){
   $('inventoryMetricTitle').textContent=row.product_name||'Film Inventory';
   $('inventoryMetricSubtitle').textContent=`${invFmt(row.projected_sqft,1)} sq ft projected available`;
   $('inventoryMetricThreshold').value=Number(row.reorder_threshold_sqft)||75;
+  let productSettings=inventoryProductCache.find(p=>p.id===productId);
+  if(!productSettings){
+    let pr=await sb.from('film_inventory_products').select('id,notify_low_inventory').eq('id',productId).maybeSingle();
+    productSettings=pr.data||null;
+  }
+  if($('inventoryMetricLowStockNotify'))$('inventoryMetricLowStockNotify').checked=productSettings?.notify_low_inventory!==false;
 
   $('inventoryMetricRolls').innerHTML=rolls.length?rolls.map((r,i)=>`
     <div class="metric-roll-editor">
@@ -960,7 +967,12 @@ async function saveInventoryMetricEditor(){
     if(r.error)errors.push(r.error.message);
   }
 
-  let tr=await sb.from('film_inventory_products').update({reorder_threshold_sqft:threshold,updated_at:new Date().toISOString()}).eq('id',inventoryMetricProductId);
+  let lowStockNotify=$('inventoryMetricLowStockNotify')?.checked!==false;
+  let tr=await sb.from('film_inventory_products').update({
+    reorder_threshold_sqft:threshold,
+    notify_low_inventory:lowStockNotify,
+    updated_at:new Date().toISOString()
+  }).eq('id',inventoryMetricProductId);
   if(tr.error)errors.push(tr.error.message);
 
   if(errors.length)return toast('Some inventory changes failed: '+errors[0]);
