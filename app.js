@@ -334,9 +334,9 @@ function stockAvailabilityPct(row){
   // 0 sq ft = 0%; reorder threshold = 50%; 2× reorder threshold or more = 100%.
   return Math.max(0,Math.min(100,Math.round(projected/(threshold*2)*100)));
 }
-function inventoryRing(percent,size='md'){
-  let p=Math.max(0,Math.min(100,Number(percent)||0));
-  return `<span class="inventory-ring ${size}" style="--ring-pct:${p}"><span>${Math.round(p)}%</span></span>`;
+function inventorySqftDisplay(value,size='md',low=false){
+  let n=Math.max(0,Number(value)||0);
+  return `<span class="inventory-sqft-display ${size} ${low?'low':''}"><b>${invFmt(n,0)}</b><small>sq ft</small></span>`;
 }
 
 async function inventoryProducts(){
@@ -354,10 +354,10 @@ async function loadInventoryHomeAlerts(){
 
   host.innerHTML=`<div class="app-inventory-snapshot">
     ${priority.map(x=>{
-      let p=Number(x.projected_sqft)||0,t=Number(x.reorder_threshold_sqft)||75,low=p<=t,pct=stockAvailabilityPct(x);
+      let p=Number(x.projected_sqft)||0,t=Number(x.reorder_threshold_sqft)||75,low=p<=t;
       return `<button class="app-inventory-snapshot-card ${low?'is-low':''}" data-homeinventory="${x.product_id}">
         <span class="app-stock-copy"><b>${esc(x.product_name.replace(' Tint Install','').replace('Ceramic','Ceramic '))}</b><small>${Number(x.active_roll_count)||0} roll${Number(x.active_roll_count)===1?'':'s'} • ${invFmt(p,1)} sq ft available</small>${low?'<em>ORDER SOON</em>':'<em>IN STOCK</em>'}</span>
-        ${inventoryRing(pct,'sm')}
+        ${inventorySqftDisplay(p,'sm',low)}
         <span class="app-chevron">›</span>
       </button>`
     }).join('')}
@@ -792,7 +792,7 @@ function renderInventory(){
             <span class="muted">${Number(x.active_roll_count)||0} active roll${Number(x.active_roll_count)===1?'':'s'} • ${invFmt(projected,1)} sq ft available</span>
             <span class="app-inline-stock ${low?'low':''}">${low?'ORDER SOON':'IN STOCK'}</span>
           </div>
-          ${inventoryRing(stockAvailabilityPct(x),'md')}
+          ${inventorySqftDisplay(projected,'md',low)}
           <button type="button" class="film-edit-button" data-editfilm="${x.product_id}" aria-label="Edit film inventory">Edit</button>
         </summary>
 

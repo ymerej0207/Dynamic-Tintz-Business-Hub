@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.8.1-notification-identity-routing
+ * Release: 7.8.2-inventory-sqft-display
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.8.1-";
-const CACHE_NAME = `${CACHE_PREFIX}notification-identity-routing`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.8.2-";
+const CACHE_NAME = `${CACHE_PREFIX}inventory-sqft-display`; 
 
 const APP_SHELL = [
   "./",
