@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.9.0-leads-quote-flow
+ * Release: 7.9.1-mileage-autofill-fix
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.9.0-";
-const CACHE_NAME = `${CACHE_PREFIX}leads-quote-flow`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.9.1-";
+const CACHE_NAME = `${CACHE_PREFIX}mileage-autofill-fix`; 
 
 const APP_SHELL = [
   "./",
