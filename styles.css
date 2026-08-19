@@ -1092,3 +1092,22 @@ button.app-kpi-card{cursor:pointer}
 .inventory-sqft-display.stock-good{background:rgba(92,224,120,.07)}
 .inventory-sqft-display.stock-warning{background:rgba(242,204,77,.07)}
 .inventory-sqft-display.stock-critical{background:rgba(255,93,93,.08)}
+
+/* v7.8.6 — quote window measurement sharing */
+.window-measurements-modal{max-width:520px}
+.window-measurements-note{
+  margin:8px 0 12px;padding:10px;border:1px solid var(--app-line);border-radius:11px;
+  background:#091315;color:var(--app-muted);font-size:9px;line-height:1.45
+}
+.window-measurements-list{display:grid;gap:7px}
+.window-measurement-row{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;
+  padding:10px 11px;border:1px solid var(--app-line);border-radius:12px;background:#0a1315
+}
+.window-measurement-row b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.window-measurement-row span{font-size:12px;font-weight:850;color:var(--app-accent);white-space:nowrap}
+.window-measurements-actions{margin-top:12px}
+@media(max-width:480px){
+  .window-measurement-row{grid-template-columns:1fr}
+  .window-measurement-row span{font-size:14px}
+}
