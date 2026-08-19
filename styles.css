@@ -1168,3 +1168,24 @@ button.app-kpi-card{cursor:pointer}
     top:6px;
   }
 }
+
+/* v7.9.0 — lead actions + unified lead-to-quote workflow */
+.lead-actions .lead-call-btn,
+.lead-actions .lead-directions-btn{
+  min-height:42px;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  font-size:13px!important;
+  line-height:1.1!important;
+  padding:10px 12px!important;
+}
+.lead-actions .lead-call-btn{font-weight:900!important}
+@media(max-width:600px){
+  .lead-actions .lead-call-btn,
+  .lead-actions .lead-directions-btn{
+    font-size:13px!important;
+    min-height:44px!important;
+  }
+}

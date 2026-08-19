@@ -1180,7 +1180,8 @@ function card(l,due=false){
     <div class="lead-attempt-line">Attempts: <b>${l.attempt_count||0}</b>${due?` • Follow-up: <b>${when(l.next_follow_up_at)}</b>`:''}</div>
 
     <div class="actions lead-actions">
-      ${l.phone?`<a class="btn primary" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
+      ${l.phone?`<a class="btn primary lead-call-btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
+      ${location?`<a class="btn lead-directions-btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(location)}">Directions</a>`:''}
       <button class="btn" data-log="${l.id}">Log Attempt</button>
       <button class="btn" data-leadquote="${l.id}">Create Quote</button>
       ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}
@@ -1197,10 +1198,10 @@ async function copyPhone(phone){
   try{await copyText(number);toast('Phone number copied.')}catch(error){toast('Could not copy automatically. Press and hold the number to copy it.')}
 }
 function bindLeadActions(container=document){container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
-function renderLeadResults(){let q=($('leadSearch')?.value||'').toLowerCase(),status=$('leadStatusFilter')?.value||'',items=leads.filter(l=>(!status||l.status===status)&&JSON.stringify(l).toLowerCase().includes(q));$('leadList').innerHTML=items.length?items.map(x=>card(x)).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'))}
+function renderLeadResults(){let q=($('leadSearch')?.value||'').toLowerCase(),status=$('leadStatusFilter')?.value||'',items=leads.filter(l=>(!status||l.status===status)&&JSON.stringify(l).toLowerCase().includes(q)).sort((a,b)=>new Date(b.received_at||b.created_at||b.updated_at||0)-new Date(a.received_at||a.created_at||a.updated_at||0));$('leadList').innerHTML=items.length?items.map(x=>card(x)).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'))}
 async function loadLeads(){let{data,error}=await sb.from('leads').select('*').order('received_at',{ascending:false});if(error)return toast(error.message);leads=data||[];renderLeadResults()}
 async function loadFollowups(){let now=new Date(),future=new Date(now);future.setDate(future.getDate()+7);let{data,error}=await sb.from('leads').select('*').not('status','in','("approved","lost","do_not_contact","no_response")').not('next_follow_up_at','is',null).lte('next_follow_up_at',future.toISOString()).order('next_follow_up_at');if(error)return toast(error.message);let due=(data||[]).filter(x=>new Date(x.next_follow_up_at)<=now),upcoming=(data||[]).filter(x=>new Date(x.next_follow_up_at)>now);$('overdueFollowups').textContent=due.length;$('upcomingFollowups').textContent=upcoming.length;$('followList').innerHTML=due.length?due.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups due right now.</div>';$('upcomingFollowList').innerHTML=upcoming.length?upcoming.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups scheduled in the next seven days.</div>';bindLeadActions($('followList'));bindLeadActions($('upcomingFollowList'))}
-function createQuoteFromLead(id){let l=leads.find(x=>x.id===id);if(!l)return toast('Lead not found.');clearQuoteForm(false);$('qFirst').value=l.first_name||'';$('qLast').value=l.last_name||'';$('qEmail').value=l.email||'';$('qPhone').value=l.phone||'';$('qAddress').value=l.service_address||'';$('qProject').value=l.service_requested||'Window Film Project';$('qLead').value=l.source||'Angi';$('qNotes').value=l.original_message||'';$('qStatus').value='Estimate Requested';show('quotes');toast('Lead loaded into Quote Builder.')}
+function createQuoteFromLead(id){let l=leads.find(x=>x.id===id);if(!l)return toast('Lead not found.');clearQuoteForm(false);editingLeadId=l.id;$('qFirst').value=l.first_name||'';$('qLast').value=l.last_name||'';$('qEmail').value=l.email||'';$('qPhone').value=l.phone||'';$('qAddress').value=l.service_address||l.city||'';$('qProject').value=l.service_requested||'Window Film Project';let source=leadSourceLabel(l);$('qLead').value=[...$('qLead').options].some(o=>o.value===source)?source:(String(source).toLowerCase().includes('angi')?'Angi':'Other');$('qNotes').value=l.original_message||l.notes||'';$('qStatus').value='Estimate Requested';quoteMilesManual=false;autoFillQuoteMiles(l.service_address||l.city||'',true);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');toast('Lead loaded into Quote Builder.')}
 async function saveLead(){let p={source:'Angi',first_name:$('lfn').value.trim(),last_name:$('lln').value.trim(),phone:$('lphone').value.trim(),email:$('lemail').value.trim(),city:$('lcity').value.trim(),service_requested:$('lservice').value.trim(),original_message:$('lmessage').value.trim(),status:'new',attempt_count:0,next_follow_up_at:new Date().toISOString()};let{error}=await sb.from('leads').insert(p);if(error)return toast(error.message);$('leadModal').classList.remove('show');toast('Lead added to immediate follow-up.');loadLeads()}
 async function deleteLead(id){
   if(!owner())return toast('Only an owner or manager can delete leads.');
@@ -1243,7 +1244,7 @@ async function loadTeam(){let{data,error}=await sb.from('time_entry_totals').sel
 function exportTimeCsv(){if(!teamTimeCache.length)return toast('No weekly time records to export.');let rows=[['Employee','Clock In','Clock Out','Net Hours','Status'],...teamTimeCache.map(x=>[x.employee?.full_name||x.employee?.email||'Employee',when(x.clock_in),when(x.clock_out),Number(x.net_hours||0).toFixed(2),x.status||''])],csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`dynamic-tintz-time-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('Weekly time CSV exported.')}
 
 const ceramicMatrix=[[0,49,12],[50,99,11],[100,199,10],[200,299,9],[300,399,8],[400,499,7],[500,999999,6.5]],solarMatrix=[[0,99,7.5],[100,199,6.5],[200,299,6],[300,399,5.5],[400,999999,5]];
-let measures=[{id:1,area:'',w:0,h:0,qty:1}],nextMeasure=2,editingQuoteId=null,editingCustomerId=null;
+let measures=[{id:1,area:'',w:0,h:0,qty:1}],nextMeasure=2,editingQuoteId=null,editingCustomerId=null,editingLeadId=null,quoteMilesManual=false;
 let quoteAutosaveTimer=null,quoteCloudAutosaveTimer=null,quoteDraftRestoring=false,quoteAutosaveMuted=false;
 function quoteDraftKey(){return `dt.quoteDraft.${session?.user?.id||'guest'}`}
 function quoteDraftPayload(){
@@ -1252,6 +1253,7 @@ function quoteDraftPayload(){
     saved_at:new Date().toISOString(),
     editingQuoteId,
     editingCustomerId,
+    editingLeadId,
     fields:{
       qFirst:$('qFirst')?.value||'',qLast:$('qLast')?.value||'',qEmail:$('qEmail')?.value||'',
       qPhone:$('qPhone')?.value||'',qAddress:$('qAddress')?.value||'',qProject:$('qProject')?.value||'',
@@ -1341,7 +1343,7 @@ function restoreQuoteDraftIfNeeded(){
       nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;
     }
     editingQuoteId=draft.editingQuoteId||null;
-    editingCustomerId=draft.editingCustomerId||null;
+    editingCustomerId=draft.editingCustomerId||null;editingLeadId=draft.editingLeadId||null;
     renderMeasures();
     calculateQuote();
     $('quoteBuilderPanel')?.setAttribute('open','');
@@ -1373,6 +1375,51 @@ if(shortcutVersion!==SHORTCUT_LIBRARY_VERSION){
 
 function money(n){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0)}
 function qPrice(matrix,s,miles){if(s>0&&s<=18)return{price:Number(miles)>35?350:250,label:'Minimum job pricing'};let b=matrix.find(x=>s>=x[0]&&s<=x[1])||matrix[0];return{price:b[2]*s,label:money(b[2])+' per sq ft'}}
+const annaMileageByCity={
+  'anna':0,'melissa':8,'mckinney':15,'princeton':18,'van alstyne':14,'sherman':30,'denison':38,
+  'frisco':25,'prosper':18,'celina':17,'plano':30,'allen':22,'lucas':25,'parker':27,'fairview':18,
+  'wylie':31,'murphy':31,'richardson':38,'garland':40,'dallas':50,'carrollton':40,'the colony':32,
+  'lewisville':39,'denton':42,'little elm':30,'aubrey':32,'pilot point':28,'gunter':20,'howe':24,
+  'whitewright':30,'bonham':38,'greenville':45,'farmersville':28,'royse city':46,'rockwall':48,
+  'forney':58,'mesquite':58,'fort worth':65,'arlington':68,'irving':55,'grapevine':50,'southlake':48,
+  'keller':55,'flower mound':45,'coppell':48,'addison':42,'farmers branch':45,'highland park':47,
+  'university park':46,'rowlett':45,'sachse':38,'lavon':37,'nevada':35,'blue ridge':22,'leonard':28,
+  'trenton':26,'bells':32,'pottsboro':42,'gainesville':50,'sanger':47,'argyle':48,'krum':49,
+  'justin':55,'roanoke':54,'haslet':61,'northlake':51,'trophy club':52,'colleyville':54,
+  'bedford':58,'euless':58,'hurst':60,'grand prairie':62,'sunnyvale':53,'heath':52,'fate':46,
+  'caddo mills':42,'commerce':48,'terrell':63,'crandall':64,'seagoville':64,'red oak':72,
+  'waxahachie':82,'mansfield':78
+};
+function quoteMileageFromLocation(value){
+  let text=String(value||'').toLowerCase().replace(/\s+/g,' ').trim();
+  if(!text)return null;
+  let matches=Object.keys(annaMileageByCity).filter(city=>new RegExp(`(^|[,\\s])${city.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=,|\\s|$)`,'i').test(text));
+  if(!matches.length)return null;
+  matches.sort((a,b)=>b.length-a.length);
+  return annaMileageByCity[matches[0]];
+}
+function autoFillQuoteMiles(location,force=false){
+  if(quoteMilesManual&&!force)return false;
+  let miles=quoteMileageFromLocation(location);
+  if(miles==null)return false;
+  $('qMiles').value=String(miles);
+  quoteMilesManual=false;
+  calculateQuote();
+  scheduleQuoteAutosave();
+  return true;
+}
+function openNewLeadQuote(source='Angi'){
+  clearQuoteForm(false);
+  editingLeadId=null;
+  quoteMilesManual=false;
+  if($('qLead'))$('qLead').value=source;
+  if($('qStatus'))$('qStatus').value='Estimate Requested';
+  show('quotes');
+  $('quoteBuilderPanel')?.setAttribute('open','');
+  setTimeout(()=>$('qFirst')?.focus(),80);
+  toast(`${source} lead ready for quote details.`);
+}
+
 function qSqft(){return measures.reduce((s,r)=>s+(Number(r.w)*Number(r.h)*Number(r.qty||1))/144,0)}
 function calculateQuote(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;$('qSqft').textContent=s.toFixed(2);$('qCerPrice').textContent=money(c.price);$('qCerTier').textContent=c.label;$('qSolarPrice').textContent=money(o.price);$('qSolarTier').textContent=o.label;$('qListPrice').textContent=money(list);$('qTierPrice').textContent=money(c.price);$('qSavings').textContent=money(save)+' ('+pct+'%)';$('qDeposit').textContent=money(c.price*1.0625/2);if($('mobileSqft'))$('mobileSqft').textContent=s.toFixed(2)+' sq ft';if($('mobilePrice'))$('mobilePrice').textContent=money(c.price)}
 
@@ -1529,13 +1576,62 @@ function renderMeasures(){
 function addMeasure(focus=true,preset=null){let id=nextMeasure++,row=preset||{id,area:'',w:0,h:0,qty:1};row={...row,id};measures.push(row);renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${preset&&row.area?'w':'area'}"]`)?.focus(),40);scheduleQuoteAutosave()}
 function duplicateMeasure(id){let source=measures.find(x=>x.id===id);if(!source)return;addMeasure(false,{...source});toast('Window duplicated')}
 function duplicateLastMeasure(){let last=measures[measures.length-1];if(!last)return;duplicateMeasure(last.id)}
-function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';$('qStatus').value='New Lead';$('qLead').value='Angi';measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
+function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';$('qStatus').value='New Lead';$('qLead').value='Angi';measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
 function currentQuoteText(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;return `Dynamic Tintz Window Film Proposal\n\nCustomer: ${$('qFirst').value} ${$('qLast').value}\nProject: ${$('qProject').value||'Window Film Project'}\nAddress: ${$('qAddress').value}\nTotal glass: ${s.toFixed(2)} sq ft\n\nPremium Ceramic normal price: ${money(list)}\nVolume-tier price: ${money(c.price)}\nCustomer savings: ${money(save)} (${pct}%)\nSolar Control: ${money(o.price)}\n\n50% deposit due at invoicing; balance due upon completion.\nResidential Lifetime Warranty • 12 Year Commercial Warranty\nProudly Veteran Owned and Operated\nDynamic Tintz • 469-840-4008`}
+async function ensureLeadForQuoteCustomer(customerId){
+  let source=$('qLead')?.value||'Organic',
+      leadPayload={
+        customer_id:customerId,
+        source,
+        first_name:$('qFirst').value.trim(),
+        last_name:$('qLast').value.trim(),
+        phone:$('qPhone').value.trim(),
+        email:$('qEmail').value.trim(),
+        service_address:$('qAddress').value.trim(),
+        service_requested:$('qProject').value.trim()||'Window Film Project',
+        original_message:$('qNotes').value.trim(),
+        status:'contacted',
+        attempt_count:0,
+        next_follow_up_at:new Date().toISOString(),
+        updated_at:new Date().toISOString()
+      };
+  if(editingLeadId){
+    let {error}=await sb.from('leads').update({
+      customer_id:customerId,
+      first_name:leadPayload.first_name,last_name:leadPayload.last_name,
+      phone:leadPayload.phone,email:leadPayload.email,
+      service_address:leadPayload.service_address,
+      service_requested:leadPayload.service_requested,
+      status:'contacted',updated_at:new Date().toISOString()
+    }).eq('id',editingLeadId);
+    if(error)console.warn('Existing lead link update:',error);
+    return editingLeadId;
+  }
+  if(editingQuoteId)return null;
+  let {data,error}=await sb.from('leads').insert(leadPayload).select('id').single();
+  if(error){
+    // Compatibility fallback for older leads schemas with fewer optional fields.
+    let fallback={
+      source,first_name:leadPayload.first_name,last_name:leadPayload.last_name,
+      phone:leadPayload.phone,email:leadPayload.email,
+      service_address:leadPayload.service_address,service_requested:leadPayload.service_requested,
+      original_message:leadPayload.original_message,status:'contacted',
+      attempt_count:0,next_follow_up_at:new Date().toISOString()
+    };
+    let retry=await sb.from('leads').insert(fallback).select('id').single();
+    if(retry.error){console.warn('Manual quote lead creation:',retry.error);return null}
+    editingLeadId=retry.data?.id||null;
+    return editingLeadId;
+  }
+  editingLeadId=data?.id||null;
+  return editingLeadId;
+}
+
 async function saveCloudQuote(){
   let saveButtons=[$('saveQuote'),$('mobileSaveQuote'),$('quoteSaveDockButton')].filter(Boolean),saveLabels=saveButtons.map(b=>b.textContent);
   saveButtons.forEach(b=>{b.disabled=true;b.textContent='Saving…'});
   try{
-  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:$('qSquareItem')?.value||'25% Ceramic Tint Install',status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();clearQuoteForm(false);await loadQuotes();
+  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:$('qSquareItem')?.value||'25% Ceramic Tint Install',status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();clearQuoteForm(false);await loadQuotes();
   }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
 }
 async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
@@ -2118,7 +2214,7 @@ function renderOperations(){
 
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'&&!confirm('Mark this job completed and move it to the archive?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
-async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;$('qLead').value=q.customer?.lead_source||'';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();scrollTo({top:0,behavior:'smooth'});toast('Quote loaded from cloud.')}
+async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();scrollTo({top:0,behavior:'smooth'});toast('Quote loaded from cloud.')}
 function shortcutCategories(){return ['All',...new Set(shortcutData.map(s=>s.category||'Custom'))]}
 function populateShortcutCategories(){
   let select=$('shortcutCategoryFilter');
@@ -2911,9 +3007,9 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
   el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleQuoteAutosave);
 });
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
-bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',calculateQuote);bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
+bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;calculateQuote()});bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+bind('addOrganicLeadBtn','onclick',()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';
@@ -2956,7 +3052,7 @@ bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;ren
     show(goButton.dataset.go);
   }
 });
-bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>$('leadModal').classList.add('show'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
+bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>openNewLeadQuote('Angi'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
 
 function routePushTarget(target){
   let raw=typeof target==='string'?target:(target?.url||'./'),
