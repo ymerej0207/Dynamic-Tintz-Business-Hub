@@ -1111,3 +1111,60 @@ button.app-kpi-card{cursor:pointer}
   .window-measurement-row{grid-template-columns:1fr}
   .window-measurement-row span{font-size:14px}
 }
+
+/* v7.8.7 — mobile-safe close controls for Window Measurements */
+.window-measurements-modal{
+  position:relative;
+  max-height:min(88vh,760px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-top:14px;
+  padding-bottom:calc(16px + env(safe-area-inset-bottom));
+}
+.window-measurements-head{
+  position:sticky;
+  top:0;
+  z-index:3;
+  background:inherit;
+  padding-top:4px;
+}
+.window-measurements-close-x{
+  position:sticky;
+  top:6px;
+  float:right;
+  z-index:5;
+  width:40px;
+  height:40px;
+  margin:0 0 -40px auto;
+  border:1px solid var(--app-line);
+  border-radius:999px;
+  background:#111b1d;
+  color:#fff;
+  font-size:26px;
+  line-height:1;
+  display:grid;
+  place-items:center;
+}
+@media(max-width:520px){
+  #windowMeasurementsModal{
+    align-items:flex-end;
+    padding:0;
+  }
+  .window-measurements-modal{
+    width:100%;
+    max-width:none;
+    max-height:92vh;
+    border-radius:18px 18px 0 0;
+    padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+  }
+  .window-measurements-head{
+    padding-right:46px;
+  }
+  .window-measurements-close-text{
+    display:none;
+  }
+  .window-measurements-close-x{
+    position:sticky;
+    top:6px;
+  }
+}

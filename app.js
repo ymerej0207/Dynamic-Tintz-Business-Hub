@@ -1640,6 +1640,9 @@ async function openWindowMeasurements(quoteId){
   $('shareWindowMeasurements').disabled=!text;
   $('windowMeasurementsModal').classList.add('show');
 }
+function closeWindowMeasurementsModal(){
+  $('windowMeasurementsModal')?.classList.remove('show');
+}
 async function copyWindowMeasurements(){
   if(!currentWindowMeasurementText)return;
   try{
@@ -2934,7 +2937,7 @@ bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);bind('saveOrganicLeadBt
 bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
 bind('operationsToday','onclick',async()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());renderOperationsCalendar();await renderSelectedCalendarDate();});
 bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});
-bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('copyWindowMeasurements','onclick',copyWindowMeasurements);bind('shareWindowMeasurements','onclick',shareWindowMeasurements);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('notifyFollowups','onchange',savePushPreferences);bind('notifyAssignments','onchange',savePushPreferences);bind('notifyJobTomorrow','onchange',savePushPreferences);bind('notifyJobSoon','onchange',savePushPreferences);bind('notifyScheduleChanges','onchange',savePushPreferences);bind('notifyLowInventory','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('windowMeasurementsCloseX','onclick',closeWindowMeasurementsModal);bind('copyWindowMeasurements','onclick',copyWindowMeasurements);bind('shareWindowMeasurements','onclick',shareWindowMeasurements);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('notifyFollowups','onchange',savePushPreferences);bind('notifyAssignments','onchange',savePushPreferences);bind('notifyJobTomorrow','onchange',savePushPreferences);bind('notifyJobSoon','onchange',savePushPreferences);bind('notifyScheduleChanges','onchange',savePushPreferences);bind('notifyLowInventory','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
     e.preventDefault();
@@ -2988,3 +2991,10 @@ window.addEventListener('hashchange',routeInitialPushHash);
 
 
 window.addEventListener('load',routeInitialPushHash);
+
+document.addEventListener('click',e=>{
+  if(e.target?.id==='windowMeasurementsModal')closeWindowMeasurementsModal();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&$('windowMeasurementsModal')?.classList.contains('show'))closeWindowMeasurementsModal();
+});

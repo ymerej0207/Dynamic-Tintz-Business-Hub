@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.8.6-window-measurements
+ * Release: 7.8.7-window-measurements-mobile-close
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.8.6-";
-const CACHE_NAME = `${CACHE_PREFIX}window-measurements`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.8.7-";
+const CACHE_NAME = `${CACHE_PREFIX}window-measurements-mobile-close`; 
 
 const APP_SHELL = [
   "./",
