@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.9.3-mark-only-header
+ * Release: 7.9.4-home-week-quick-actions
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.9.3-";
-const CACHE_NAME = `${CACHE_PREFIX}mark-only-header`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.9.4-";
+const CACHE_NAME = `${CACHE_PREFIX}home-week-quick-actions`; 
 
 const APP_SHELL = [
   "./",

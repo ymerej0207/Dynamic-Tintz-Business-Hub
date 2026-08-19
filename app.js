@@ -200,73 +200,52 @@ async function loadHomeWeekIcloudEvents(start,end){
 }
 function renderHomeWeekSchedule(jobs,external,start,end){
   let host=$('liveJobs'),strip=$('homeWeekStrip'),range=$('homeWeekRange');
-  if(!host)return;
-
+  if(!strip)return;
   if(range){
     let endDisplay=new Date(end);endDisplay.setDate(endDisplay.getDate()-1);
     range.textContent=`${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${endDisplay.toLocaleDateString([],{month:'short',day:'numeric'})}`;
   }
-
   let entries=[
     ...(jobs||[]).map(j=>({kind:'job',date:j.scheduled_start,value:j})),
     ...(external||[]).map(e=>({kind:'external',date:e.start,value:e}))
   ].filter(x=>x.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
-
-  let byDate={};
-  entries.forEach(x=>(byDate[homeWeekDateKey(x.date)]??=[]).push(x));
-
+  let byDate={};entries.forEach(x=>(byDate[homeWeekDateKey(x.date)]??=[]).push(x));
   let days=[];
   for(let i=0;i<7;i++){
     let d=new Date(start);d.setDate(start.getDate()+i);
-    let key=homeWeekDateKey(d),count=(byDate[key]||[]).length;
-    days.push({d,key,count});
+    let key=homeWeekDateKey(d);days.push({d,key,items:byDate[key]||[]});
   }
-
-  if(strip)strip.innerHTML=days.map(({d,key,count})=>`
-    <button class="home-week-day ${homeWeekDateKey(new Date())===key?'today':''} ${count?'has-events':''}" data-homeweekdate="${key}" data-go="operations">
-      <span>${d.toLocaleDateString([],{weekday:'narrow'})}</span>
-      <b>${d.getDate()}</b>
-      <small>${count||''}</small>
-    </button>`).join('');
-
-  if(!entries.length){
-    host.innerHTML='<div class="app-empty">Nothing is scheduled this week.</div>';
-    return;
-  }
-
-  host.innerHTML=days.map(({d,key,count})=>{
-    if(!count)return '';
-    let dayEntries=byDate[key]||[];
-    return `<section class="home-week-day-group">
-      <div class="home-week-day-heading">
-        <b>${d.toLocaleDateString([],{weekday:'long'})}</b>
-        <span>${d.toLocaleDateString([],{month:'short',day:'numeric'})}</span>
-      </div>
-      <div class="home-week-day-items">
-        ${dayEntries.map(entry=>{
-          if(entry.kind==='external'){
-            let e=entry.value,dt=new Date(entry.date),
-                time=e.all_day?'All Day':dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-            return `<button class="app-schedule-item home-week-event external-home-event" data-go="operations">
-              <span class="app-time-tile external-time-tile"><small>${d.toLocaleDateString([],{weekday:'short'}).toUpperCase()} ${d.getDate()}</small>${esc(time)}</span>
-              <span class="app-schedule-copy"><b>${esc(e.summary||'Calendar Event')}</b><small>${esc(e.calendar_name||'iCloud')} • ${e.location?esc(e.location):'Personal / family calendar'}</small></span>
-              <span class="app-status-pill external-source-pill">PERSONAL</span>
-              <span class="app-chevron">›</span>
-            </button>`;
-          }
-          let j=entry.value,dt=new Date(entry.date),time=dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-          return `<button class="app-schedule-item home-week-event" data-go="operations">
-            <span class="app-time-tile"><small>${d.toLocaleDateString([],{weekday:'short'}).toUpperCase()} ${d.getDate()}</small>${esc(time)}</span>
-            <span class="app-schedule-copy"><b>${esc(j.title||'Window Film Installation')}</b><small>${esc(j.assignee?.full_name||j.assignee?.email||'Unassigned')} • ${esc(j.service_address||'')}</small></span>
-            <span class="app-status-pill status-${String(j.status||'Scheduled').toLowerCase().replaceAll(' ','-')}">${esc(j.status||'Scheduled')}</span>
-            <span class="app-chevron">›</span>
-          </button>`;
-        }).join('')}
-      </div>
-    </section>`;
+  strip.innerHTML=days.map(({d,key,items})=>{
+    let preview=items.slice(0,3).map(entry=>{
+      let dt=new Date(entry.date),
+          time=entry.kind==='external'&&entry.value.all_day?'ALL DAY':dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}),
+          title=entry.kind==='external'?(entry.value.summary||'Personal Event'):(entry.value.title||'Window Film Installation'),
+          tag=entry.kind==='external'?'PERSONAL':String(entry.value.status||'Scheduled').toUpperCase(),
+          tagClass=entry.kind==='external'?'personal':'job';
+      return `<span class="home-week-mini-event">
+        <small>${esc(time)}</small>
+        <b>${esc(title)}</b>
+        <em class="${tagClass}">${esc(tag)}</em>
+      </span>`;
+    }).join('');
+    let more=items.length>3?`<span class="home-week-more">+${items.length-3} more</span>`:'';
+    return `<button class="home-week-overview-card ${homeWeekDateKey(new Date())===key?'today':''} ${items.length?'has-events':''}" data-go="operations" data-homeweekdate="${key}">
+      <span class="home-week-card-date"><small>${d.toLocaleDateString([],{weekday:'short'}).toUpperCase()}</small><b>${d.getDate()}</b></span>
+      <span class="home-week-card-events">${preview||'<span class="home-week-open">OPEN</span>'}${more}</span>
+    </button>`;
   }).join('');
-
-  host.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+  if(host){
+    host.innerHTML='';
+    host.classList.add('home-week-detail-source');
+  }
+  strip.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
+    try{sessionStorage.setItem('dynamicTintzOperationsDate',b.dataset.homeweekdate||'')}catch{}
+    show(b.dataset.go);
+  });
+  setTimeout(()=>{
+    let today=strip.querySelector('.home-week-overview-card.today');
+    if(today)today.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+  },50);
 }
 
 async function dashboard(){
@@ -3036,7 +3015,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+bind('addOrganicLeadBtn','onclick',()=>openNewLeadQuote('Organic'));document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';

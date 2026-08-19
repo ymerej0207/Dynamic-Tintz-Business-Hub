@@ -1234,3 +1234,40 @@ button.app-kpi-card{cursor:pointer}
     font-size:23px!important;
   }
 }
+
+/* v7.9.4 — glanceable horizontal week + mobile quick actions */
+.home-week-detail-source{display:none!important}
+.home-week-overview{
+  display:flex!important;gap:9px!important;overflow-x:auto!important;overflow-y:hidden!important;
+  scroll-snap-type:x proximity;padding:4px 1px 9px!important;-webkit-overflow-scrolling:touch
+}
+.home-week-overview-card{
+  flex:0 0 168px;min-height:148px;scroll-snap-align:center;text-align:left;
+  border:1px solid var(--app-line);border-radius:15px;background:#0a1315;color:inherit;
+  padding:11px;display:flex;flex-direction:column;gap:9px
+}
+.home-week-overview-card.today{border-color:var(--app-accent);box-shadow:0 0 0 1px rgba(38,218,225,.18)}
+.home-week-card-date{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--app-line);padding-bottom:7px}
+.home-week-card-date small{font-size:9px;font-weight:900;letter-spacing:.08em;color:var(--app-muted)}
+.home-week-card-date b{font-size:20px}
+.home-week-card-events{display:grid;gap:6px}
+.home-week-mini-event{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 6px;align-items:center}
+.home-week-mini-event small{font-size:8px;color:var(--app-muted)}
+.home-week-mini-event b{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-week-mini-event em{grid-column:1/-1;width:max-content;font-style:normal;font-size:6px;font-weight:900;letter-spacing:.07em;border-radius:999px;padding:2px 5px}
+.home-week-mini-event em.personal{color:#d5a4ff;background:rgba(180,95,255,.12)}
+.home-week-mini-event em.job{color:#5ce078;background:rgba(92,224,120,.10)}
+.home-week-open{font-size:9px;font-weight:850;color:var(--app-muted);padding-top:5px}
+.home-week-more{font-size:8px;color:var(--app-accent);font-weight:850}
+.home-quick-actions{display:flex;gap:9px;overflow-x:auto;padding:2px 1px 8px;-webkit-overflow-scrolling:touch}
+.home-quick-action{
+  flex:0 0 105px;min-height:96px;border:1px solid var(--app-line);border-radius:14px;background:#0a1315;color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;text-align:center
+}
+.home-quick-action b{font-size:10px}
+.home-quick-icon{font-size:25px;line-height:1;color:var(--app-accent);font-weight:500}
+@media(min-width:760px){
+  .home-week-overview-card{flex-basis:185px}
+  .home-quick-actions{display:grid;grid-template-columns:repeat(5,1fr);overflow:visible}
+  .home-quick-action{width:100%}
+}
