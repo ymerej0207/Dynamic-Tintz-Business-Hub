@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.9.4-home-week-quick-actions
+ * Release: 7.9.5-quote-index-call
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.9.4-";
-const CACHE_NAME = `${CACHE_PREFIX}home-week-quick-actions`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.9.5-";
+const CACHE_NAME = `${CACHE_PREFIX}quote-index-call`; 
 
 const APP_SHELL = [
   "./",

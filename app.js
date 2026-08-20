@@ -1706,7 +1706,87 @@ async function releaseSquareDraft(quoteId){
   await loadQuotes();
 }
 
-function renderQuoteResults(){let data=window._cloudQuotes||[],q=($('quoteSearch')?.value||'').toLowerCase(),status=$('quoteStatusFilter')?.value||'',filtered=data.filter(x=>(!status||x.status===status)&&JSON.stringify(x).toLowerCase().includes(q)),open=data.filter(x=>!['Completed','Lost'].includes(x.status)),value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;$('quotePipelineValue').textContent=money(value);$('quoteAverage').textContent=money(avg);$('quoteCount').textContent=data.length;$('savedQuotes').innerHTML=filtered.length?filtered.map(q=>{let job=Array.isArray(q.jobs)?q.jobs[0]:q.jobs,globalIndex=data.indexOf(q),actual=Number(q.total_sqft)||0,billed=Math.ceil(actual),squareItem=q.square_catalog_item_name||'25% Ceramic Tint Install',squareButton=q.square_invoice_id?`<button class="btn" disabled>Square Draft ${esc(q.square_invoice_number||q.square_status||'Created')}</button><button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`:`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;return `<div class="quote-card app-quote-card"><div class="head"><div><h2>${esc((q.customer?.first_name||'')+' '+(q.customer?.last_name||''))}</h2><div class="muted">${esc(q.project_name||'Project')} • ${new Date(q.created_at).toLocaleDateString()}</div></div><span class="pill">${esc(q.status)}</span></div><div class="muted">${esc(q.service_address)}<br>${actual.toFixed(2)} sq ft • Ceramic ${money(q.ceramic_price)}<br><b>Square Draft:</b> ${esc(squareItem)} • ${billed||0} whole sq ft${q.square_invoice_id?`<br><b>Square:</b> Draft ${esc(q.square_invoice_number||q.square_status||'Created')}`:''}${job?`<br><b>Assigned job:</b> ${when(job.scheduled_start)} • ${esc(job.status)}`:'<br><b>Not scheduled yet</b>'}</div><div class="actions"><button class="btn primary" data-openquote="${q.id}">Open</button>${squareButton}<button class="btn" data-optimizequote="${q.id}">Optimize Roll</button><button class="btn" data-duplicatequote="${q.id}">Duplicate</button><button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}<button class="btn" data-windowmeasurements="${q.id}">Window Measurements</button><button class="btn" data-copycloud="${globalIndex}">Copy</button><button class="btn danger" data-deletequote="${q.id}">Delete Quote</button></div></div>`}).join(''):'<div class="card muted">No matching cloud quotes.</div>';$('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=()=>openCloudQuote(b.dataset.openquote));$('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=()=>createSquareDraft(b.dataset.squaredraft,b));$('savedQuotes').querySelectorAll('[data-releasesquaredraft]').forEach(b=>b.onclick=()=>releaseSquareDraft(b.dataset.releasesquaredraft));$('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=()=>openQuoteInOptimizer(b.dataset.optimizequote));$('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=()=>duplicateCloudQuote(b.dataset.duplicatequote));$('savedQuotes').querySelectorAll('[data-schedulequote]').forEach(b=>b.onclick=()=>openScheduleJob(b.dataset.schedulequote));$('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=()=>removeAssignment(b.dataset.removeassignment,b.dataset.jobid));$('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=()=>deleteCloudQuote(b.dataset.deletequote));$('savedQuotes').querySelectorAll('[data-windowmeasurements]').forEach(b=>b.onclick=()=>openWindowMeasurements(b.dataset.windowmeasurements));$('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied')))}
+function renderQuoteResults(){
+  let data=window._cloudQuotes||[],
+      q=($('quoteSearch')?.value||'').toLowerCase(),
+      status=$('quoteStatusFilter')?.value||'',
+      filtered=data
+        .filter(x=>(!status||x.status===status)&&JSON.stringify(x).toLowerCase().includes(q))
+        .sort((a,b)=>new Date(b.created_at||b.updated_at||0)-new Date(a.created_at||a.updated_at||0)),
+      open=data.filter(x=>!['Completed','Lost'].includes(x.status)),
+      value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),
+      avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;
+
+  $('quotePipelineValue').textContent=money(value);
+  $('quoteAverage').textContent=money(avg);
+  $('quoteCount').textContent=data.length;
+
+  $('savedQuotes').innerHTML=filtered.length?filtered.map(q=>{
+    let job=Array.isArray(q.jobs)?q.jobs[0]:q.jobs,
+        globalIndex=data.indexOf(q),
+        actual=Number(q.total_sqft)||0,
+        name=((q.customer?.first_name||'')+' '+(q.customer?.last_name||'')).trim()||q.project_name||'Customer',
+        phone=String(q.customer?.phone||'').trim(),
+        cityOrAddress=q.service_address||q.customer?.service_address||'',
+        squareItem=q.square_catalog_item_name||'25% Ceramic Tint Install',
+        billed=Math.ceil(actual),
+        squareButton=q.square_invoice_id
+          ?`<button class="btn" disabled>Square Draft ${esc(q.square_invoice_number||q.square_status||'Created')}</button><button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
+          :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
+
+    return `<details class="quote-index-card" data-quoteindex="${q.id}">
+      <summary class="quote-index-summary">
+        <span class="quote-index-main">
+          <b>${esc(name)}</b>
+          <small>${esc(cityOrAddress)}${q.created_at?` • ${new Date(q.created_at).toLocaleDateString()}`:''}</small>
+        </span>
+        <span class="quote-index-metrics">
+          <strong>${actual.toFixed(0)} sq ft</strong>
+          <em>${esc(q.status||'')}</em>
+        </span>
+        <span class="quote-index-chevron">⌄</span>
+      </summary>
+
+      <div class="quote-index-expanded">
+        <div class="quote-index-top-actions">
+          ${phone?`<a class="btn primary quote-call-btn" href="tel:${esc(phone)}">Call Customer</a>`:''}
+          <button class="btn primary" data-openquote="${q.id}">Open / Edit</button>
+          <button class="btn" data-windowmeasurements="${q.id}">Window Measurements</button>
+        </div>
+
+        <div class="quote-index-detail">
+          <span><b>Project</b>${esc(q.project_name||'Window Film Project')}</span>
+          <span><b>Glass</b>${actual.toFixed(2)} sq ft</span>
+          <span><b>Price</b>${money(q.ceramic_price)}</span>
+          <span><b>Status</b>${esc(q.status||'')}</span>
+          <span><b>Film</b>${esc(squareItem.replace(' Tint Install',''))}</span>
+          <span><b>Schedule</b>${job?`${when(job.scheduled_start)} • ${esc(job.status)}`:'Not scheduled'}</span>
+        </div>
+
+        <div class="actions quote-index-more-actions">
+          ${squareButton}
+          <button class="btn" data-optimizequote="${q.id}">Optimize Roll</button>
+          <button class="btn" data-duplicatequote="${q.id}">Duplicate</button>
+          <button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>
+          ${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}
+          <button class="btn" data-copycloud="${globalIndex}">Copy</button>
+          <button class="btn danger" data-deletequote="${q.id}">Delete Quote</button>
+        </div>
+      </div>
+    </details>`;
+  }).join(''):'<div class="card muted">No matching cloud quotes.</div>';
+
+  $('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=e=>{e.preventDefault();openCloudQuote(b.dataset.openquote)});
+  $('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();createSquareDraft(b.dataset.squaredraft,b)});
+  $('savedQuotes').querySelectorAll('[data-releasesquaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();releaseSquareDraft(b.dataset.releasesquaredraft)});
+  $('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=e=>{e.preventDefault();openQuoteInOptimizer(b.dataset.optimizequote)});
+  $('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=e=>{e.preventDefault();duplicateCloudQuote(b.dataset.duplicatequote)});
+  $('savedQuotes').querySelectorAll('[data-schedulequote]').forEach(b=>b.onclick=e=>{e.preventDefault();openScheduleJob(b.dataset.schedulequote)});
+  $('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=e=>{e.preventDefault();removeAssignment(b.dataset.removeassignment,b.dataset.jobid)});
+  $('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteCloudQuote(b.dataset.deletequote)});
+  $('savedQuotes').querySelectorAll('[data-windowmeasurements]').forEach(b=>b.onclick=e=>{e.preventDefault();openWindowMeasurements(b.dataset.windowmeasurements)});
+  $('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=e=>{e.preventDefault();navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied'))});
+}
 let currentWindowMeasurementText='';
 
 function formatWindowDimension(value){
@@ -2220,7 +2300,12 @@ function renderOperations(){
 
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'&&!confirm('Mark this job completed and move it to the archive?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
-async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();scrollTo({top:0,behavior:'smooth'});toast('Quote loaded from cloud.')}
+async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
+  setTimeout(()=>{
+    let target=$('quoteMeasurementsCard')||$('qSqft');
+    target?.scrollIntoView({behavior:'smooth',block:'start'});
+  },120);
+  toast('Quote loaded — jumped to measurements.')}
 function shortcutCategories(){return ['All',...new Set(shortcutData.map(s=>s.category||'Custom'))]}
 function populateShortcutCategories(){
   let select=$('shortcutCategoryFilter');
