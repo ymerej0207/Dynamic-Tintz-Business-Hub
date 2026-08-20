@@ -1706,6 +1706,14 @@ async function releaseSquareDraft(quoteId){
   await loadQuotes();
 }
 
+
+function quoteProjectIcon(type){
+  let commercial=String(type||'').toLowerCase()==='commercial';
+  return commercial
+    ? `<span class="quote-type-icon commercial" aria-label="Commercial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V7l8-4v18M12 9h8v12M7 9h2M7 13h2M7 17h2M15 12h2M15 16h2M15 20h2M2 21h20"/></svg></span>`
+    : `<span class="quote-type-icon residential" aria-label="Residential"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10.5V21h13V10.5M9 21v-6h6v6"/></svg></span>`;
+}
+
 function renderQuoteResults(){
   let data=window._cloudQuotes||[],
       q=($('quoteSearch')?.value||'').toLowerCase(),
@@ -1736,14 +1744,17 @@ function renderQuoteResults(){
 
     return `<details class="quote-index-card" data-quoteindex="${q.id}">
       <summary class="quote-index-summary">
+        ${quoteProjectIcon(q.project_type)}
         <span class="quote-index-main">
           <b>${esc(name)}</b>
-          <small>${esc(cityOrAddress)}${q.created_at?` • ${new Date(q.created_at).toLocaleDateString()}`:''}</small>
+          <small>${esc(cityOrAddress)}</small>
         </span>
-        <span class="quote-index-metrics">
+        <span class="quote-index-size">
           <strong>${actual.toFixed(0)} sq ft</strong>
-          <em>${esc(q.status||'')}</em>
+          <small>${q.created_at?new Date(q.created_at).toLocaleDateString():''}</small>
         </span>
+        <span class="quote-index-status status-${String(q.status||'').toLowerCase().replaceAll(' ','-')}">${esc(q.status||'')}</span>
+        ${phone?`<a class="quote-index-call" href="tel:${esc(phone)}" aria-label="Call ${esc(name)}" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h3l1.5 4-2 1.5a14 14 0 0 0 6 6l1.5-2L21 14v3c0 2-1 4-4 4C9.3 21 3 14.7 3 7c0-3 2-4 4-4Z"/></svg></a>`:''}
         <span class="quote-index-chevron">⌄</span>
       </summary>
 

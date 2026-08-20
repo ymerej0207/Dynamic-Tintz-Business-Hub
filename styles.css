@@ -1312,3 +1312,75 @@ button.app-kpi-card{cursor:pointer}
   .quote-index-more-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .quote-index-more-actions .btn{width:100%;font-size:9px;padding:8px!important}
 }
+
+/* v7.9.6 — Layout 5 quote rows */
+.quote-index-card{
+  border-radius:14px!important;
+  background:linear-gradient(180deg,#0b1214,#081012)!important;
+  border:1px solid #1a2629!important;
+}
+.quote-index-summary{
+  grid-template-columns:42px minmax(0,1fr) 76px auto 38px 16px!important;
+  gap:9px!important;
+  padding:10px 11px!important;
+  min-height:64px;
+}
+.quote-type-icon{
+  width:38px;height:38px;border-radius:50%;
+  display:grid;place-items:center;
+  border:1px solid rgba(255,255,255,.06);
+}
+.quote-type-icon svg{
+  width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.quote-type-icon.residential{background:rgba(0,213,216,.12);color:#39dce0}
+.quote-type-icon.commercial{background:rgba(255,171,64,.12);color:#ffb04c}
+.quote-index-main>b{font-size:13px!important;font-weight:850}
+.quote-index-main>small{font-size:9px!important;color:#8ea0a4!important;margin-top:3px}
+.quote-index-size{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.quote-index-size>strong{font-size:11px;color:#eef6f7;white-space:nowrap}
+.quote-index-size>small{font-size:8px;color:var(--app-muted);white-space:nowrap}
+.quote-index-status{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:24px;padding:4px 8px;border-radius:999px;
+  font-size:7px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;
+  background:#14242a;color:#8bdcff;white-space:nowrap;
+}
+.quote-index-status.status-scheduled,
+.quote-index-status.status-approved,
+.quote-index-status.status-deposit-paid{background:rgba(92,224,120,.11);color:#5ce078}
+.quote-index-status.status-estimate-requested,
+.quote-index-status.status-quote-sent{background:rgba(57,220,224,.10);color:#39dce0}
+.quote-index-status.status-follow-up-needed{background:rgba(255,190,70,.12);color:#ffc24f}
+.quote-index-status.status-completed{background:rgba(140,160,165,.12);color:#b8c5c8}
+.quote-index-status.status-lost{background:rgba(255,93,93,.10);color:#ff7777}
+.quote-index-call{
+  width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;
+  background:rgba(24,125,200,.12);color:#54b9ff;
+  border:1px solid rgba(84,185,255,.12);
+}
+.quote-index-call svg{
+  width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.quote-index-chevron{font-size:16px!important;text-align:center}
+.quote-index-card[open] .quote-index-summary{background:#0c1517}
+@media(max-width:620px){
+  .quote-index-summary{
+    grid-template-columns:38px minmax(0,1fr) 62px auto 34px 12px!important;
+    gap:7px!important;
+  }
+  .quote-type-icon{width:34px;height:34px}
+  .quote-type-icon svg{width:19px;height:19px}
+  .quote-index-main>b{font-size:12px!important}
+  .quote-index-size>strong{font-size:10px}
+  .quote-index-status{font-size:6px;padding:4px 6px}
+  .quote-index-call{width:32px;height:32px}
+}
+@media(max-width:430px){
+  .quote-index-summary{
+    grid-template-columns:34px minmax(0,1fr) 54px 34px 12px!important;
+  }
+  .quote-index-status{display:none}
+  .quote-type-icon{width:32px;height:32px}
+}
