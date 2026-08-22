@@ -1907,7 +1907,11 @@ async function syncCalendarJob(jobId,action='sync'){
   if(!google?.error&&google?.data?.ok!==false&&google?.data?.connected&&(google.data.selected_calendars||[]).length){
     providers.push(['google-calendar-sync','Google']);
   }
-  if(!icloud?.error&&icloud?.data?.ok!==false&&icloud?.data?.configured&&(icloud.data.selected_calendars||[]).length){
+  let localIcloudSyncIds=getIcloudSyncCalendarIds();
+  let icloudSyncAllowed=localIcloudSyncIds===null
+    ? (icloud?.data?.selected_calendars||[]).length>0
+    : localIcloudSyncIds.length>0;
+  if(!icloud?.error&&icloud?.data?.ok!==false&&icloud?.data?.configured&&icloudSyncAllowed){
     providers.push(['icloud-calendar-sync','iCloud']);
   }
   if(!providers.length)return {ok:true,providers:[],skipped:true};
@@ -3034,16 +3038,31 @@ function getIcloudViewCalendarIds(){
 function setIcloudViewCalendarIds(ids){
   localStorage.setItem(icloudViewCalendarKey(),JSON.stringify([...new Set(ids||[])]));
 }
+function icloudSyncCalendarKey(){return `dt.icloud.syncCalendars.${session?.user?.id||'guest'}`}
+function getIcloudSyncCalendarIds(){
+  try{
+    let raw=localStorage.getItem(icloudSyncCalendarKey());
+    if(raw===null)return null;
+    let v=JSON.parse(raw);
+    return Array.isArray(v)?v:[];
+  }catch{return []}
+}
+function setIcloudSyncCalendarIds(ids){
+  localStorage.setItem(icloudSyncCalendarKey(),JSON.stringify([...new Set(ids||[])]));
+}
 async function loadIcloudCalendarStatus(){
   let st=$('icloudCalendarStatus'),m=$('icloudCalendarMessage'),wrap=$('icloudCalendarPickerWrap'),test=$('testIcloudCalendar');
   if(!st)return;
   let{data,error}=await sb.functions.invoke('icloud-calendar-auth',{body:{action:'status'}});
   if(error||data?.ok===false){st.textContent='Needs setup';m.textContent=error?.message||data?.error||'Add the iCloud secrets and deploy the iCloud functions.';wrap?.classList.add('hidden');if(test)test.disabled=true;return}
   if(!data.configured){st.textContent='Not configured';m.textContent='Add ICLOUD_APPLE_ID and ICLOUD_APP_SPECIFIC_PASSWORD in Supabase Edge Function secrets.';wrap?.classList.add('hidden');if(test)test.disabled=true;return}
-  let syncSelected=data.selected_calendars||[],viewIds=getIcloudViewCalendarIds();
-  st.textContent=`${viewIds.length} View • ${syncSelected.length} Sync`;
+  let remoteSyncSelected=data.selected_calendars||[],
+      localSyncIds=getIcloudSyncCalendarIds(),
+      syncSelected=localSyncIds===null?remoteSyncSelected:remoteSyncSelected.filter(c=>localSyncIds.includes(c.id)),
+      viewIds=getIcloudViewCalendarIds();
+  st.textContent=`${viewIds.length} View • ${localSyncIds===null?syncSelected.length:localSyncIds.length} Sync`;
   m.textContent='VIEW calendars appear read-only on the Operations schedule. SYNC JOBS calendars are the only calendars Dynamic Tintz may create, update, or remove job events on.';
-  wrap?.classList.remove('hidden');if(test)test.disabled=!syncSelected.length;
+  wrap?.classList.remove('hidden');if(test)test.disabled=(localSyncIds===null?!syncSelected.length:!localSyncIds.length);
   await loadIcloudCalendarChoices(syncSelected);
 }
 async function loadIcloudCalendarChoices(syncSelected=[]){
@@ -3073,12 +3092,15 @@ async function saveIcloudCalendarSelection(){
   let viewIds=[...picker.querySelectorAll('[data-icloudview]:checked')].map(x=>x.value),
       syncIds=[...picker.querySelectorAll('[data-icloudsync]:checked')].map(x=>x.value);
   setIcloudViewCalendarIds(viewIds);
+  setIcloudSyncCalendarIds(syncIds);
   b.disabled=true;m.textContent='Saving iCloud calendar permissions…';
   if(syncIds.length){
     let{data,error}=await sb.functions.invoke('icloud-calendar-auth',{body:{action:'select',calendar_ids:syncIds}});
     if(error||data?.ok===false){b.disabled=false;m.textContent=error?.message||data?.error||'View calendars were saved locally, but Sync Jobs selection could not be saved.';return}
   }else{
-    m.textContent='View calendars saved. No calendar is currently selected for job syncing.';
+    // Explicit local zero means VIEW ONLY. Do not allow stale remote selections
+    // to cause job writes from this PWA.
+    m.textContent='View calendars saved. iCloud job syncing is OFF for this device.';
   }
   b.disabled=false;
   toast(`${viewIds.length} view-only calendar${viewIds.length===1?'':'s'} • ${syncIds.length} job-sync calendar${syncIds.length===1?'':'s'}.`);
@@ -3086,7 +3108,10 @@ async function saveIcloudCalendarSelection(){
   if($('operations')?.classList.contains('active'))await loadOperations();
 }
 async function testIcloudCalendarConnection(){
-  let b=$('testIcloudCalendar'),m=$('icloudCalendarMessage'),st=$('icloudCalendarStatus');b.disabled=true;m.textContent='Testing calendars allowed to receive Dynamic Tintz jobs…';
+  let b=$('testIcloudCalendar'),m=$('icloudCalendarMessage'),st=$('icloudCalendarStatus');
+  let localSyncIds=getIcloudSyncCalendarIds();
+  if(localSyncIds!==null&&!localSyncIds.length){m.textContent='iCloud is configured as VIEW ONLY. No calendars are allowed to receive Dynamic Tintz jobs.';return}
+  b.disabled=true;m.textContent='Testing calendars allowed to receive Dynamic Tintz jobs…';
   let{data,error}=await sb.functions.invoke('icloud-calendar-sync',{body:{test:true}});b.disabled=false;
   if(error||data?.ok===false){
     st.textContent='Needs attention';
