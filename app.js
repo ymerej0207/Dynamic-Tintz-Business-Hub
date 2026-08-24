@@ -460,7 +460,7 @@ async function reconcileCurrentScheduledReservations(){
         let{error}=await sb.from('job_material_plans').upsert({
           job_id:j.id,
           product_id:product.id,
-          source:optimizer?'optimizer':'calculated',
+          source:optimizer?'optimizer':'manual',
           optimizer_plan_id:optimizer?.id||null,
           planned_linear_inches:linearInches,
           actual_linear_inches:null,
@@ -517,7 +517,7 @@ async function assignScheduledReservationFilm(jobId,quoteId,productId,totalSqft)
   let{error:planError}=await sb.from('job_material_plans').upsert({
     job_id:jobId,
     product_id:productId,
-    source:optimizer?'optimizer':'calculated',
+    source:optimizer?'optimizer':'manual',
     optimizer_plan_id:optimizer?.id||null,
     planned_linear_inches:linearInches,
     actual_linear_inches:null,
@@ -1391,7 +1391,7 @@ async function loadScheduleMaterialPlan(quote,jobId){
       let calculatedSqft=Number(quote?.total_sqft)||0;
       planned.value=calculatedSqft>0?invFmt(calculatedSqft,2):'';
       actual.value='';
-      planned.dataset.source='calculated';
+      planned.dataset.source='manual';
       planned.dataset.optimizerPlanId='';
       planned.dataset.rollWidth=product?.default_roll_width_inches||72;
       hint.innerHTML=calculatedSqft>0
@@ -1405,6 +1405,7 @@ function updateScheduleMaterialProjection(){
   let select=$('scheduleFilmProduct'),planned=$('scheduleMaterialLinearFt'),host=$('scheduleMaterialProjection');if(!select||!planned||!host)return;
   let p=inventoryProductCache.find(x=>x.id===select.value),sqft=Number(planned.value)||0;host.textContent=sqft>0?`${invFmt(sqft,2)} sq ft of roll material will be reserved while this job is active.`:'No inventory reservation yet.'
 }
+// DB source constraint: quote-calculated reservations use source='manual'; optimizer reservations use source='optimizer'.
 async function saveScheduleMaterialPlan(jobId){
   let productId=$('scheduleFilmProduct')?.value,plannedSqft=Number($('scheduleMaterialLinearFt')?.value)||0,actualRaw=$('scheduleMaterialActualFt')?.value??'',actualSqft=actualRaw===''?null:Number(actualRaw),plannedEl=$('scheduleMaterialLinearFt');if(!jobId)return;
   if(!productId||plannedSqft<=0){await sb.from('job_material_plans').delete().eq('job_id',jobId);return}
