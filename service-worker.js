@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.9.7-icloud-view-only-sync-fix
+ * Release: 7.9.9-current-scheduled-reservation-reconcile
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.9.7-";
-const CACHE_NAME = `${CACHE_PREFIX}icloud-view-only-sync-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.9.9-";
+const CACHE_NAME = `${CACHE_PREFIX}current-scheduled-reservation-reconcile`; 
 
 const APP_SHELL = [
   "./",

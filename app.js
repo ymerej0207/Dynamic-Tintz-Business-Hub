@@ -328,8 +328,94 @@ async function inventoryProducts(){
   let{data,error}=await sb.from('film_inventory_products').select('*').eq('active',true).order('name');
   if(error)throw error;inventoryProductCache=data||[];return inventoryProductCache
 }
+let scheduledReservationReconcilePromise=null;
+async function reconcileCurrentScheduledReservations(){
+  if(scheduledReservationReconcilePromise)return scheduledReservationReconcilePromise;
+  scheduledReservationReconcilePromise=(async()=>{
+    try{
+      let products=await inventoryProducts();
+      let{data:jobs,error:jobError}=await sb.from('jobs')
+        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,square_catalog_item_name)')
+        .in('status',['Scheduled','Confirmed','En Route','In Progress']);
+      if(jobError)throw jobError;
+      jobs=jobs||[];
+      if(!jobs.length)return {created:0,skipped:0,unmatched:0};
+
+      let jobIds=jobs.map(j=>j.id),
+          quoteIds=jobs.map(j=>j.quote_id).filter(Boolean);
+
+      let [plansRes,optRes]=await Promise.all([
+        sb.from('job_material_plans').select('job_id').in('job_id',jobIds),
+        quoteIds.length
+          ?sb.from('roll_optimization_plans')
+            .select('id,quote_id,roll_width,linear_inches_required,created_at')
+            .in('quote_id',quoteIds)
+            .order('created_at',{ascending:false})
+          :Promise.resolve({data:[],error:null})
+      ]);
+      if(plansRes.error)throw plansRes.error;
+      if(optRes.error)throw optRes.error;
+
+      let existing=new Set((plansRes.data||[]).map(x=>x.job_id)),
+          optimizerByQuote={};
+      for(let p of (optRes.data||[])){
+        if(!optimizerByQuote[p.quote_id])optimizerByQuote[p.quote_id]=p;
+      }
+
+      let created=0,skipped=0,unmatched=0;
+      for(let j of jobs){
+        if(existing.has(j.id)){skipped++;continue}
+        let q=j.quote||{};
+        if(!j.quote_id||!(Number(q.total_sqft)>0)){unmatched++;continue}
+
+        let wanted=String(q.square_catalog_item_name||'').trim().toLowerCase(),
+            product=products.find(p=>String(p.name||'').trim().toLowerCase()===wanted);
+        if(!product){unmatched++;continue}
+
+        let optimizer=optimizerByQuote[j.quote_id]||null,
+            width=Number(optimizer?.roll_width)||Number(product.default_roll_width_inches)||72,
+            plannedSqft=optimizer?optimizerMaterialSqft(optimizer):Number(q.total_sqft)||0,
+            linearInches=optimizer
+              ?Number(optimizer.linear_inches_required)||0
+              :invLinearInchesFromSqft(plannedSqft,width);
+
+        if(!(plannedSqft>0)&&!(linearInches>0)){unmatched++;continue}
+
+        let{error}=await sb.from('job_material_plans').upsert({
+          job_id:j.id,
+          product_id:product.id,
+          source:optimizer?'optimizer':'calculated',
+          optimizer_plan_id:optimizer?.id||null,
+          planned_linear_inches:linearInches,
+          actual_linear_inches:null,
+          roll_width_inches:width,
+          notes:optimizer
+            ?`Automatic scheduled-job reconciliation from saved optimizer plan: ${plannedSqft.toFixed(2)} sq ft reserved.`
+            :`Automatic scheduled-job reconciliation from quote glass: ${plannedSqft.toFixed(2)} sq ft reserved.`,
+          updated_at:new Date().toISOString()
+        },{onConflict:'job_id'});
+        if(error){
+          console.warn('Scheduled reservation reconciliation:',j.id,error);
+          unmatched++;
+          continue;
+        }
+        created++;
+      }
+      if(created)console.info(`Reconciled ${created} current scheduled inventory reservation${created===1?'':'s'}.`);
+      return {created,skipped,unmatched};
+    }catch(e){
+      console.warn('Current scheduled inventory reconciliation failed:',e);
+      return {created:0,skipped:0,unmatched:0,error:e};
+    }finally{
+      setTimeout(()=>{scheduledReservationReconcilePromise=null},1500);
+    }
+  })();
+  return scheduledReservationReconcilePromise;
+}
+
 async function loadInventoryHomeAlerts(){
   let host=$('inventoryHomeAlerts');if(!host)return;
+  await reconcileCurrentScheduledReservations();
   let{data,error}=await sb.from('inventory_product_status').select('*').eq('active',true).order('product_name');
   if(error){console.error('Inventory forecast error',error);host.innerHTML=`<div class="app-empty"><b>Inventory forecast could not load.</b><br>${esc(error.message||'Unknown inventory error')}</div>`;return}
 
@@ -745,6 +831,7 @@ async function findScrapsForWindow(width,height,productId=null){
 async function loadInventory(){
   let host=$('inventoryStatusList');if(host)host.innerHTML='<div class="card muted">Loading film inventory…</div>';
   try{
+    await reconcileCurrentScheduledReservations();
     let[statusResult,rollResult,products]=await Promise.all([
       sb.from('inventory_product_status').select('*').eq('active',true).order('product_name'),
       sb.from('film_inventory_rolls').select('*,product:film_inventory_products(name)').order('created_at'),
@@ -1092,7 +1179,17 @@ async function loadScheduleMaterialPlan(quote,jobId){
       planned.value=invFmt(materialSqft,2);actual.value='';planned.dataset.source='optimizer';planned.dataset.optimizerPlanId=optimizer.id;planned.dataset.rollWidth=optimizer.roll_width||product?.default_roll_width_inches||72;
       hint.innerHTML=`<b>Optimizer plan detected.</b> ${invFmt(materialSqft,2)} sq ft total material will be reserved, including ${invFmt(wasteSqft,2)} sq ft calculated waste. Change it anytime to override manually.`
     }
-    else{planned.value='';actual.value='';planned.dataset.source='manual';planned.dataset.optimizerPlanId='';planned.dataset.rollWidth=product?.default_roll_width_inches||72;hint.innerHTML='<b>No saved optimizer plan found.</b> Enter the total square feet of film you expect this job to use.'}
+    else{
+      let calculatedSqft=Number(quote?.total_sqft)||0;
+      planned.value=calculatedSqft>0?invFmt(calculatedSqft,2):'';
+      actual.value='';
+      planned.dataset.source='calculated';
+      planned.dataset.optimizerPlanId='';
+      planned.dataset.rollWidth=product?.default_roll_width_inches||72;
+      hint.innerHTML=calculatedSqft>0
+        ?`<b>Calculated reservation.</b> ${invFmt(calculatedSqft,2)} sq ft from this quote will be reserved immediately when the job is scheduled. Final inventory usage is replaced by your actual material entry when the job is completed.`
+        :'<b>No calculated material found.</b> Enter the total square feet of film you expect this job to use.';
+    }
     updateScheduleMaterialProjection()
   }catch{hint.textContent='Inventory module not installed yet.'}
 }
@@ -1107,6 +1204,34 @@ async function saveScheduleMaterialPlan(jobId){
       plannedLinear=invLinearInchesFromSqft(plannedSqft,width),actualLinear=Number.isFinite(actualSqft)?invLinearInchesFromSqft(actualSqft,width):null;
   let{error}=await sb.from('job_material_plans').upsert({job_id:jobId,product_id:productId,source:plannedEl.dataset.source||'manual',optimizer_plan_id:plannedEl.dataset.optimizerPlanId||null,planned_linear_inches:plannedLinear,actual_linear_inches:actualLinear,roll_width_inches:width,updated_at:new Date().toISOString()},{onConflict:'job_id'});if(error)throw error
 }
+async function finalizeScheduledJobInventory(jobId,actualOverride=null){
+  if(!jobId)return {ok:true,skipped:true};
+  let{data:plan,error}=await sb.from('job_material_plans').select('*').eq('job_id',jobId).maybeSingle();
+  if(error)throw error;
+  if(!plan)return {ok:true,skipped:true};
+
+  let plannedSqft=invSqft(plan.roll_width_inches,plan.planned_linear_inches),
+      actualSqft=actualOverride==null?null:Number(actualOverride);
+
+  if(actualSqft==null||!Number.isFinite(actualSqft)){
+    let entered=prompt(
+      `Final film used for this job (sq ft):\n\nReserved / calculated: ${invFmt(plannedSqft,2)} sq ft\n\nEnter the ACTUAL total film used. This replaces the reservation and becomes the permanent inventory deduction.`,
+      invFmt(plannedSqft,2)
+    );
+    if(entered===null)return {ok:false,canceled:true};
+    actualSqft=Number(entered);
+  }
+  if(!Number.isFinite(actualSqft)||actualSqft<0)throw new Error('Enter a valid actual film usage amount.');
+
+  let actualLinear=invLinearInchesFromSqft(actualSqft,Number(plan.roll_width_inches)||72);
+  let u=await sb.from('job_material_plans').update({actual_linear_inches:actualLinear,updated_at:new Date().toISOString()}).eq('job_id',jobId);
+  if(u.error)throw u.error;
+
+  let r=await sb.rpc('inventory_finalize_job',{p_job_id:jobId});
+  if(r.error)throw r.error;
+  return {ok:true,actualSqft};
+}
+
 async function applyInventoryToOptimizer(q){
   try{let p=await inventoryProductForQuote(q);if(!p)return;let{data,error}=await sb.from('film_inventory_rolls').select('*').eq('product_id',p.id).gt('remaining_length_inches',0).order('remaining_length_inches',{ascending:false});if(error||!data?.length)return;let r=data[0];$('optimizerRollWidth').value=Number(r.roll_width_inches)||Number(p.default_roll_width_inches)||72;$('optimizerRollLength').value=optimizerRound(invFeet(r.remaining_length_inches),2);$('optimizerMessage').textContent=`Loaded quote and current ${p.name} inventory: ${invFmt(invFeet(r.remaining_length_inches),1)} linear ft available on ${r.label||'the largest active roll'}.`}catch{}
 }
@@ -1218,7 +1343,7 @@ async function startBreak(id){let{error}=await sb.from('time_breaks').insert({ti
 async function endBreak(id){let{error}=await sb.from('time_breaks').update({break_end:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);toast('Break ended.');loadTime();loadEmployee()}
 function week(){let d=new Date(),day=d.getDay();d.setDate(d.getDate()-day);d.setHours(0,0,0,0);return d.toISOString()}
 async function loadTime(){renderClock($('timeCard'),await openShift());let{data}=await sb.from('time_entry_totals').select('*').eq('employee_id',session.user.id).gte('clock_in',week()).order('clock_in',{ascending:false}),tot=(data||[]).reduce((s,x)=>s+Number(x.net_hours||0),0);$('timeList').innerHTML=`<div class="card metric"><b>${tot.toFixed(2)}</b><span>Net hours this week</span></div>`+(data||[]).map(x=>`<div class="item muted">${when(x.clock_in)} → ${when(x.clock_out)}<br>${Number(x.net_hours||0).toFixed(2)} hours</div>`).join('')}
-async function loadEmployee(){renderClock($('employeeClock'),await openShift());let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,project_type,total_sqft,measurements,notes,status)').neq('status','Completed').order('scheduled_start');data=(data||[]).filter(j=>j.assigned_to===session.user.id||(j.assigned_installers||[]).includes(session.user.id));if(error){$('jobs').innerHTML=`<div class="item muted">${esc(error.message)}</div>`;return}window._assignedJobs=data||[];$('jobs').innerHTML=data?.length?data.map((j,i)=>{let q=j.quote,roomCount=Array.isArray(q?.measurements)?q.measurements.length:0,status=j.status||'Scheduled';return `<div class="item"><div class="head"><div><b>${esc(j.title||q?.project_name||'Installation')}</b><div class="muted">${when(j.scheduled_start)}<br>${esc(j.service_address)}</div></div><span class="pill">${esc(status)}</span></div>${q?`<div class="muted">${Number(q.total_sqft||0).toFixed(2)} total sq ft • ${roomCount} measurement row${roomCount===1?'':'s'}</div><div class="actions"><button class="btn primary" data-jobdetails="${i}">Open Job</button><a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>${status==='Scheduled'?`<button class="btn warn" data-jobstatus="${i}" data-status="En Route">Mark En Route</button>`:''}${status==='En Route'?`<button class="btn warn" data-jobstatus="${i}" data-status="In Progress">Start Job</button>`:''}${status==='In Progress'?`<button class="btn primary" data-jobstatus="${i}" data-status="Completed">Mark Complete</button>`:''}</div>`:`<div class="muted">No quote is linked to this job yet.</div>`}</div>`}).join(''):'No assigned jobs yet.';$('jobs').querySelectorAll('[data-jobdetails]').forEach(b=>b.onclick=()=>openJobDetails(Number(b.dataset.jobdetails)));$('jobs').querySelectorAll('[data-jobstatus]').forEach(b=>b.onclick=()=>updateJobStatus(Number(b.dataset.jobstatus),b.dataset.status))}function openJobDetails(i){let j=window._assignedJobs?.[i],q=j?.quote;if(!q)return toast('No quote is linked to this job.');let measurements=Array.isArray(q.measurements)?q.measurements:[];$('jobDetailModal').dataset.jobIndex=i;$('jobDetailTitle').textContent=j.title||q.project_name||'Job Details';$('jobDetailMeta').innerHTML=`${esc(j.service_address||'')}<br>${Number(q.total_sqft||0).toFixed(2)} total sq ft<br><b>Status:</b> ${esc(j.status||'Scheduled')}${q.notes?`<br><b>Project notes:</b> ${esc(q.notes)}`:''}`;$('jobInstallerNotes').value=j.notes||'';$('jobStatusSelect').value=j.status||'Scheduled';$('jobDimensionList').innerHTML=measurements.length?measurements.map((m,n)=>{let area=Number(m.w||0)*Number(m.h||0)*Number(m.qty||1)/144;return `<div class="dimension-card"><div><b>${n+1}. ${esc(m.area||'Window')}</b><div class="muted">${Number(m.w||0)}″ W × ${Number(m.h||0)}″ H • Qty ${Number(m.qty||1)}</div></div><strong>${area.toFixed(2)} sq ft</strong></div>`}).join(''):'<div class="muted">No measurements are stored on this quote.</div>';$('jobDetailModal').classList.add('show')}async function updateJobStatus(i,status){let j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');if(status==='Completed'&&!confirm('Mark this installation complete?'))return;let{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id){let quoteStatus=status==='Completed'?'Completed':'Scheduled';await sb.from('quotes').update({status:quoteStatus,updated_at:new Date().toISOString()}).eq('id',j.quote_id)}toast(`Job marked ${status}.`);await loadEmployee()}async function saveInstallerJobUpdate(){let i=Number($('jobDetailModal').dataset.jobIndex),j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');let status=$('jobStatusSelect').value,notes=$('jobInstallerNotes').value.trim();let{error}=await sb.from('jobs').update({status,notes,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id){let quoteStatus=status==='Completed'?'Completed':'Scheduled';await sb.from('quotes').update({status:quoteStatus,updated_at:new Date().toISOString()}).eq('id',j.quote_id)}$('jobDetailModal').classList.remove('show');toast('Job update saved.');await loadEmployee()}
+async function loadEmployee(){renderClock($('employeeClock'),await openShift());let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,project_type,total_sqft,measurements,notes,status)').neq('status','Completed').order('scheduled_start');data=(data||[]).filter(j=>j.assigned_to===session.user.id||(j.assigned_installers||[]).includes(session.user.id));if(error){$('jobs').innerHTML=`<div class="item muted">${esc(error.message)}</div>`;return}window._assignedJobs=data||[];$('jobs').innerHTML=data?.length?data.map((j,i)=>{let q=j.quote,roomCount=Array.isArray(q?.measurements)?q.measurements.length:0,status=j.status||'Scheduled';return `<div class="item"><div class="head"><div><b>${esc(j.title||q?.project_name||'Installation')}</b><div class="muted">${when(j.scheduled_start)}<br>${esc(j.service_address)}</div></div><span class="pill">${esc(status)}</span></div>${q?`<div class="muted">${Number(q.total_sqft||0).toFixed(2)} total sq ft • ${roomCount} measurement row${roomCount===1?'':'s'}</div><div class="actions"><button class="btn primary" data-jobdetails="${i}">Open Job</button><a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>${status==='Scheduled'?`<button class="btn warn" data-jobstatus="${i}" data-status="En Route">Mark En Route</button>`:''}${status==='En Route'?`<button class="btn warn" data-jobstatus="${i}" data-status="In Progress">Start Job</button>`:''}${status==='In Progress'?`<button class="btn primary" data-jobstatus="${i}" data-status="Completed">Mark Complete</button>`:''}</div>`:`<div class="muted">No quote is linked to this job yet.</div>`}</div>`}).join(''):'No assigned jobs yet.';$('jobs').querySelectorAll('[data-jobdetails]').forEach(b=>b.onclick=()=>openJobDetails(Number(b.dataset.jobdetails)));$('jobs').querySelectorAll('[data-jobstatus]').forEach(b=>b.onclick=()=>updateJobStatus(Number(b.dataset.jobstatus),b.dataset.status))}function openJobDetails(i){let j=window._assignedJobs?.[i],q=j?.quote;if(!q)return toast('No quote is linked to this job.');let measurements=Array.isArray(q.measurements)?q.measurements:[];$('jobDetailModal').dataset.jobIndex=i;$('jobDetailTitle').textContent=j.title||q.project_name||'Job Details';$('jobDetailMeta').innerHTML=`${esc(j.service_address||'')}<br>${Number(q.total_sqft||0).toFixed(2)} total sq ft<br><b>Status:</b> ${esc(j.status||'Scheduled')}${q.notes?`<br><b>Project notes:</b> ${esc(q.notes)}`:''}`;$('jobInstallerNotes').value=j.notes||'';$('jobStatusSelect').value=j.status||'Scheduled';$('jobDimensionList').innerHTML=measurements.length?measurements.map((m,n)=>{let area=Number(m.w||0)*Number(m.h||0)*Number(m.qty||1)/144;return `<div class="dimension-card"><div><b>${n+1}. ${esc(m.area||'Window')}</b><div class="muted">${Number(m.w||0)}″ W × ${Number(m.h||0)}″ H • Qty ${Number(m.qty||1)}</div></div><strong>${area.toFixed(2)} sq ft</strong></div>`}).join(''):'<div class="muted">No measurements are stored on this quote.</div>';$('jobDetailModal').classList.add('show')}async function updateJobStatus(i,status){let j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this installation complete?\n\nConfirm actual film used next so inventory can be finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id){let quoteStatus=status==='Completed'?'Completed':'Scheduled';await sb.from('quotes').update({status:quoteStatus,updated_at:new Date().toISOString()}).eq('id',j.quote_id)}toast(`Job marked ${status}.`);await loadEmployee()}async function saveInstallerJobUpdate(){let i=Number($('jobDetailModal').dataset.jobIndex),j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');let status=$('jobStatusSelect').value,notes=$('jobInstallerNotes').value.trim();if(status==='Completed'&&j.status!=='Completed'){try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let{error}=await sb.from('jobs').update({status,notes,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id){let quoteStatus=status==='Completed'?'Completed':'Scheduled';await sb.from('quotes').update({status:quoteStatus,updated_at:new Date().toISOString()}).eq('id',j.quote_id)}$('jobDetailModal').classList.remove('show');toast('Job update saved.');await loadEmployee()}
 async function loadTeam(){let{data,error}=await sb.from('time_entry_totals').select('*,employee:profiles!time_entries_employee_id_fkey(full_name,email)').gte('clock_in',week()).order('clock_in',{ascending:false});if(error)return toast(error.message);teamTimeCache=data||[];let groups={};teamTimeCache.forEach(x=>{let id=x.employee_id;groups[id]??={name:x.employee?.full_name||x.employee?.email||'Employee',total:0,entries:[]};groups[id].total+=Number(x.net_hours||0);groups[id].entries.push(x)});$('teamList').innerHTML=Object.values(groups).length?Object.values(groups).map(g=>`<div class="card"><div class="head"><h2>${esc(g.name)}</h2><span class="pill">${g.total.toFixed(2)} hrs</span></div>${g.entries.map(x=>`<div class="time-row"><span>${when(x.clock_in)} → ${when(x.clock_out)}</span><b>${Number(x.net_hours||0).toFixed(2)} hrs</b></div>`).join('')}</div>`).join(''):'<div class="card muted">No time entries this week.</div>'}
 function exportTimeCsv(){if(!teamTimeCache.length)return toast('No weekly time records to export.');let rows=[['Employee','Clock In','Clock Out','Net Hours','Status'],...teamTimeCache.map(x=>[x.employee?.full_name||x.employee?.email||'Employee',when(x.clock_in),when(x.clock_out),Number(x.net_hours||0).toFixed(2),x.status||''])],csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`dynamic-tintz-time-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('Weekly time CSV exported.')}
 
@@ -1943,7 +2068,15 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
   if(existingJobId)res=await sb.from('jobs').update(payload).eq('id',existingJobId).select('id').single();else res=await sb.from('jobs').insert(payload).select('id').single();
   if(res.error){$('scheduleMessage').textContent=res.error.message;return}
   let jobId=res.data?.id||existingJobId;try{await saveScheduleMaterialPlan(jobId)}catch(e){$('scheduleMessage').textContent='Job saved, but material plan failed: '+e.message;return}
-  if(selectedStatus==='Completed'){let r=await sb.from('jobs').update({status:'Completed',archived_at:now,updated_at:now}).eq('id',jobId);if(r.error){$('scheduleMessage').textContent='Material plan saved, but completion failed: '+r.error.message;return}}
+  if(selectedStatus==='Completed'){
+    try{
+      let actualRaw=$('scheduleMaterialActualFt')?.value??'',
+          finalInv=await finalizeScheduledJobInventory(jobId,actualRaw===''?null:Number(actualRaw));
+      if(finalInv?.canceled){$('scheduleMessage').textContent='Completion canceled. Enter actual film used to close the job.';return}
+    }catch(e){$('scheduleMessage').textContent='Job saved, but final inventory deduction failed: '+e.message;return}
+    let r=await sb.from('jobs').update({status:'Completed',archived_at:now,updated_at:now}).eq('id',jobId);
+    if(r.error){$('scheduleMessage').textContent='Inventory finalized, but completion failed: '+r.error.message;return}
+  }
   let{error:qError}=await sb.from('quotes').update({status:selectedStatus==='Completed'?'Completed':selectedStatus==='Canceled'?'Approved':'Scheduled',assigned_to:assigned[0],updated_at:now}).eq('id',quoteId);if(qError){$('scheduleMessage').textContent='Job saved, but quote status update failed: '+qError.message;return}
   let calendarAction=calendarActionForJobStatus(selectedStatus),calendarWarning='';
   if(calendarAction){
@@ -2313,7 +2446,7 @@ function renderOperations(){
   $('operationsList').querySelectorAll('[data-restorejob]').forEach(b=>b.onclick=()=>restoreArchivedJob(b.dataset.restorejob));
 }
 
-async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'&&!confirm('Mark this job completed and move it to the archive?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
+async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this job completed and move it to the archive?\n\nYou will confirm the actual film used before inventory is finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled. Inventory was not changed.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
 async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
   setTimeout(()=>{
