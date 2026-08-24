@@ -349,6 +349,7 @@ function filmSignature(value){
   return '';
 }
 function resolveInventoryProduct(products, quote={}, job={}){
+  if(quote?.inventory_product_id){let linked=products.find(p=>p.id===quote.inventory_product_id);if(linked)return linked}
   let candidates=[
     quote.square_catalog_item_name,
     quote.film_type,
@@ -392,11 +393,11 @@ async function reconcileCurrentScheduledReservations(){
     try{
       let products=await inventoryProducts();
       let{data:jobs,error:jobError}=await sb.from('jobs')
-        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,square_catalog_item_name,project_name,notes)')
+        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,square_catalog_item_name,inventory_product_id,project_name,notes)')
         .in('status',['Scheduled','Confirmed','En Route','In Progress']);
       if(jobError)throw jobError;
       jobs=jobs||[];
-      if(!jobs.length)return {created:0,skipped:0,unmatched:0};
+      if(!jobs.length)return {created:0,skipped:0,unmatched:0,unmatchedJobs:[]};
 
       let jobIds=jobs.map(j=>j.id),
           quoteIds=jobs.map(j=>j.quote_id).filter(Boolean);
@@ -419,11 +420,15 @@ async function reconcileCurrentScheduledReservations(){
         if(!optimizerByQuote[p.quote_id])optimizerByQuote[p.quote_id]=p;
       }
 
-      let created=0,skipped=0,unmatched=0;
+      let created=0,skipped=0,unmatched=0,unmatchedJobs=[];
       for(let j of jobs){
         if(existing.has(j.id)){skipped++;continue}
         let q=j.quote||{};
-        if(!j.quote_id||!(Number(q.total_sqft)>0)){unmatched++;continue}
+        if(!j.quote_id||!(Number(q.total_sqft)>0)){
+          unmatched++;
+          unmatchedJobs.push({job_id:j.id,quote_id:j.quote_id||null,title:j.title||'Scheduled Job',status:j.status,total_sqft:Number(q.total_sqft)||0,film:q.square_catalog_item_name||'',reason:'Missing quote or square footage'});
+          continue
+        }
 
         let product=resolveInventoryProduct(products,q,j);
         if(!product){
@@ -435,6 +440,11 @@ async function reconcileCurrentScheduledReservations(){
             project:q.project_name
           });
           unmatched++;
+          unmatchedJobs.push({
+            job_id:j.id,quote_id:j.quote_id||null,title:j.title||q.project_name||'Scheduled Job',
+            status:j.status,total_sqft:Number(q.total_sqft)||0,
+            film:q.square_catalog_item_name||'',reason:'Film type not identified'
+          });
           continue
         }
 
@@ -463,15 +473,20 @@ async function reconcileCurrentScheduledReservations(){
         if(error){
           console.warn('Scheduled reservation reconciliation:',j.id,error);
           unmatched++;
+          unmatchedJobs.push({
+            job_id:j.id,quote_id:j.quote_id||null,title:j.title||q.project_name||'Scheduled Job',
+            status:j.status,total_sqft:Number(q.total_sqft)||0,
+            film:q.square_catalog_item_name||'',reason:error.message||'Reservation could not be saved'
+          });
           continue;
         }
         created++;
       }
       if(created)console.info(`Reconciled ${created} current scheduled inventory reservation${created===1?'':'s'}.`);
-      return {created,skipped,unmatched};
+      return {created,skipped,unmatched,unmatchedJobs};
     }catch(e){
       console.warn('Current scheduled inventory reconciliation failed:',e);
-      return {created:0,skipped:0,unmatched:0,error:e};
+      return {created:0,skipped:0,unmatched:0,unmatchedJobs:[],error:e};
     }finally{
       setTimeout(()=>{scheduledReservationReconcilePromise=null},1500);
     }
@@ -480,7 +495,91 @@ async function reconcileCurrentScheduledReservations(){
 }
 
 
-let activeReservationOverlayWarning=0;
+let activeReservationOverlayWarning=0,unmatchedScheduledReservationJobs=[];
+async function assignScheduledReservationFilm(jobId,quoteId,productId,totalSqft){
+  if(!jobId||!productId)return toast('Choose the film for this scheduled job.');
+  let product=inventoryProductCache.find(p=>p.id===productId);
+  if(!product){
+    try{await inventoryProducts();product=inventoryProductCache.find(p=>p.id===productId)}catch{}
+  }
+  if(!product)return toast('Film type not found.');
+
+  let sqft=Number(totalSqft)||0;
+  if(!(sqft>0))return toast('This job does not have usable quote square footage.');
+
+  let optimizer=quoteId?await latestOptimizerPlanForQuote(quoteId):null,
+      width=Number(optimizer?.roll_width)||Number(product.default_roll_width_inches)||72,
+      plannedSqft=optimizer?optimizerMaterialSqft(optimizer):sqft,
+      linearInches=optimizer
+        ?Number(optimizer.linear_inches_required)||0
+        :invLinearInchesFromSqft(plannedSqft,width);
+
+  let{error:planError}=await sb.from('job_material_plans').upsert({
+    job_id:jobId,
+    product_id:productId,
+    source:optimizer?'optimizer':'calculated',
+    optimizer_plan_id:optimizer?.id||null,
+    planned_linear_inches:linearInches,
+    actual_linear_inches:null,
+    roll_width_inches:width,
+    notes:optimizer
+      ?`Film assigned during scheduled reservation repair. Optimizer material reserved: ${plannedSqft.toFixed(2)} sq ft.`
+      :`Film assigned during scheduled reservation repair. Quote glass reserved: ${plannedSqft.toFixed(2)} sq ft.`,
+    updated_at:new Date().toISOString()
+  },{onConflict:'job_id'});
+  if(planError)return toast(planError.message);
+
+  // Persist the selected film back to the quote so this job never becomes ambiguous again.
+  if(quoteId){
+    let{error:quoteError}=await sb.from('quotes').update({
+      inventory_product_id:product.id,
+      square_catalog_item_name:product.name,
+      updated_at:new Date().toISOString()
+    }).eq('id',quoteId);
+    if(quoteError)console.warn('Reservation film quote update:',quoteError);
+  }
+
+  toast(`${product.name.replace(' Tint Install','')} reserved for scheduled job.`);
+  unmatchedScheduledReservationJobs=[];
+  await loadInventoryHomeAlerts();
+  if($('inventoryStatusList'))await loadInventory();
+}
+
+function renderUnmatchedScheduledReservations(){
+  if(!unmatchedScheduledReservationJobs.length)return '';
+  let options=inventoryProductCache.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  return `<div class="scheduled-reservation-repair">
+    <div class="scheduled-reservation-repair-head">
+      <b>${unmatchedScheduledReservationJobs.length} scheduled job${unmatchedScheduledReservationJobs.length===1?'':'s'} need a film type</b>
+      <span>Select the film once. The reservation will immediately reduce projected inventory and the choice is saved back to the quote.</span>
+    </div>
+    ${unmatchedScheduledReservationJobs.map((j,i)=>`
+      <div class="scheduled-reservation-repair-row">
+        <div>
+          <b>${esc(j.title||'Scheduled Job')}</b>
+          <small>${invFmt(j.total_sqft,2)} sq ft${j.film?` • Current: ${esc(j.film)}`:''}</small>
+        </div>
+        <select data-reservationrepairselect="${i}">
+          <option value="">Select film…</option>
+          ${options}
+        </select>
+        <button class="btn primary" data-reservationrepair="${i}">Reserve</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+function bindUnmatchedScheduledReservationControls(host){
+  host?.querySelectorAll('[data-reservationrepair]').forEach(b=>b.onclick=async()=>{
+    let i=Number(b.dataset.reservationrepair),
+        j=unmatchedScheduledReservationJobs[i],
+        select=host.querySelector(`[data-reservationrepairselect="${i}"]`);
+    if(!j||!select?.value)return toast('Choose the film for this scheduled job.');
+    b.disabled=true;b.textContent='Reserving…';
+    try{await assignScheduledReservationFilm(j.job_id,j.quote_id,select.value,j.total_sqft)}
+    finally{b.disabled=false;b.textContent='Reserve'}
+  });
+}
+
 async function applyActiveReservationOverlay(rows=[]){
   try{
     let{data:plans,error}=await sb.from('job_material_plans')
@@ -524,6 +623,7 @@ async function loadInventoryHomeAlerts(){
 
   let rows=await applyActiveReservationOverlay(data||[]);
   activeReservationOverlayWarning=Number(reconcileResult?.unmatched)||0;
+  unmatchedScheduledReservationJobs=Array.isArray(reconcileResult?.unmatchedJobs)?reconcileResult.unmatchedJobs:[];
   let priorityNames=['25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install'];
   let priority=priorityNames.map(n=>rows.find(x=>x.product_name===n)).filter(Boolean);
   let otherLow=rows.filter(x=>!priorityNames.includes(x.product_name)&&Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft));
@@ -532,15 +632,16 @@ async function loadInventoryHomeAlerts(){
     ${priority.map(x=>{
       let p=Number(x.projected_sqft)||0,t=Number(x.reorder_threshold_sqft)||75,low=p<=t;
       return `<button class="app-inventory-snapshot-card ${low?'is-low':''}" data-homeinventory="${x.product_id}">
-        <span class="app-stock-copy"><b>${esc(x.product_name.replace(' Tint Install','').replace('Ceramic','Ceramic '))}</b><small>${Number(x.active_roll_count)||0} roll${Number(x.active_roll_count)===1?'':'s'} • ${invFmt(p,1)} sq ft available</small>${low?'<em>ORDER SOON</em>':'<em>IN STOCK</em>'}</span>
+        <span class="app-stock-copy"><b>${esc(x.product_name)}</b><small>${Number(x.active_roll_count)||0} roll${Number(x.active_roll_count)===1?'':'s'} • ${invFmt(p,1)} sq ft available</small>${low?'<em>ORDER SOON</em>':'<em>IN STOCK</em>'}</span>
         ${inventorySqftDisplay(p,'sm')}
         <span class="app-chevron">›</span>
       </button>`
     }).join('')}
   </div>
   ${otherLow.length?`<details class="app-low-stock"><summary>${otherLow.length} other film${otherLow.length===1?'':'s'} need attention</summary>${otherLow.map(x=>`<div><span>${esc(x.product_name)}</span><b>${invFmt(x.projected_sqft,1)} sq ft</b></div>`).join('')}</details>`:''}
-  ${activeReservationOverlayWarning?`<div class="inventory-reservation-warning"><b>${activeReservationOverlayWarning} scheduled job${activeReservationOverlayWarning===1?'':'s'} need a film type.</b><span>Open the job and select the correct film so its reservation can be applied.</span></div>`:''}`;
+  ${renderUnmatchedScheduledReservations()}`;
   host.querySelectorAll('[data-homeinventory]').forEach(b=>b.onclick=()=>openInventoryMetricEditor(b.dataset.homeinventory,'projected'));
+  bindUnmatchedScheduledReservationControls(host);
 }
 async function loadInventoryBackfill(){
   let host=$('inventoryBackfillList');
@@ -778,7 +879,7 @@ function renderScrapInventory(){
 
   host.innerHTML=filmNames.map(film=>{
     let filmPieces=filmGroups[film];
-    let shortName=film.replace(' Tint Install','');
+    let shortName=film;
     let filmSqft=filmPieces.reduce((s,x)=>s+Number(x.square_feet||0),0);
     let filmAvailable=filmPieces.filter(x=>x.status==='available').length;
     let filmReserved=filmPieces.filter(x=>x.status==='reserved').length;
@@ -1869,7 +1970,13 @@ async function saveCloudQuote(){
   let saveButtons=[$('saveQuote'),$('mobileSaveQuote'),$('quoteSaveDockButton')].filter(Boolean),saveLabels=saveButtons.map(b=>b.textContent);
   saveButtons.forEach(b=>{b.disabled=true;b.textContent='Saving…'});
   try{
-  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:$('qSquareItem')?.value||'25% Ceramic Tint Install',status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();clearQuoteForm(false);await loadQuotes();
+  let selectedFilmName=$('qSquareItem')?.value||'25% Ceramic Tint Install',selectedInventoryProduct=null;
+  try{
+    let products=await inventoryProducts();
+    selectedInventoryProduct=resolveInventoryProduct(products,{square_catalog_item_name:selectedFilmName},{});
+    if(selectedInventoryProduct)selectedFilmName=selectedInventoryProduct.name;
+  }catch(e){console.warn('Quote inventory product link:',e)}
+  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();clearQuoteForm(false);await loadQuotes();
   }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
 }
 async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
@@ -2555,7 +2662,15 @@ function renderOperations(){
 
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this job completed and move it to the archive?\n\nYou will confirm the actual film used before inventory is finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled. Inventory was not changed.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
-async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem'))$('qSquareItem').value=q.square_catalog_item_name||'25% Ceramic Tint Install';$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
+async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem')){
+  let canonical=q.square_catalog_item_name||'25% Ceramic Tint Install';
+  try{
+    let products=inventoryProductCache.length?inventoryProductCache:await inventoryProducts(),
+        product=resolveInventoryProduct(products,q,{});
+    if(product)canonical=product.name;
+  }catch{}
+  $('qSquareItem').value=[...$('qSquareItem').options].some(o=>o.value===canonical)?canonical:'25% Ceramic Tint Install';
+}$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
   setTimeout(()=>{
     let target=$('quoteMeasurementsCard')||$('qSqft');
     target?.scrollIntoView({behavior:'smooth',block:'start'});

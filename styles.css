@@ -1398,3 +1398,39 @@ button.app-kpi-card{cursor:pointer}
 }
 .inventory-reservation-warning b{font-size:9px;color:#ffc24f}
 .inventory-reservation-warning span{font-size:8px;color:var(--app-muted);line-height:1.35}
+
+/* v7.10.1 — scheduled reservation repair */
+.scheduled-reservation-repair{
+  margin-top:9px;
+  border:1px solid rgba(255,190,70,.35);
+  border-radius:13px;
+  background:rgba(255,190,70,.055);
+  overflow:hidden;
+}
+.scheduled-reservation-repair-head{
+  padding:10px 11px;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  border-bottom:1px solid rgba(255,190,70,.18);
+}
+.scheduled-reservation-repair-head>b{font-size:10px;color:#ffc24f}
+.scheduled-reservation-repair-head>span{font-size:8px;color:var(--app-muted);line-height:1.35}
+.scheduled-reservation-repair-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(150px,220px) auto;
+  align-items:center;
+  gap:8px;
+  padding:9px 10px;
+  border-bottom:1px solid rgba(255,255,255,.045);
+}
+.scheduled-reservation-repair-row:last-child{border-bottom:0}
+.scheduled-reservation-repair-row>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.scheduled-reservation-repair-row>div>b{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scheduled-reservation-repair-row>div>small{font-size:8px;color:var(--app-muted)}
+.scheduled-reservation-repair-row select{min-height:36px}
+@media(max-width:600px){
+  .scheduled-reservation-repair-row{grid-template-columns:1fr}
+  .scheduled-reservation-repair-row select,
+  .scheduled-reservation-repair-row .btn{width:100%}
+}

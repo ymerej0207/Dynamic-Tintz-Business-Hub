@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.10.0-reliable-scheduled-reservations
+ * Release: 7.10.2-canonical-film-linking
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.10.0-";
-const CACHE_NAME = `${CACHE_PREFIX}reliable-scheduled-reservations`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.10.2-";
+const CACHE_NAME = `${CACHE_PREFIX}canonical-film-linking`; 
 
 const APP_SHELL = [
   "./",
