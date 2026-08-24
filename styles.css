@@ -1384,3 +1384,17 @@ button.app-kpi-card{cursor:pointer}
   .quote-index-status{display:none}
   .quote-type-icon{width:32px;height:32px}
 }
+
+/* v7.10.0 — reliable scheduled inventory reservation */
+.inventory-reservation-warning{
+  margin-top:8px;
+  padding:9px 10px;
+  border:1px solid rgba(255,190,70,.28);
+  border-radius:11px;
+  background:rgba(255,190,70,.07);
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.inventory-reservation-warning b{font-size:9px;color:#ffc24f}
+.inventory-reservation-warning span{font-size:8px;color:var(--app-muted);line-height:1.35}

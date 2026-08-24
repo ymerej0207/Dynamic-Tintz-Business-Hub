@@ -328,6 +328,63 @@ async function inventoryProducts(){
   let{data,error}=await sb.from('film_inventory_products').select('*').eq('active',true).order('name');
   if(error)throw error;inventoryProductCache=data||[];return inventoryProductCache
 }
+
+function normalizeFilmText(value){
+  return String(value||'')
+    .toLowerCase()
+    .replace(/%/g,' percent ')
+    .replace(/[^a-z0-9]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function filmSignature(value){
+  let t=normalizeFilmText(value);
+  if(/\b15\b|\b15 percent\b/.test(t)&&t.includes('ceramic'))return '15c';
+  if(/\b25\b|\b25 percent\b/.test(t)&&t.includes('ceramic'))return '25c';
+  if(/\b35\b|\b35 percent\b/.test(t)&&t.includes('ceramic'))return '35c';
+  if(/\b45\b|\b45 percent\b/.test(t)&&t.includes('ceramic'))return '45c';
+  if(t.includes('security')||t.includes('2 mil')||t.includes('2mil'))return 'security';
+  if(t.includes('blackout'))return 'blackout';
+  if(t.includes('solar control')||t.includes('budget friendly'))return 'solar';
+  return '';
+}
+function resolveInventoryProduct(products, quote={}, job={}){
+  let candidates=[
+    quote.square_catalog_item_name,
+    quote.film_type,
+    quote.project_name,
+    quote.notes,
+    job.title
+  ].filter(Boolean);
+
+  // 1. Exact normalized name.
+  for(let raw of candidates){
+    let wanted=normalizeFilmText(raw);
+    let exact=products.find(p=>normalizeFilmText(p.name)===wanted);
+    if(exact)return exact;
+  }
+
+  // 2. Film signature (25c / 35c / etc.).
+  for(let raw of candidates){
+    let sig=filmSignature(raw);
+    if(!sig)continue;
+    let hit=products.find(p=>filmSignature(p.name)===sig);
+    if(hit)return hit;
+  }
+
+  // 3. Conservative containment only when it identifies exactly one product.
+  for(let raw of candidates){
+    let wanted=normalizeFilmText(raw);
+    if(!wanted)continue;
+    let hits=products.filter(p=>{
+      let pn=normalizeFilmText(p.name);
+      return pn.includes(wanted)||wanted.includes(pn);
+    });
+    if(hits.length===1)return hits[0];
+  }
+  return null;
+}
+
 let scheduledReservationReconcilePromise=null;
 async function reconcileCurrentScheduledReservations(){
   if(scheduledReservationReconcilePromise)return scheduledReservationReconcilePromise;
@@ -335,7 +392,7 @@ async function reconcileCurrentScheduledReservations(){
     try{
       let products=await inventoryProducts();
       let{data:jobs,error:jobError}=await sb.from('jobs')
-        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,square_catalog_item_name)')
+        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,square_catalog_item_name,project_name,notes)')
         .in('status',['Scheduled','Confirmed','En Route','In Progress']);
       if(jobError)throw jobError;
       jobs=jobs||[];
@@ -368,9 +425,18 @@ async function reconcileCurrentScheduledReservations(){
         let q=j.quote||{};
         if(!j.quote_id||!(Number(q.total_sqft)>0)){unmatched++;continue}
 
-        let wanted=String(q.square_catalog_item_name||'').trim().toLowerCase(),
-            product=products.find(p=>String(p.name||'').trim().toLowerCase()===wanted);
-        if(!product){unmatched++;continue}
+        let product=resolveInventoryProduct(products,q,j);
+        if(!product){
+          console.warn('Scheduled reservation could not identify film:',{
+            job_id:j.id,
+            title:j.title,
+            quote_id:j.quote_id,
+            film:q.square_catalog_item_name,
+            project:q.project_name
+          });
+          unmatched++;
+          continue
+        }
 
         let optimizer=optimizerByQuote[j.quote_id]||null,
             width=Number(optimizer?.roll_width)||Number(product.default_roll_width_inches)||72,
@@ -413,13 +479,52 @@ async function reconcileCurrentScheduledReservations(){
   return scheduledReservationReconcilePromise;
 }
 
+
+let activeReservationOverlayWarning=0;
+async function applyActiveReservationOverlay(rows=[]){
+  try{
+    let{data:plans,error}=await sb.from('job_material_plans')
+      .select('product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,job:jobs!job_material_plans_job_id_fkey(id,status)');
+    if(error)throw error;
+
+    let activeStatuses=new Set(['Scheduled','Confirmed','En Route','In Progress']),
+        reservedByProduct={},
+        countByProduct={};
+
+    for(let p of (plans||[])){
+      let status=p.job?.status;
+      if(!activeStatuses.has(status))continue;
+      let sqft=invSqft(p.roll_width_inches,p.planned_linear_inches);
+      if(!(sqft>0))continue;
+      reservedByProduct[p.product_id]=(reservedByProduct[p.product_id]||0)+sqft;
+      countByProduct[p.product_id]=(countByProduct[p.product_id]||0)+1;
+    }
+
+    return (rows||[]).map(r=>{
+      let onHand=Number(r.on_hand_sqft)||0,
+          reserved=reservedByProduct[r.product_id]||0;
+      return {
+        ...r,
+        reserved_sqft:reserved,
+        reserved_job_count:countByProduct[r.product_id]||0,
+        projected_sqft:Math.max(0,onHand-reserved)
+      };
+    });
+  }catch(e){
+    console.warn('Active reservation overlay failed:',e);
+    return rows||[];
+  }
+}
+
 async function loadInventoryHomeAlerts(){
   let host=$('inventoryHomeAlerts');if(!host)return;
-  await reconcileCurrentScheduledReservations();
+  let reconcileResult=await reconcileCurrentScheduledReservations();
   let{data,error}=await sb.from('inventory_product_status').select('*').eq('active',true).order('product_name');
   if(error){console.error('Inventory forecast error',error);host.innerHTML=`<div class="app-empty"><b>Inventory forecast could not load.</b><br>${esc(error.message||'Unknown inventory error')}</div>`;return}
 
-  let rows=data||[],priorityNames=['25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install'];
+  let rows=await applyActiveReservationOverlay(data||[]);
+  activeReservationOverlayWarning=Number(reconcileResult?.unmatched)||0;
+  let priorityNames=['25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install'];
   let priority=priorityNames.map(n=>rows.find(x=>x.product_name===n)).filter(Boolean);
   let otherLow=rows.filter(x=>!priorityNames.includes(x.product_name)&&Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft));
 
@@ -433,7 +538,8 @@ async function loadInventoryHomeAlerts(){
       </button>`
     }).join('')}
   </div>
-  ${otherLow.length?`<details class="app-low-stock"><summary>${otherLow.length} other film${otherLow.length===1?'':'s'} need attention</summary>${otherLow.map(x=>`<div><span>${esc(x.product_name)}</span><b>${invFmt(x.projected_sqft,1)} sq ft</b></div>`).join('')}</details>`:''}`;
+  ${otherLow.length?`<details class="app-low-stock"><summary>${otherLow.length} other film${otherLow.length===1?'':'s'} need attention</summary>${otherLow.map(x=>`<div><span>${esc(x.product_name)}</span><b>${invFmt(x.projected_sqft,1)} sq ft</b></div>`).join('')}</details>`:''}
+  ${activeReservationOverlayWarning?`<div class="inventory-reservation-warning"><b>${activeReservationOverlayWarning} scheduled job${activeReservationOverlayWarning===1?'':'s'} need a film type.</b><span>Open the job and select the correct film so its reservation can be applied.</span></div>`:''}`;
   host.querySelectorAll('[data-homeinventory]').forEach(b=>b.onclick=()=>openInventoryMetricEditor(b.dataset.homeinventory,'projected'));
 }
 async function loadInventoryBackfill(){
@@ -838,7 +944,8 @@ async function loadInventory(){
       inventoryProducts()
     ]);
     if(statusResult.error)throw statusResult.error;if(rollResult.error)throw rollResult.error;
-    inventoryStatusCache=statusResult.data||[];inventoryRollCache=rollResult.data||[];
+    inventoryStatusCache=await applyActiveReservationOverlay(statusResult.data||[]);
+    inventoryRollCache=rollResult.data||[];
     populateInventoryProductSelects(products);renderInventory();loadScrapInventory()
   }catch(e){if(host)host.innerHTML=`<div class="card inventory-alert"><b>Inventory database isn't installed yet.</b><div class="muted">${esc(e.message)}</div><div style="margin-top:8px">Run <b>INVENTORY-MANAGEMENT-MIGRATION.sql</b> in Supabase SQL Editor.</div></div>`}
 }
@@ -1157,7 +1264,7 @@ async function changeInventoryThreshold(productId,current){
 }
 async function inventoryProductForQuote(q){
   if(!inventoryProductCache.length){try{await inventoryProducts()}catch{return null}}
-  let wanted=String(q?.square_catalog_item_name||'').trim().toLowerCase();return inventoryProductCache.find(p=>p.name.toLowerCase()===wanted)||null
+  return resolveInventoryProduct(inventoryProductCache,q,{});
 }
 async function latestOptimizerPlanForQuote(quoteId){
   if(!quoteId)return null;let{data,error}=await sb.from('roll_optimization_plans').select('id,quote_id,roll_width,linear_inches_required,created_at').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle();return error?null:data
