@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.10.3-reservation-source-fix
+ * Release: 7.10.4-full-film-library
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.10.3-";
-const CACHE_NAME = `${CACHE_PREFIX}reservation-source-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.10.4-";
+const CACHE_NAME = `${CACHE_PREFIX}full-film-library`; 
 
 const APP_SHELL = [
   "./",
