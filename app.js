@@ -1556,24 +1556,6 @@ async function loadEmployee(){renderClock($('employeeClock'),await openShift());
 async function loadTeam(){let{data,error}=await sb.from('time_entry_totals').select('*,employee:profiles!time_entries_employee_id_fkey(full_name,email)').gte('clock_in',week()).order('clock_in',{ascending:false});if(error)return toast(error.message);teamTimeCache=data||[];let groups={};teamTimeCache.forEach(x=>{let id=x.employee_id;groups[id]??={name:x.employee?.full_name||x.employee?.email||'Employee',total:0,entries:[]};groups[id].total+=Number(x.net_hours||0);groups[id].entries.push(x)});$('teamList').innerHTML=Object.values(groups).length?Object.values(groups).map(g=>`<div class="card"><div class="head"><h2>${esc(g.name)}</h2><span class="pill">${g.total.toFixed(2)} hrs</span></div>${g.entries.map(x=>`<div class="time-row"><span>${when(x.clock_in)} → ${when(x.clock_out)}</span><b>${Number(x.net_hours||0).toFixed(2)} hrs</b></div>`).join('')}</div>`).join(''):'<div class="card muted">No time entries this week.</div>'}
 function exportTimeCsv(){if(!teamTimeCache.length)return toast('No weekly time records to export.');let rows=[['Employee','Clock In','Clock Out','Net Hours','Status'],...teamTimeCache.map(x=>[x.employee?.full_name||x.employee?.email||'Employee',when(x.clock_in),when(x.clock_out),Number(x.net_hours||0).toFixed(2),x.status||''])],csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`dynamic-tintz-time-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('Weekly time CSV exported.')}
 
-const QUOTE_SERVICE_CATALOG=[
- {key:'tint-removal',name:'Tint removal',squareName:'Tint removal',unit:'hr',price:100},
- {key:'tint-reapply',name:'Tint removal w/reapplication',squareName:'Tint removal w/reapplication',unit:'hr',price:50},
- {key:'shop-min',name:'Shop Minimum',squareName:'Shop Minimum',unit:'ea',price:250},
- {key:'shop-min-50',name:'Shop Minimum 50+',squareName:'Shop Minimum 50+',unit:'ea',price:350},
- {key:'scaffolding',name:'Scaffolding Usage',squareName:'Scaffolding Usage',unit:'ea',price:250},
- {key:'manlift',name:'Manlift Rental 4 week term',squareName:'Manlift Rental 4 week term',unit:'ea',price:5000},
- {key:'custom-film',name:'Custom Film Order Fee',squareName:'Custom Film Order Fee',unit:'ea',price:450},
- {key:'half-roll',name:'Half Roll Order — Special Order Film',squareName:'Roll Order (Special Order Film)',unit:'ea',price:150},
- {key:'full-roll',name:'Full Roll Order — Special Order Film',squareName:'Roll Order (Special Order Film)',unit:'ea',price:250}
-];
-let quoteServices=[];
-function serviceItem(k){return QUOTE_SERVICE_CATALOG.find(x=>x.key===k)}
-function quoteServicesTotal(){return quoteServices.reduce((s,x)=>s+(Number(x.qty)||0)*(Number(x.price)||0),0)}
-function normalizeQuoteServices(a){return (Array.isArray(a)?a:[]).map((x,i)=>{let c=serviceItem(x.key)||QUOTE_SERVICE_CATALOG.find(v=>v.squareName===x.squareName&&Number(v.price)===Number(x.price));return{id:x.id||`${Date.now()}-${i}`,key:x.key||c?.key,name:x.name||c?.name||x.squareName,squareName:x.squareName||c?.squareName||x.name,unit:x.unit||c?.unit||'ea',price:Number(x.price??c?.price??0),qty:Number(x.qty)||1}})}
-function addQuoteService(){let c=QUOTE_SERVICE_CATALOG[0];quoteServices.push({id:String(Date.now()),...c,qty:1});renderQuoteServices();scheduleQuoteAutosave()}
-function renderQuoteServices(){let h=$('quoteServiceRows');if(!h)return;if(!quoteServices.length){h.innerHTML='<div class="app-empty">No additional services or fees.</div>';calculateQuote();return}let opts=QUOTE_SERVICE_CATALOG.map(x=>`<option value="${x.key}">${esc(x.name)} — ${money(x.price)}/${x.unit}</option>`).join('');h.innerHTML=quoteServices.map((r,i)=>`<div class="quote-service-row"><select data-skey="${i}">${opts}</select><label><span>Qty</span><input data-sqty="${i}" type="number" min=".01" step="${r.unit==='hr'?'.25':'1'}" value="${r.qty}"></label><div class="quote-service-price"><small>${esc(r.unit)}</small><b>${money(r.price*r.qty)}</b></div><button class="btn danger" data-sremove="${i}">×</button></div>`).join('');quoteServices.forEach((r,i)=>{let s=h.querySelector(`[data-skey="${i}"]`);if(s)s.value=r.key});h.querySelectorAll('[data-skey]').forEach(s=>s.onchange=()=>{let i=Number(s.dataset.skey),c=serviceItem(s.value);quoteServices[i]={...quoteServices[i],...c};renderQuoteServices();scheduleQuoteAutosave()});h.querySelectorAll('[data-sqty]').forEach(x=>x.onchange=()=>{quoteServices[Number(x.dataset.sqty)].qty=Math.max(.01,Number(x.value)||1);renderQuoteServices();scheduleQuoteAutosave()});h.querySelectorAll('[data-sremove]').forEach(b=>b.onclick=()=>{quoteServices.splice(Number(b.dataset.sremove),1);renderQuoteServices();scheduleQuoteAutosave()});calculateQuote()}
-
 const ceramicMatrix=[[0,49,12],[50,99,11],[100,199,10],[200,299,9],[300,399,8],[400,499,7],[500,999999,6.5]],solarMatrix=[[0,99,7.5],[100,199,6.5],[200,299,6],[300,399,5.5],[400,999999,5]];
 let measures=[{id:1,area:'',w:0,h:0,qty:1}],nextMeasure=2,editingQuoteId=null,editingCustomerId=null,editingLeadId=null,quoteMilesManual=false;
 let quoteAutosaveTimer=null,quoteCloudAutosaveTimer=null,quoteDraftRestoring=false,quoteAutosaveMuted=false;
@@ -1592,7 +1574,6 @@ function quoteDraftPayload(){
       qStatus:$('qStatus')?.value||'New Lead',qMiles:$('qMiles')?.value||'0',
       qLead:$('qLead')?.value||'Angi',qNotes:$('qNotes')?.value||''
     },
-    services:JSON.parse(JSON.stringify(quoteServices||[])),
     measures:JSON.parse(JSON.stringify(measures||[]))
   }
 }
@@ -1649,7 +1630,7 @@ async function autosaveExistingCloudQuote(){
       status:$('qStatus').value,service_address:$('qAddress').value.trim(),
       miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,
       ceramic_price:cprice.price,ceramic_savings:Math.max(0,list-cprice.price),
-      solar_price:solar.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteServices,additional_services_total:quoteServicesTotal(),quote_total:cprice.price+quoteServicesTotal(),
+      solar_price:solar.price,tax_rate:6.25,notes:$('qNotes').value.trim(),
       measurements:measures,updated_at:new Date().toISOString()
     };
     let q=await sb.from('quotes').update(payload).eq('id',editingQuoteId);
@@ -1674,8 +1655,6 @@ function restoreQuoteDraftIfNeeded(){
       measures=draft.measures;
       nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;
     }
-    quoteServices=normalizeQuoteServices(draft.services||[]);
-    renderQuoteServices();
     editingQuoteId=draft.editingQuoteId||null;
     editingCustomerId=draft.editingCustomerId||null;editingLeadId=draft.editingLeadId||null;
     renderMeasures();
@@ -1782,11 +1761,162 @@ function openNewLeadQuote(source='Angi'){
 }
 
 function qSqft(){return measures.reduce((s,r)=>s+(Number(r.w)*Number(r.h)*Number(r.qty||1))/144,0)}
-function calculateQuote(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0,extra=quoteServicesTotal(),total=c.price+extra;$('qSqft').textContent=s.toFixed(2);$('qCerPrice').textContent=money(c.price);$('qCerTier').textContent=c.label;$('qSolarPrice').textContent=money(o.price);$('qSolarTier').textContent=o.label;$('qListPrice').textContent=money(list);$('qTierPrice').textContent=money(c.price);$('qSavings').textContent=money(save)+' ('+pct+'%)';if($('qServicesTotal'))$('qServicesTotal').textContent=money(extra);$('qServicesSummaryLine')?.classList.toggle('hidden',extra<=0);if($('qProjectTotal'))$('qProjectTotal').textContent=money(total);$('qProjectTotalLine')?.classList.toggle('hidden',extra<=0);$('qDeposit').textContent=money(total*1.0625/2);if($('mobileSqft'))$('mobileSqft').textContent=s.toFixed(2)+' sq ft';if($('mobilePrice'))$('mobilePrice').textContent=money(total)}
+function calculateQuote(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;$('qSqft').textContent=s.toFixed(2);$('qCerPrice').textContent=money(c.price);$('qCerTier').textContent=c.label;$('qSolarPrice').textContent=money(o.price);$('qSolarTier').textContent=o.label;$('qListPrice').textContent=money(list);$('qTierPrice').textContent=money(c.price);$('qSavings').textContent=money(save)+' ('+pct+'%)';$('qDeposit').textContent=money(c.price*1.0625/2);if($('mobileSqft'))$('mobileSqft').textContent=s.toFixed(2)+' sq ft';if($('mobilePrice'))$('mobilePrice').textContent=money(c.price)}
+
+const commonRoomAreas=[
+  'Living Room',
+  'Office',
+  'Home Office',
+  'Kitchen',
+  'Dining Room',
+  'Master Bedroom',
+  'Primary Bedroom',
+  'Master Bathroom',
+  'Primary Bathroom',
+  'Bedroom',
+  'Upstairs Bedroom',
+  'Downstairs Bedroom',
+  'Guest Bedroom',
+  'Kids Bedroom',
+  'Nursery',
+  'Bathroom',
+  'Guest Bathroom',
+  'Half Bath',
+  'Powder Room',
+  'Game Room',
+  'Media Room',
+  'Theater Room',
+  'Family Room',
+  'Great Room',
+  'Den',
+  'Study',
+  'Library',
+  'Breakfast Nook',
+  'Breakfast Area',
+  'Sunroom',
+  'Bonus Room',
+  'Loft',
+  'Playroom',
+  'Exercise Room',
+  'Gym',
+  'Laundry Room',
+  'Mudroom',
+  'Entry',
+  'Entryway',
+  'Foyer',
+  'Hallway',
+  'Stairway',
+  'Stairwell',
+  'Landing',
+  'Front Door',
+  'Back Door',
+  'Patio Door',
+  'Sliding Door',
+  'French Doors',
+  'Patio',
+  'Enclosed Patio',
+  'Pool Room',
+  'Garage',
+  'Garage Door',
+  'Workshop',
+  'Basement',
+  'Attic',
+  'Closet',
+  'Walk-In Closet',
+  'Pantry',
+  'Storefront',
+  'Lobby',
+  'Reception',
+  'Conference Room',
+  'Break Room',
+  'Waiting Room',
+  'Exam Room',
+  'Treatment Room',
+  'Classroom',
+  'Office Front',
+  'Office Rear',
+  'Front Elevation',
+  'Rear Elevation',
+  'Left Elevation',
+  'Right Elevation',
+  'North Side',
+  'South Side',
+  'East Side',
+  'West Side'
+];
+function roomAreaOptions(){
+  return commonRoomAreas.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');
+}
+
+function renderMeasures(){
+  let el=$('measureRows');
+  if(!el)return;
+  el.innerHTML='';
+  measures.forEach((r,index)=>{
+    let d=document.createElement('div');
+    d.className='measure-row';
+    let area=(Number(r.w)*Number(r.h)*Number(r.qty||1)/144).toFixed(2);
+    d.innerHTML=`<div class="measure-index">${index+1}</div>
+      <div class="room-area-picker">
+        <input class="area" data-mid="${r.id}" data-k="area" placeholder="Type room / area" value="${esc(r.area)}" autocomplete="off">
+        <select class="room-area-select" data-roomselect="${r.id}" aria-label="Choose a common room or area">
+          <option value="">Choose room…</option>
+          ${roomAreaOptions()}
+        </select>
+      </div>
+      <input data-mid="${r.id}" data-k="w" inputmode="decimal" placeholder="Width" value="${r.w||''}">
+      <input data-mid="${r.id}" data-k="h" inputmode="decimal" placeholder="Height" value="${r.h||''}">
+      <input data-mid="${r.id}" data-k="qty" inputmode="numeric" placeholder="Qty" value="${r.qty||1}">
+      <div class="measure-total">${area} sq ft</div>
+      <button class="btn mini" data-duplicate="${r.id}" title="Duplicate window">⧉</button>
+      <button class="btn danger mini" data-remove="${r.id}" title="Delete window">×</button>`;
+    el.appendChild(d)
+  });
+  el.querySelectorAll('input[data-mid]').forEach(i=>{
+    i.oninput=()=>{
+      let r=measures.find(x=>x.id===Number(i.dataset.mid));
+      r[i.dataset.k]=i.dataset.k==='area'?i.value:Number(i.value)||0;
+      calculateQuote();
+      scheduleQuoteAutosave();
+      let row=i.closest('.measure-row'),total=row?.querySelector('.measure-total');
+      if(total)total.textContent=((Number(r.w)*Number(r.h)*Number(r.qty||1))/144).toFixed(2)+' sq ft'
+    };
+    i.onkeydown=e=>{
+      if(e.key!=='Enter')return;
+      e.preventDefault();
+      let order=['area','w','h','qty'],position=order.indexOf(i.dataset.k);
+      if(position<order.length-1){
+        i.closest('.measure-row')?.querySelector(`[data-k="${order[position+1]}"]`)?.focus()
+      }else{
+        addMeasure(true)
+      }
+    }
+  });
+  el.querySelectorAll('[data-roomselect]').forEach(s=>{
+    s.onchange=()=>{
+      if(!s.value)return;
+      let id=Number(s.dataset.roomselect),r=measures.find(x=>x.id===id);
+      if(!r)return;
+      r.area=s.value;
+      let input=s.closest('.room-area-picker')?.querySelector('[data-k="area"]');
+      if(input)input.value=s.value;
+      s.value='';
+      calculateQuote();
+      setTimeout(()=>s.closest('.measure-row')?.querySelector('[data-k="w"]')?.focus(),20)
+    }
+  });
+  el.querySelectorAll('[data-duplicate]').forEach(b=>b.onclick=()=>duplicateMeasure(Number(b.dataset.duplicate)));
+  el.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{
+    measures=measures.filter(x=>x.id!==Number(b.dataset.remove));
+    if(!measures.length)measures=[{id:nextMeasure++,area:'',w:0,h:0,qty:1}];
+    renderMeasures()
+  });
+  calculateQuote()
+}
 function addMeasure(focus=true,preset=null){let id=nextMeasure++,row=preset||{id,area:'',w:0,h:0,qty:1};row={...row,id};measures.push(row);renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${preset&&row.area?'w':'area'}"]`)?.focus(),40);scheduleQuoteAutosave()}
 function duplicateMeasure(id){let source=measures.find(x=>x.id===id);if(!source)return;addMeasure(false,{...source});toast('Window duplicated')}
 function duplicateLastMeasure(){let last=measures[measures.length-1];if(!last)return;duplicateMeasure(last.id)}
-function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';$('qStatus').value='New Lead';$('qLead').value='Angi';quoteServices=[];renderQuoteServices();measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;setMileageAutoStatus('');renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
+function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';$('qStatus').value='New Lead';$('qLead').value='Angi';measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;setMileageAutoStatus('');renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
 function currentQuoteText(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;return `Dynamic Tintz Window Film Proposal\n\nCustomer: ${$('qFirst').value} ${$('qLast').value}\nProject: ${$('qProject').value||'Window Film Project'}\nAddress: ${$('qAddress').value}\nTotal glass: ${s.toFixed(2)} sq ft\n\nPremium Ceramic normal price: ${money(list)}\nVolume-tier price: ${money(c.price)}\nCustomer savings: ${money(save)} (${pct}%)\nSolar Control: ${money(o.price)}\n\n50% deposit due at invoicing; balance due upon completion.\nResidential Lifetime Warranty • 12 Year Commercial Warranty\nProudly Veteran Owned and Operated\nDynamic Tintz • 469-840-4008`}
 async function ensureLeadForQuoteCustomer(customerId){
   let source=$('qLead')?.value||'Organic',
@@ -1847,7 +1977,7 @@ async function saveCloudQuote(){
     selectedInventoryProduct=resolveInventoryProduct(products,{square_catalog_item_name:selectedFilmName},{});
     if(selectedInventoryProduct)selectedFilmName=selectedInventoryProduct.name;
   }catch(e){console.warn('Quote inventory product link:',e)}
-  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteServices,additional_services_total:quoteServicesTotal(),quote_total:c.price+quoteServicesTotal(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();clearQuoteForm(false);await loadQuotes();
+  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload);if(res.error)return toast(res.error.message);toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();clearQuoteForm(false);await loadQuotes();
   }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
 }
 async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
@@ -2069,7 +2199,7 @@ async function shareWindowMeasurements(){
   }
 }
 
-async function duplicateCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);let customer={first_name:q.customer?.first_name||'',last_name:q.customer?.last_name||'',email:q.customer?.email||'',phone:q.customer?.phone||'',service_address:q.customer?.service_address||q.service_address||'',lead_source:q.customer?.lead_source||'',notes:q.customer?.notes||''},{data:newCustomer,error:customerError}=await sb.from('customers').insert(customer).select().single();if(customerError)return toast(customerError.message);let payload={customer_id:newCustomer.id,project_name:(q.project_name||'Project')+' — Copy',project_type:q.project_type,square_catalog_item_name:q.square_catalog_item_name||'25% Ceramic Tint Install',inventory_product_id:q.inventory_product_id||null,additional_services:q.additional_services||[],additional_services_total:Number(q.additional_services_total)||0,quote_total:Number(q.quote_total)||Number(q.ceramic_price)||0,status:'New Lead',service_address:q.service_address,miles:q.miles,total_sqft:q.total_sqft,ceramic_list_price:q.ceramic_list_price,ceramic_price:q.ceramic_price,ceramic_savings:q.ceramic_savings,solar_price:q.solar_price,tax_rate:q.tax_rate,notes:q.notes,measurements:q.measurements,assigned_to:null},{error:quoteError}=await sb.from('quotes').insert(payload);if(quoteError)return toast(quoteError.message);toast('Quote duplicated as a new project.');await loadQuotes()}
+async function duplicateCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);let customer={first_name:q.customer?.first_name||'',last_name:q.customer?.last_name||'',email:q.customer?.email||'',phone:q.customer?.phone||'',service_address:q.customer?.service_address||q.service_address||'',lead_source:q.customer?.lead_source||'',notes:q.customer?.notes||''},{data:newCustomer,error:customerError}=await sb.from('customers').insert(customer).select().single();if(customerError)return toast(customerError.message);let payload={customer_id:newCustomer.id,project_name:(q.project_name||'Project')+' — Copy',project_type:q.project_type,square_catalog_item_name:q.square_catalog_item_name||'25% Ceramic Tint Install',status:'New Lead',service_address:q.service_address,miles:q.miles,total_sqft:q.total_sqft,ceramic_list_price:q.ceramic_list_price,ceramic_price:q.ceramic_price,ceramic_savings:q.ceramic_savings,solar_price:q.solar_price,tax_rate:q.tax_rate,notes:q.notes,measurements:q.measurements,assigned_to:null},{error:quoteError}=await sb.from('quotes').insert(payload);if(quoteError)return toast(quoteError.message);toast('Quote duplicated as a new project.');await loadQuotes()}
 function calendarActionForJobStatus(status){
   if(status==='Scheduled'||status==='Confirmed')return 'sync';
   if(status==='Canceled')return 'delete';
@@ -2541,7 +2671,7 @@ async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open',''
     if(product)canonical=product.name;
   }catch{}
   $('qSquareItem').value=[...$('qSquareItem').options].some(o=>o.value===canonical)?canonical:'25% Ceramic Tint Install';
-}quoteServices=normalizeQuoteServices(q.additional_services||[]);renderQuoteServices();$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
+}$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
   setTimeout(()=>{
     let target=$('quoteMeasurementsCard')||$('qSqft');
     target?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -3360,7 +3490,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
   el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleQuoteAutosave);
 });
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
-bind('addQuoteService','onclick',addQuoteService);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
+bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
 bind('addOrganicLeadBtn','onclick',()=>openNewLeadQuote('Organic'));document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
