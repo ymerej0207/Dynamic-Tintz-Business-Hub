@@ -2329,7 +2329,7 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
   }
   await loadQuotes();await dashboard();
   if($('operations')?.classList.contains('active'))await loadOperations();
-  if(calendarWarning)showCalendarSyncDiagnostic(calendarErr);
+  if(calendarWarning)showCalendarSyncDiagnostic(calendarWarning);
 }
 async function loadOperations(){
   if(!operationsDefaultsApplied){
