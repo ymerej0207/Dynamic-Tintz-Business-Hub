@@ -2329,7 +2329,7 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
   }
   await loadQuotes();await dashboard();
   if($('operations')?.classList.contains('active'))await loadOperations();
-  if(calendarWarning)setTimeout(()=>toast('Calendar: '+calendarWarning),350);
+  if(calendarWarning)showCalendarSyncDiagnostic(calendarErr);
 }
 async function loadOperations(){
   if(!operationsDefaultsApplied){
@@ -3602,3 +3602,21 @@ function scrollToCurrentQuoteTop(){($('quoteEditorTop')||$('quoteBuilderPanel')|
 function updateQuoteBackToTop(){let b=$('quoteBackToTop'),v=$('quotes'),e=$('quoteBuilderPanel');if(b&&v)b.classList.toggle('hidden',!(v.classList.contains('active')&&e?.open&&window.scrollY>450))}
 
 window.addEventListener('scroll',updateQuoteBackToTop,{passive:true});
+
+
+function showCalendarSyncDiagnostic(error){
+  const existing=document.getElementById('calendarSyncDiagnostic');
+  if(existing) existing.remove();
+  const message=(error&&error.message)?error.message:String(error||'Unknown calendar sync error');
+  const box=document.createElement('div');
+  box.id='calendarSyncDiagnostic';
+  box.className='calendar-sync-diagnostic';
+  box.innerHTML=`<div class="calendar-sync-diagnostic-title">Job saved, but calendar sync failed</div>
+    <div class="calendar-sync-diagnostic-label">Calendar error:</div>
+    <div class="calendar-sync-diagnostic-message"></div>
+    <button type="button" class="calendar-sync-diagnostic-close">Dismiss</button>`;
+  box.querySelector('.calendar-sync-diagnostic-message').textContent=message;
+  box.querySelector('.calendar-sync-diagnostic-close').onclick=()=>box.remove();
+  document.body.appendChild(box);
+}
+
