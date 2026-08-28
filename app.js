@@ -2259,10 +2259,16 @@ async function syncCalendarJob(jobId,action='sync'){
     providers.push(['google-calendar-sync','Google']);
   }
   let localIcloudSyncIds=getIcloudSyncCalendarIds();
-  let icloudSyncAllowed=localIcloudSyncIds===null
-    ? (icloud?.data?.selected_calendars||[]).length>0
-    : localIcloudSyncIds.length>0;
-  if(!icloud?.error&&icloud?.data?.ok!==false&&icloud?.data?.configured&&icloudSyncAllowed){
+  // The device's explicit SYNC JOBS selection is authoritative.
+  // Do not let a transient/stale auth-status response silently skip iCloud
+  // when this device has a writable sync calendar selected.
+  let localIcloudSyncEnabled=Array.isArray(localIcloudSyncIds)&&localIcloudSyncIds.length>0;
+  let remoteIcloudSyncEnabled=localIcloudSyncIds===null
+    && !icloud?.error
+    && icloud?.data?.ok!==false
+    && icloud?.data?.configured
+    && (icloud?.data?.selected_calendars||[]).length>0;
+  if(localIcloudSyncEnabled||remoteIcloudSyncEnabled){
     providers.push(['icloud-calendar-sync','iCloud']);
   }
   if(!providers.length)return {ok:true,providers:[],skipped:true};
@@ -2275,6 +2281,9 @@ async function syncCalendarJob(jobId,action='sync'){
         throw new Error(detail);
       }
       if(data?.ok===false&&!data?.skipped)throw new Error(data.error||`${label} calendar sync failed`);
+      if(label==='iCloud'&&localIcloudSyncEnabled&&data?.skipped){
+        throw new Error(data?.error||data?.reason||'iCloud sync was skipped even though SYNC JOBS is enabled.');
+      }
       if(!data?.skipped)results.push({provider:label,...data});
     }catch(e){
       let msg=e?.message||String(e);

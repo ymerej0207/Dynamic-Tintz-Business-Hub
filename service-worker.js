@@ -1,9 +1,9 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.11.0-full-hometown-responsesn-responses
+ * Release: 7.11.1-icloud-schedule-sync-fixn-responsesn-responses
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.11.0-";
+const CACHE_PREFIX = "dynamic-tintz-v7.11.1-";
 const CACHE_NAME = `${CACHE_PREFIX}hometown-responses`; 
 
 const APP_SHELL = [
