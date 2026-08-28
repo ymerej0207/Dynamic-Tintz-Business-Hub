@@ -1,6 +1,6 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.11.3"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
 <div id="auth" class="auth card"><div class="brand"><img src="logo.png"><div><h1>Dynamic Tintz OS</h1><p>Secure team access</p></div></div><div class="field"><label>Email</label><input id="email" type="email"></div><div class="field"><label>Password</label><input id="password" type="password"></div><button id="login" class="btn primary wide">Sign In</button><button id="reset" class="btn" style="margin-top:10px">Send Password Reset</button><p id="message" class="muted"></p></div>
-<div id="app" class="shell hidden"><div class="brand app-topbar"><button id="mobileMenuBrand" class="app-menu-glyph" type="button" aria-label="Open menu">☰</button><img src="dynamic-tintz-mark.png" alt="Dynamic Tintz mark"><div><h1>Dynamic Tintz</h1><p id="userline"></p></div><span class="topbar-spacer"></span></div>
+<div id="app" class="shell hidden"><div class="brand app-topbar"><button id="mobileMenuBrand" class="app-menu-glyph" type="button" aria-label="Open menu">☰</button><img src="logo.png"><div><h1>Dynamic Tintz</h1><p id="userline"></p></div><span class="topbar-spacer"></span></div>
 <main id="owner" class="view app-dashboard">
   <div class="app-screen-title">
     <div><span class="eyebrow">DYNAMIC TINTZ OS</span><h2>Dashboard</h2></div>
@@ -18,19 +18,8 @@
       <div><h3>This Week</h3><div id="homeWeekRange" class="muted home-week-range"></div></div>
       <button data-go="operations">Full Calendar</button>
     </div>
-    <div id="homeWeekStrip" class="home-week-strip home-week-overview"></div>
-    <div id="liveJobs" class="home-week-detail-source" aria-hidden="true"><div class="muted">Loading this week…</div></div>
-  </section>
-
-  <section class="app-section home-quick-actions-section">
-    <div class="app-section-head"><h3>Quick Actions</h3></div>
-    <div class="home-quick-actions">
-      <button class="home-quick-action" data-homequick="quote"><span class="home-quick-icon">＋</span><b>New Quote</b></button>
-      <button class="home-quick-action" data-homequick="lead"><span class="home-quick-icon">◎</span><b>New Lead</b></button>
-      <button class="home-quick-action" data-go="operations"><span class="home-quick-icon">▣</span><b>Schedule</b></button>
-      <button class="home-quick-action" data-go="inventory"><span class="home-quick-icon">◇</span><b>Inventory</b></button>
-      <button class="home-quick-action" data-go="operations"><span class="home-quick-icon">✓</span><b>Operations</b></button>
-    </div>
+    <div id="homeWeekStrip" class="home-week-strip"></div>
+    <div id="liveJobs" class="app-schedule-list home-week-list"><div class="muted">Loading this week…</div></div>
   </section>
 
   <section class="app-section">
@@ -72,7 +61,7 @@
 
   <section class="lead-filter-bar">
     <div class="field"><label>Search</label><input id="leadSearch" placeholder="Name, phone, address, request..."></div>
-    <div class="field"><label>Status</label><select id="leadStatusFilter"><option value="" selected>All Leads</option><option value="new">New</option><option value="contacted">Contacted</option><option value="follow_up">Follow Up</option><option value="approved">Approved</option><option value="lost">Lost</option><option value="no_response">No Response</option><option value="do_not_contact">Do Not Contact</option></select></div>
+    <div class="field"><label>Status</label><select id="leadStatusFilter"><option value="">All Leads</option><option value="new" selected>New</option><option value="contacted">Contacted</option><option value="follow_up">Follow Up</option><option value="approved">Approved</option><option value="lost">Lost</option><option value="no_response">No Response</option><option value="do_not_contact">Do Not Contact</option></select></div>
   </section>
 
   <div id="leadList" class="lead-card-list"><div class="app-empty">Loading leads…</div></div>
@@ -90,7 +79,7 @@
 <div class="card">
 <div class="grid2">
 <div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
-<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="" selected>All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
+<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option selected>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
 </div>
 <div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
 </div>
@@ -102,8 +91,7 @@
     <summary><span>Quote Builder</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner">
       <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><button id="newQuote" class="btn primary">New Quote</button></div>
-      <div id="quoteEditorTop" class="quote-editor-top-anchor"></div>
-<div id="quoteEditor" class="quote-layout">
+      <div id="quoteEditor" class="quote-layout">
 <section class="quote-main">
 <div class="card">
 <div class="grid2">
@@ -114,30 +102,23 @@
 <div class="field"><label>Service Address</label><input id="qAddress"></div>
 <div class="field"><label>Project Name</label><input id="qProject"></div>
 <div class="field"><label>Project Type</label><select id="qType"><option>Residential</option><option>Commercial</option></select></div>
-<div class="field"><label>Film Type</label><select id="qSquareItem">
-<optgroup label="Ceramic — Most Common"><option>15% Ceramic Tint Install</option><option selected>25% Ceramic Tint Install</option><option>35% Ceramic Tint Install</option><option>45% Ceramic Tint Install</option></optgroup>
-<optgroup label="Specialty Film"><option>Frosted Tint Install</option><option>2 Mil Security Film</option><option>Blackout Tint Install</option><option>Budget Friendly Solar Control</option><option>SS Clear Perspective</option><option>Turf Pro+ Film Installation</option></optgroup>
-</select><small class="muted">Film selection controls Square drafting and scheduled roll reservations.</small></div>
+<div class="field"><label>Square Draft Service</label><select id="qSquareItem">
+<option>15% Ceramic Tint Install</option>
+<option>2 Mil Security Film</option>
+<option selected>25% Ceramic Tint Install</option>
+<option>35% Ceramic Tint Install</option>
+<option>45% Ceramic Tint Install</option>
+<option>Blackout Tint Install</option>
+<option>Budget Friendly Solar Control</option>
+</select><small class="muted">Square draft quantity is always rounded up to the next whole square foot.</small></div>
 <div class="field"><label>Status</label><select id="qStatus"><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-<div class="field"><label>Estimated Miles from 75409</label><input id="qMiles" inputmode="decimal" value="0"><small id="qMilesAutoStatus" class="muted">Enter the full service address or city. Mileage auto-fills when the location is recognized and remains editable.</small></div>
-<div class="field"><label>Lead Source</label><select id="qLead">
-<option>Angi</option>
-<option>Organic</option>
-<option>Google</option>
-<option>Referral</option>
-<option>Facebook</option>
-<option>Nextdoor</option>
-<option>Repeat Customer</option>
-<option>Commercial Referral</option>
-<option>Other</option>
-</select></div>
+<div class="field"><label>Miles from 75409</label><input id="qMiles" inputmode="decimal" value="0"></div>
+<div class="field"><label>Lead Source</label><input id="qLead" value="Angi"></div>
 </div>
 <div class="field"><label>Internal Notes</label><textarea id="qNotes"></textarea></div>
 </div>
 
-<div class="card quote-addons-card"><div class="head" style="margin-top:0"><div><h2>Additional Services & Fees</h2><div class="muted">Optional quote items. These never affect film inventory.</div></div><button type="button" id="addQuoteAddon" class="btn">+ Add</button></div><div id="quoteAddonRows"><div class="app-empty">No additional services or fees.</div></div></div>
-
-<div id="quoteMeasurementsCard" class="card measurement-card">
+<div class="card measurement-card">
 <div class="head" style="margin-top:0"><div><h2>Rooms & Windows</h2><div class="muted">Enter moves across the row; Enter on quantity creates the next window.</div></div><div class="actions"><button id="duplicateLastMeasure" class="btn">Duplicate Last</button><button id="addMeasure" class="btn primary">+ Add Window</button></div></div>
 <div class="measure-labels"><span>Room / Area</span><span>Width</span><span>Height</span><span>Qty</span><span></span></div>
 <div id="measureRows"></div>
@@ -158,7 +139,7 @@
 <div class="head" style="margin-top:0"><h2>Live Quote</h2><span class="pill">Always Visible</span></div>
 <div class="summary-hero"><span>Total Glass</span><b id="qSqft">0.00</b><small>square feet</small></div>
 <div class="summary-line"><span>Normal Price<br><small>$12 per sq ft</small></span><strong id="qListPrice">$0.00</strong></div>
-<div class="summary-line featured"><span>Dynamic Tintz Price<br><small id="qCerTier"></small></span><strong id="qCerPrice">$0.00</strong></div><div id="qAddonSummary" class="summary-line hidden"><span>Additional Services</span><strong id="qAddonTotal">$0.00</strong></div><div id="qGrandSummary" class="summary-line featured hidden"><span>Project Total</span><strong id="qGrandTotal">$0.00</strong></div>
+<div class="summary-line featured"><span>Dynamic Tintz Price<br><small id="qCerTier"></small></span><strong id="qCerPrice">$0.00</strong></div>
 <div class="summary-line savings"><span>Customer Savings</span><strong id="qSavings">$0.00 (0%)</strong></div>
 <div class="summary-line"><span>50% Deposit<br><small>including 6.25% tax</small></span><strong id="qDeposit">$0.00</strong></div>
 <div class="summary-divider"></div>
@@ -252,7 +233,6 @@
     </div>
     <div id="optimizerOutput"></div>
   </div>
-<button type="button" id="quoteBackToTop" class="quote-back-top hidden">↑ Top</button>
 </main>
 <main id="inventory" class="view">
   <div class="head inventory-page-head">
@@ -372,16 +352,9 @@
     </div>
   </section>
 
-  <section class="operations-upcoming-jobs">
-    <div class="app-section-head">
-      <div><h3>Upcoming Dynamic Tintz Jobs</h3><div id="operationsUpcomingMeta" class="muted"></div></div>
-    </div>
-    <div id="operationsUpcomingList"></div>
-  </section>
-
   <section class="operations-agenda-section">
     <div class="app-section-head">
-      <div><h3 id="operationsAgendaTitle">All Job Details</h3><div id="operationsAgendaMeta" class="muted"></div></div>
+      <div><h3 id="operationsAgendaTitle">Upcoming Jobs</h3><div id="operationsAgendaMeta" class="muted"></div></div>
       <button id="operationsClearDate" class="btn mini hidden">Clear Date</button>
     </div>
     <div id="operationsList"></div>
@@ -390,49 +363,7 @@
 <main id="shortcuts" class="view"><div class="head"><div><h2>Hometown Response Hub</h2><div id="shortcutCountLabel" class="muted">Loading responses…</div></div><button id="addShortcut" class="btn primary">+ Add</button></div><div class="card"><div class="grid2"><div class="field"><label>Search Responses</label><input id="shortcutSearch" placeholder="Keyword, category, or message"></div><div class="field"><label>Category</label><select id="shortcutCategoryFilter"><option>All</option></select></div></div><div class="actions"><button id="refreshShortcuts" class="btn">Refresh Built-In Responses</button></div></div><div id="shortcutList"></div></main>
 <main id="time" class="view"><div class="head"><h2>My Time Clock</h2></div><div id="timeCard" class="card"></div><div id="timeList"></div></main>
 <main id="team" class="view"><div class="head"><h2>Team Time</h2><button id="exportTimeCsv" class="btn primary">Export Weekly CSV</button></div><div class="card muted">Weekly pay period • unpaid breaks deducted • no automatic overtime calculation</div><div id="teamList"></div></main>
-<main id="account" class="view"><div class="card"><p id="accountInfo"></p><button id="logout" class="btn danger">Sign Out</button></div><div id="calendarIntegrationCard" class="card hidden"><div class="head"><div><h2>Google Calendar</h2><div class="muted">Choose every calendar that should receive scheduled jobs</div></div><span id="calendarStatus" class="pill">Not connected</span></div><p class="muted">Connect the Dynamic Tintz Google account, then select one or more writable calendars below. Each scheduled job will be created and updated on every selected calendar. Pricing and Square information are never included.</p><div id="calendarPickerWrap" class="hidden"><div class="field"><label>Calendars to Sync</label><div id="calendarPicker" class="installer-picker"></div></div><button id="saveCalendarSelection" class="btn primary">Save Calendar Selection</button></div><div class="actions"><button id="connectCalendar" class="btn primary">Connect Google Calendar</button><button id="refreshCalendars" class="btn hidden">Refresh Calendars</button><button id="testCalendar" class="btn">Test Selected Calendars</button><button id="disconnectCalendar" class="btn danger hidden">Disconnect</button></div><div id="calendarMessage" class="muted" style="margin-top:10px"></div></div><div id="icloudCalendarCard" class="card hidden"><div class="head"><div><h2>Apple iCloud Calendar</h2><div class="muted">Choose which calendars you only want to VIEW and which may SYNC JOBS</div></div><span id="icloudCalendarStatus" class="pill">Not configured</span></div><p class="muted">VIEW is read-only inside Dynamic Tintz OS. Only calendars with SYNC JOBS enabled may receive Dynamic Tintz job events. New calendars default to no job-sync permission.</p><div id="icloudCalendarPickerWrap" class="hidden"><div class="field"><label>iCloud Calendar Permissions</label><div id="icloudCalendarPicker" class="icloud-calendar-picker"></div></div><button id="saveIcloudCalendarSelection" class="btn primary">Save Calendar Permissions</button></div><div class="actions"><button id="refreshIcloudCalendars" class="btn primary">Load iCloud Calendars</button><button id="testIcloudCalendar" class="btn">Test Job-Sync Calendars</button></div><div id="icloudCalendarMessage" class="muted" style="margin-top:10px"></div></div>
-<div id="pushNotificationCard" class="card">
-  <div class="head">
-    <div><h2>Notifications</h2><div class="muted">Free browser push notifications for Dynamic Tintz OS</div></div>
-    <span id="pushNotificationStatus" class="pill">Checking…</span>
-  </div>
-  <p class="muted">Enable notifications on this device to receive new lead alerts even when the app is not open.</p>
-  <div class="notification-setting-row">
-    <div><b>New Leads</b><small>Immediate alert when a new Angi or organic lead arrives.</small></div>
-    <label class="switch"><input id="notifyNewLeads" type="checkbox" checked><span></span></label>
-  </div>
-  <div class="notification-setting-row">
-    <div><b>Follow-Ups Due</b><small>Alert when a lead follow-up reaches its due time.</small></div>
-    <label class="switch"><input id="notifyFollowups" type="checkbox" checked><span></span></label>
-  </div>
-  <div class="notification-setting-row">
-    <div><b>Job Assigned</b><small>Alert an installer when a job is assigned to them.</small></div>
-    <label class="switch"><input id="notifyAssignments" type="checkbox" checked><span></span></label>
-  </div>
-  <div class="notification-setting-row">
-    <div><b>Job Tomorrow</b><small>Reminder for assigned jobs approximately 24 hours before the appointment.</small></div>
-    <label class="switch"><input id="notifyJobTomorrow" type="checkbox" checked><span></span></label>
-  </div>
-  <div class="notification-setting-row">
-    <div><b>Job Starting Soon</b><small>Reminder for assigned jobs approximately one hour before start time.</small></div>
-    <label class="switch"><input id="notifyJobSoon" type="checkbox"><span></span></label>
-  </div>
-  <div class="notification-setting-row">
-    <div><b>Schedule Changes</b><small>Alert assigned installers when a job is rescheduled, confirmed, or canceled.</small></div>
-    <label class="switch"><input id="notifyScheduleChanges" type="checkbox" checked><span></span></label>
-  </div>
-  <div class="notification-setting-row">
-    <div><b>Low Film Inventory</b><small>Alert when projected film inventory reaches 75 sq ft or less.</small></div>
-    <label class="switch"><input id="notifyLowInventory" type="checkbox" checked><span></span></label>
-  </div>
-  <div class="actions">
-    <button id="enablePushNotifications" class="btn primary">Enable on This Device</button>
-    <button id="testPushNotification" class="btn">Send Test</button>
-    <button id="disablePushNotifications" class="btn danger">Disable Device</button>
-  </div>
-  <div id="pushNotificationMessage" class="muted"></div>
-</div>
-</main>
+<main id="account" class="view"><div class="card"><p id="accountInfo"></p><button id="logout" class="btn danger">Sign Out</button></div><div id="calendarIntegrationCard" class="card hidden"><div class="head"><div><h2>Google Calendar</h2><div class="muted">Choose every calendar that should receive scheduled jobs</div></div><span id="calendarStatus" class="pill">Not connected</span></div><p class="muted">Connect the Dynamic Tintz Google account, then select one or more writable calendars below. Each scheduled job will be created and updated on every selected calendar. Pricing and Square information are never included.</p><div id="calendarPickerWrap" class="hidden"><div class="field"><label>Calendars to Sync</label><div id="calendarPicker" class="installer-picker"></div></div><button id="saveCalendarSelection" class="btn primary">Save Calendar Selection</button></div><div class="actions"><button id="connectCalendar" class="btn primary">Connect Google Calendar</button><button id="refreshCalendars" class="btn hidden">Refresh Calendars</button><button id="testCalendar" class="btn">Test Selected Calendars</button><button id="disconnectCalendar" class="btn danger hidden">Disconnect</button></div><div id="calendarMessage" class="muted" style="margin-top:10px"></div></div><div id="icloudCalendarCard" class="card hidden"><div class="head"><div><h2>Apple iCloud Calendar</h2><div class="muted">Choose which calendars you only want to VIEW and which may SYNC JOBS</div></div><span id="icloudCalendarStatus" class="pill">Not configured</span></div><p class="muted">VIEW is read-only inside Dynamic Tintz OS. Only calendars with SYNC JOBS enabled may receive Dynamic Tintz job events. New calendars default to no job-sync permission.</p><div id="icloudCalendarPickerWrap" class="hidden"><div class="field"><label>iCloud Calendar Permissions</label><div id="icloudCalendarPicker" class="icloud-calendar-picker"></div></div><button id="saveIcloudCalendarSelection" class="btn primary">Save Calendar Permissions</button></div><div class="actions"><button id="refreshIcloudCalendars" class="btn primary">Load iCloud Calendars</button><button id="testIcloudCalendar" class="btn">Test Job-Sync Calendars</button></div><div id="icloudCalendarMessage" class="muted" style="margin-top:10px"></div></div></main>
 <nav id="nav" class="bottom"></nav></div>
 <div id="moreMenu" class="more-sheet">
   <button class="more-sheet-backdrop" type="button" aria-label="Close menu"></button>
@@ -450,20 +381,6 @@
   </div>
 </div>
 
-
-<div id="windowMeasurementsModal" class="modal"><div class="modal-card window-measurements-modal">
-  <button id="windowMeasurementsCloseX" class="window-measurements-close-x" type="button" aria-label="Close window measurements">×</button>
-  <div class="head window-measurements-head">
-    <div><h2>Window Measurements</h2><div class="muted">Dimensions only</div></div>
-    <button class="btn window-measurements-close-text" data-close="windowMeasurementsModal">Close</button>
-  </div>
-  <div class="window-measurements-note">Only the window title, width, height, and quantity are included. No pricing, square footage, address, film usage, or internal quote details.</div>
-  <div id="windowMeasurementsBody" class="window-measurements-list"></div>
-  <div class="actions window-measurements-actions">
-    <button id="copyWindowMeasurements" class="btn primary">Copy Measurements</button>
-    <button id="shareWindowMeasurements" class="btn">Share Measurements</button>
-  </div>
-</div></div>
 
 <div id="inventoryMetricModal" class="modal"><div class="modal-card inventory-metric-modal">
   <div class="head"><div><h2 id="inventoryMetricTitle">Film Inventory</h2><div id="inventoryMetricSubtitle" class="muted"></div></div><button class="btn" data-close="inventoryMetricModal">Close</button></div>
@@ -490,10 +407,6 @@
   <section id="inventoryMetricReorder" class="inventory-metric-section">
     <h3>Reorder Level</h3>
     <div class="field"><label>Order Soon Warning (sq ft)</label><input id="inventoryMetricThreshold" type="number" min="0" step="1"></div>
-    <div class="notification-setting-row inventory-film-alert-toggle">
-      <div><b>Low Film Notification</b><small>Turn this off for film you do not normally keep in stock. Inventory tracking still works normally.</small></div>
-      <label class="switch"><input id="inventoryMetricLowStockNotify" type="checkbox" checked><span></span></label>
-    </div>
   </section>
 
   <div class="metric-editor-save"><button id="saveInventoryMetricEditor" class="btn primary">Save Inventory Changes</button></div>
@@ -533,4 +446,4 @@
 <div id="organicLeadModal" class="modal"><div class="modal-card"><div class="head"><div><h2>Add Organic Lead</h2><div class="muted">Google, Facebook, Nextdoor, referrals, repeat customers, word of mouth, etc.</div></div><button class="btn" data-close="organicLeadModal">Close</button></div><div class="grid2"><div class="field"><label>First Name</label><input id="organicFirstName"></div><div class="field"><label>Last Name</label><input id="organicLastName"></div></div><div class="grid2"><div class="field"><label>Phone</label><input id="organicPhone"></div><div class="field"><label>Email</label><input id="organicEmail"></div></div><div class="field"><label>Lead Source</label><select id="organicSource"><option>Google</option><option>Facebook</option><option>Nextdoor</option><option>Referral</option><option>Repeat Customer</option><option>Word of Mouth</option><option>Website</option><option>Other Organic</option></select></div><div class="field"><label>Service Address</label><input id="organicAddress"></div><div class="field"><label>Notes</label><textarea id="organicNotes" rows="3"></textarea></div><div id="organicLeadMessage" class="muted"></div><div class="actions"><button id="saveOrganicLeadBtn" class="btn primary">Save Organic Lead</button></div></div></div><div id="scheduleJobModal" class="modal"><div class="panel"><div class="head"><div><h2>Schedule & Assign Job</h2><div id="scheduleQuoteName" class="muted"></div></div><button class="btn" data-close="scheduleJobModal">Close</button></div><input id="scheduleQuoteId" type="hidden"><div class="field"><label>Assign Installers</label><div id="scheduleInstallers" class="installer-picker"></div></div><div class="grid2"><div class="field"><label>Start Date & Time</label><input id="scheduleStart" type="datetime-local"></div><div class="field"><label>Estimated End</label><input id="scheduleEnd" type="datetime-local"></div></div><div class="field"><label>Job Title</label><input id="scheduleTitle" placeholder="Smith Residence — Window Film Installation"></div><div class="field"><label>Installer Notes</label><textarea id="scheduleNotes" placeholder="Entry instructions, parking, scaffolding, film selection, priority rooms..."></textarea></div><div class="card job-material-card"><div class="head" style="margin-top:0"><div><h3>Film Material Plan</h3><div class="muted">Used for inventory forecasting and final deduction.</div></div><span class="pill">Inventory</span></div><div class="field"><label>Film / Shade</label><select id="scheduleFilmProduct"><option value="">Select film…</option></select></div><div class="grid2"><div class="field"><label>Planned Material Used (sq ft)</label><input id="scheduleMaterialLinearFt" type="number" min="0" step="0.01" placeholder="Auto-filled from Roll Optimizer including waste"></div><div class="field"><label>Actual Material Used (sq ft, optional)</label><input id="scheduleMaterialActualFt" type="number" min="0" step="0.01" placeholder="Leave blank to use planned amount"></div></div><div id="scheduleMaterialHint" class="muted"></div><div id="scheduleMaterialProjection" class="inventory-material-projection"></div></div><div class="field"><label>Job Status</label><select id="scheduleStatus"><option>Scheduled</option><option>Confirmed</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><button id="saveScheduledJob" class="btn primary wide">Save & Assign Job</button><div id="scheduleMessage" class="muted" style="margin-top:10px"></div></div></div>
 <div id="jobDetailModal" class="modal"><div class="modal-panel"><div class="head"><div><h2 id="jobDetailTitle">Job Details</h2><div id="jobDetailMeta" class="muted"></div></div><button class="btn" data-close="jobDetailModal">Close</button></div><div class="field"><label>Job Status</label><select id="jobStatusSelect"><option>Scheduled</option><option>En Route</option><option>In Progress</option><option>Completed</option></select></div><div class="field"><label>Installer Notes</label><textarea id="jobInstallerNotes" placeholder="Access issues, film notes, customer requests, completion notes..."></textarea></div><button id="saveInstallerJobUpdate" class="btn primary clock-button">Save Job Update</button><div class="head"><h2>Rooms & Dimensions</h2></div><div id="jobDimensionList"></div></div></div>
 <div id="leadModal" class="modal"><div class="panel"><div class="head"><h2>New Angi Lead</h2><button data-close="leadModal" class="btn">Close</button></div><div class="field"><label>First Name</label><input id="lfn"></div><div class="field"><label>Last Name</label><input id="lln"></div><div class="field"><label>Phone</label><input id="lphone"></div><div class="field"><label>Email</label><input id="lemail"></div><div class="field"><label>City</label><input id="lcity"></div><div class="field"><label>Service Requested</label><input id="lservice"></div><div class="field"><label>Original Message</label><textarea id="lmessage"></textarea></div><button id="saveLead" class="btn primary wide">Save Lead</button></div></div>
-<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=7.11.3"></script></body></html>
+<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><button id="scrollToTopButton" class="scroll-to-top-button" type="button" aria-label="Back to top" title="Back to top">↑</button><div id="toast" class="toast"></div><script type="module" src="app.js?v=7.6.6"></script></body></html>

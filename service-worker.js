@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.11.3-calendar-diagnostic-fix
+ * Release: 7.6.6-scroll-to-top
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.11.3-";
-const CACHE_NAME = `${CACHE_PREFIX}calendar-diagnostic-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.6.6-";
+const CACHE_NAME = `${CACHE_PREFIX}scroll-to-top`; 
 
 const APP_SHELL = [
   "./",
@@ -140,49 +140,4 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(cacheFirst(request));
-});
-
-
-self.addEventListener('push', event => {
-  let payload={};
-  try{payload=event.data?event.data.json():{}}catch{payload={body:event.data?event.data.text():'Dynamic Tintz notification'}}
-  const type=payload.data?.type||'general';
-  const identity={
-    lead:{title:'NEW LEAD • DYNAMIC TINTZ',tag:'dt-lead'},
-    followup:{title:'FOLLOW-UP DUE • DYNAMIC TINTZ',tag:'dt-followup'},
-    assignment:{title:'JOB ASSIGNED • DYNAMIC TINTZ',tag:'dt-assignment'},
-    job_tomorrow:{title:'JOB TOMORROW • DYNAMIC TINTZ',tag:'dt-job-tomorrow'},
-    job_soon:{title:'JOB STARTING SOON • DYNAMIC TINTZ',tag:'dt-job-soon'},
-    schedule_change:{title:'SCHEDULE UPDATE • DYNAMIC TINTZ',tag:'dt-schedule'},
-    low_inventory:{title:'FILM REORDER ALERT • DYNAMIC TINTZ',tag:'dt-inventory'},
-    test:{title:'DYNAMIC TINTZ • TEST',tag:'dt-test'}
-  }[type]||{};
-  const options={
-    body:payload.body||'You have a new notification.',
-    icon:'./icons/icon-192.png',
-    badge:'./icons/icon-192.png',
-    tag:payload.tag||identity.tag||'dynamic-tintz',
-    renotify:true,
-    requireInteraction:type==='lead',
-    vibrate:[180,80,180,80,320],
-    data:payload.data||{url:'./'}
-  };
-  event.waitUntil(self.registration.showNotification(payload.title||identity.title||'DYNAMIC TINTZ',options));
-});
-
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  const data=event.notification?.data||{};
-  const target=data.url||'./';
-  event.waitUntil((async()=>{
-    const list=await clients.matchAll({type:'window',includeUncontrolled:true});
-    for(const client of list){
-      if('focus' in client){
-        await client.focus();
-        try{client.postMessage({type:'OPEN_PUSH_TARGET',...data,url:target})}catch{}
-        return;
-      }
-    }
-    if(clients.openWindow)return clients.openWindow(target);
-  })());
 });
