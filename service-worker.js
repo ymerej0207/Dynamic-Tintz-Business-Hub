@@ -1,9 +1,9 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.10.9-hometown-responses
+ * Release: 7.11.0-full-hometown-responsesn-responses
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.10.9-";
+const CACHE_PREFIX = "dynamic-tintz-v7.11.0-";
 const CACHE_NAME = `${CACHE_PREFIX}hometown-responses`; 
 
 const APP_SHELL = [
