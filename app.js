@@ -3598,7 +3598,19 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&$('windowMeasurementsModal')?.classList.contains('show'))closeWindowMeasurementsModal();
 });
 
-function scrollToCurrentQuoteTop(){($('quoteEditorTop')||$('quoteBuilderPanel')||$('quotes'))?.scrollIntoView({behavior:'smooth',block:'start'})}
+function scrollToCurrentQuoteTop(){
+  try{window.scrollTo({top:0,left:0,behavior:'smooth'})}catch(e){window.scrollTo(0,0)}
+  const scrollers=[document.scrollingElement,document.documentElement,document.body,$('quotes'),$('quoteBuilderPanel')].filter(Boolean);
+  scrollers.forEach(el=>{
+    if(typeof el.scrollTo==='function'){
+      try{el.scrollTo({top:0,left:0,behavior:'smooth'})}catch(e){el.scrollTop=0}
+    }else el.scrollTop=0;
+  });
+  setTimeout(()=>{
+    const top=$('quoteEditorTop')||$('quoteBuilderPanel')||$('quotes');
+    if(top&&window.scrollY>8)top.scrollIntoView({behavior:'smooth',block:'start'});
+  },60)
+}
 function updateQuoteBackToTop(){let b=$('quoteBackToTop'),v=$('quotes'),e=$('quoteBuilderPanel');if(b&&v)b.classList.toggle('hidden',!(v.classList.contains('active')&&e?.open&&window.scrollY>450))}
 
 window.addEventListener('scroll',updateQuoteBackToTop,{passive:true});
