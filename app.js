@@ -626,7 +626,10 @@ async function loadInventoryHomeAlerts(){
   unmatchedScheduledReservationJobs=Array.isArray(reconcileResult?.unmatchedJobs)?reconcileResult.unmatchedJobs:[];
   let priorityNames=['25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install'];
   let priority=priorityNames.map(n=>rows.find(x=>x.product_name===n)).filter(Boolean);
-  let otherLow=rows.filter(x=>!priorityNames.includes(x.product_name)&&Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft));
+  let frostPriority=rows.find(x=>String(x.product_name||'').trim().toLowerCase()==='frosted tint install')||rows.find(x=>/frost/i.test(String(x.product_name||'')));
+  if(frostPriority&&!priority.some(x=>x.product_id===frostPriority.product_id))priority.push(frostPriority);
+  let priorityIds=new Set(priority.map(x=>x.product_id));
+  let otherLow=rows.filter(x=>!priorityIds.has(x.product_id)&&Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft));
 
   host.innerHTML=`<div class="app-inventory-snapshot">
     ${priority.map(x=>{
@@ -1988,7 +1991,7 @@ async function saveCloudQuote(){
     selectedInventoryProduct=resolveInventoryProduct(products,{square_catalog_item_name:selectedFilmName},{});
     if(selectedInventoryProduct)selectedFilmName=selectedInventoryProduct.name;
   }catch(e){console.warn('Quote inventory product link:',e)}
-  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload).select('id').single();if(res.error)return toast(res.error.message);let savedQuoteId=editingQuoteId||res?.data?.id||null;toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();await loadQuotes();if(savedQuoteId){try{await openCloudQuote(savedQuoteId)}catch(e){console.warn('Reopen saved quote:',e)}setTimeout(scrollToCurrentQuoteTop,80)}else{clearQuoteForm(false);setTimeout(scrollToCurrentQuoteTop,80)}
+  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload).select('id').single();if(res.error)return toast(res.error.message);let savedQuoteId=editingQuoteId||res?.data?.id||null;toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();await loadQuotes();if(savedQuoteId){try{await openCloudQuote(savedQuoteId,{jumpToMeasurements:false})}catch(e){console.warn('Reopen saved quote:',e)}setTimeout(scrollToCurrentQuoteTop,80)}else{clearQuoteForm(false);setTimeout(scrollToCurrentQuoteTop,80)}
   }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
 }
 async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
@@ -2683,7 +2686,7 @@ function renderOperations(){
 
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this job completed and move it to the archive?\n\nYou will confirm the actual film used before inventory is finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled. Inventory was not changed.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
-async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem')){
+async function openCloudQuote(id,options={}){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem')){
   let canonical=q.square_catalog_item_name||'25% Ceramic Tint Install';
   try{
     let products=inventoryProductCache.length?inventoryProductCache:await inventoryProducts(),
@@ -2692,11 +2695,13 @@ async function openCloudQuote(id){$('quoteBuilderPanel')?.setAttribute('open',''
   }catch{}
   $('qSquareItem').value=[...$('qSquareItem').options].some(o=>o.value===canonical)?canonical:'25% Ceramic Tint Install';
 }quoteAddons=normalizeAddons(q.additional_services||[]);renderQuoteAddons();$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
-  setTimeout(()=>{
-    let target=$('quoteMeasurementsCard')||$('qSqft');
-    target?.scrollIntoView({behavior:'smooth',block:'start'});
-  },120);
-  toast('Quote loaded — jumped to measurements.')}
+  if(options.jumpToMeasurements!==false){
+    setTimeout(()=>{
+      let target=$('quoteMeasurementsCard')||$('qSqft');
+      target?.scrollIntoView({behavior:'smooth',block:'start'});
+    },120);
+    toast('Quote loaded — jumped to measurements.');
+  }}
 function shortcutCategories(){return ['All',...new Set(shortcutData.map(s=>s.category||'Custom'))]}
 function populateShortcutCategories(){
   let select=$('shortcutCategoryFilter');
@@ -3215,7 +3220,12 @@ function optimizeFilmRoll(groups,settings){
 function optimizerSetupText(pattern,rollWidth,kerf=0){
   let widths=pattern.lanes.map(x=>optimizerRound(x.across,3));
   let positions=[],sum=0;
-  widths.slice(0,-1).forEach(w=>{sum+=w;positions.push(optimizerRound(sum,3));sum+=kerf});
+  widths.forEach(w=>{
+    sum+=w;
+    let bladePosition=sum+0.5;
+    if(bladePosition<=rollWidth+1e-7)positions.push(optimizerRound(bladePosition,3));
+    sum+=kerf;
+  });
   let remainder=Math.max(0,rollWidth-widths.reduce((s,w)=>s+w,0)-kerf*widths.length);
   return {widths,positions,remainder};
 }
@@ -3257,7 +3267,7 @@ function renderOptimizerResult(result,title='Manual Job'){
     return `<div class="optimizer-pull">
       <div class="head"><h3>Pull ${gi+1}${g.repeat>1?` — Repeat ${g.repeat} times`:''}</h3><span class="pill">${optimizerInches(g.pull)}</span></div>
       <div><b>Cutter lanes:</b> ${setup.widths.map(optimizerInches).join(' | ')}</div>
-      <div class="muted"><b>Head positions from left edge:</b> ${setup.positions.length?setup.positions.map(optimizerInches).join(' | '):'No internal head needed'}</div>
+      <div class="muted"><b>Blade positions from left edge (+½"):</b> ${setup.positions.length?setup.positions.map(optimizerInches).join(' | '):'No internal blade needed'}</div>
       <ol>${lanes}</ol>${strip}
       <div class="optimizer-command"><b>Installer command:</b> Pull ${optimizerInches(g.pull)}, cross-cut, ${g.repeat>1?`repeat ${g.repeat} total pulls`:'continue to next instruction'}.</div>
     </div>`;
@@ -3265,7 +3275,7 @@ function renderOptimizerResult(result,title='Manual Job'){
   let setupHtml=setupGroups.map((s,i)=>`<div class="optimizer-setup">
     <b>Setup ${i+1}</b>
     <span>Lane widths: ${s.setup.widths.map(optimizerInches).join(' | ')}</span>
-    <span>Head positions: ${s.setup.positions.length?s.setup.positions.map(optimizerInches).join(' | '):'No internal head needed'}</span>
+    <span>Blade positions (+½"): ${s.setup.positions.length?s.setup.positions.map(optimizerInches).join(' | '):'No internal blade needed'}</span>
     <small>Use for pulls ${s.start}${s.end!==s.start?`–${s.end}`:''}</small>
   </div>`).join('');
   $('optimizerResultTitle').textContent=title;
