@@ -1991,7 +1991,7 @@ async function saveCloudQuote(){
     selectedInventoryProduct=resolveInventoryProduct(products,{square_catalog_item_name:selectedFilmName},{});
     if(selectedInventoryProduct)selectedFilmName=selectedInventoryProduct.name;
   }catch(e){console.warn('Quote inventory product link:',e)}
-  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload).select('id').single();if(res.error)return toast(res.error.message);let savedQuoteId=editingQuoteId||res?.data?.id||null;toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();await loadQuotes();if(savedQuoteId){try{await openCloudQuote(savedQuoteId,{jumpToMeasurements:false})}catch(e){console.warn('Reopen saved quote:',e)}setTimeout(scrollToCurrentQuoteTop,80)}else{clearQuoteForm(false);setTimeout(scrollToCurrentQuoteTop,80)}
+  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload).select('id').single();if(res.error)return toast(res.error.message);let savedQuoteId=editingQuoteId||res?.data?.id||null;toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();await loadQuotes();if(savedQuoteId){try{await openCloudQuote(savedQuoteId,{jumpToMeasurements:false})}catch(e){console.warn('Reopen saved quote:',e)}scrollToCurrentQuoteTop()}else{clearQuoteForm(false);scrollToCurrentQuoteTop()}
   }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
 }
 async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
@@ -3609,17 +3609,19 @@ document.addEventListener('keydown',e=>{
 });
 
 function scrollToCurrentQuoteTop(){
-  try{window.scrollTo({top:0,left:0,behavior:'smooth'})}catch(e){window.scrollTo(0,0)}
-  const scrollers=[document.scrollingElement,document.documentElement,document.body,$('quotes'),$('quoteBuilderPanel')].filter(Boolean);
-  scrollers.forEach(el=>{
-    if(typeof el.scrollTo==='function'){
-      try{el.scrollTo({top:0,left:0,behavior:'smooth'})}catch(e){el.scrollTop=0}
-    }else el.scrollTop=0;
-  });
-  setTimeout(()=>{
-    const top=$('quoteEditorTop')||$('quoteBuilderPanel')||$('quotes');
-    if(top&&window.scrollY>8)top.scrollIntoView({behavior:'smooth',block:'start'});
-  },60)
+  // Hard-reset every possible scroll container. Smooth scrolling can be
+  // interrupted by quote re-render/layout work, so saves use an instant reset.
+  const reset=()=>{
+    try{window.scrollTo(0,0)}catch{}
+    const scrollers=[document.scrollingElement,document.documentElement,document.body,$('quotes'),$('quoteBuilderPanel')].filter(Boolean);
+    scrollers.forEach(el=>{
+      try{if(typeof el.scrollTo==='function')el.scrollTo(0,0);else el.scrollTop=0}catch{}
+      try{el.scrollTop=0}catch{}
+    });
+  };
+  reset();
+  requestAnimationFrame(()=>{reset();requestAnimationFrame(reset)});
+  [80,180,350,650].forEach(ms=>setTimeout(reset,ms));
 }
 function updateQuoteBackToTop(){let b=$('quoteBackToTop'),v=$('quotes'),e=$('quoteBuilderPanel');if(b&&v)b.classList.toggle('hidden',!(v.classList.contains('active')&&e?.open&&window.scrollY>450))}
 
