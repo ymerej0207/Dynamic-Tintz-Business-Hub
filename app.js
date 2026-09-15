@@ -1311,6 +1311,11 @@ async function addInventoryRoll(){
   let{error}=await sb.from('film_inventory_rolls').insert({product_id:productId,label:label||`${lengthFt} ft roll`,roll_width_inches:width,starting_length_inches:inches,remaining_length_inches:inches,received_date:receivedDate,notes});if(error)return toast(error.message);
   $('inventoryRollLength').value='';$('inventoryRollLabel').value='';$('inventoryRollNotes').value='';
 
+
+
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);$('inventoryAddRollModal')?.classList.remove('show');toast('Roll added to inventory.');await loadInventory();await dashboard()
+}
+
 // QuickShot Quote: lightweight branded picture estimate. This intentionally does not
 // write to Supabase or Square. A formal quote/invoice can be created later if accepted.
 let quickShotBlob=null;
@@ -1384,8 +1389,6 @@ async function shareQuickShot(){
   }catch(e){if(e?.name!=='AbortError')alert(e.message||'Could not share the QuickShot picture.')}
 }
 
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);$('inventoryAddRollModal')?.classList.remove('show');toast('Roll added to inventory.');await loadInventory();await dashboard()
-}
 
 let manualPullRollId=null,manualPullJobs=[];
 
