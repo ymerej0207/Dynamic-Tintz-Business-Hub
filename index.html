@@ -101,7 +101,7 @@
   <details id="quoteBuilderPanel" class="app-builder-sheet">
     <summary><span>Quote Builder</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner">
-      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><button id="newQuote" class="btn primary">New Quote</button></div>
+      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="quickShotQuote" class="btn">QuickShot Quote</button><button id="newQuote" class="btn primary">New Quote</button></div></div>
       <div id="quoteEditorTop" class="quote-editor-top-anchor"></div>
 <div id="quoteEditor" class="quote-layout">
 <section class="quote-main">
@@ -166,6 +166,24 @@
 <span id="qTierPrice" class="hidden"></span>
 </div>
 </aside>
+</div>
+
+<div id="quickShotModal" class="modal quickshot-modal" aria-hidden="true">
+  <div class="panel quickshot-panel">
+    <div class="head" style="margin-top:0"><div><h2>QuickShot Quote</h2><div class="muted">Create a polished picture quote in seconds.</div></div><button type="button" id="closeQuickShot" class="btn">Close</button></div>
+    <div class="grid2">
+      <div class="field"><label>Customer Name</label><input id="qsCustomer" placeholder="Customer name"></div>
+      <div class="field"><label>Project</label><input id="qsProject" placeholder="Home window tint"></div>
+      <div class="field"><label>Service / Film</label><input id="qsService" placeholder="25% Ceramic Tint Install"></div>
+      <div class="field"><label>Quote Amount Before Tax</label><input id="qsAmount" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label>Project Type</label><select id="qsType"><option>Residential</option><option>Commercial</option></select></div>
+      <div class="field"><label>Sales Tax</label><input value="6.25%" disabled></div>
+    </div>
+    <div class="field"><label>Customer Note</label><textarea id="qsNote" placeholder="Optional note, scope, or friend/family pricing details"></textarea></div>
+    <div class="actions quickshot-actions"><button type="button" id="previewQuickShot" class="btn">Preview</button><button type="button" id="shareQuickShot" class="btn primary">Share / Save Picture</button></div>
+    <div id="quickShotPreviewWrap" class="quickshot-preview-wrap hidden"><img id="quickShotPreview" alt="QuickShot quote preview"></div>
+    <div class="muted quickshot-footnote">QuickShot is a visual preliminary quote only. It does not create a cloud quote, Square invoice, or customer record.</div>
+  </div>
 </div>
 
 <div class="mobile-quote-bar">

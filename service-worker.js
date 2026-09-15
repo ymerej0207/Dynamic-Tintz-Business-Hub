@@ -1,10 +1,10 @@
 /*
  * Dynamic Tintz OS service worker
- * Release: 7.11.3-calendar-diagnostic-fix
+ * Release: 7.11.4-quickshot-quote
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.11.3-";
-const CACHE_NAME = `${CACHE_PREFIX}calendar-diagnostic-fix`; 
+const CACHE_PREFIX = "dynamic-tintz-v7.11.4-";
+const CACHE_NAME = `${CACHE_PREFIX}quickshot-quote`; 
 
 const APP_SHELL = [
   "./",

@@ -1455,3 +1455,6 @@ button.app-kpi-card{cursor:pointer}
 @media(max-width:640px){
   .calendar-sync-diagnostic{bottom:max(110px, calc(env(safe-area-inset-bottom) + 110px));}
 }
+
+/* QuickShot Quote */
+.quickshot-modal{z-index:220!important}.quickshot-panel{width:min(760px,100%)}.quickshot-actions{justify-content:flex-end}.quickshot-preview-wrap{margin-top:16px;padding:10px;background:#020909;border:1px solid rgba(143,249,243,.22);border-radius:18px}.quickshot-preview-wrap img{display:block;width:100%;height:auto;border-radius:12px}.quickshot-footnote{margin-top:12px;line-height:1.45}@media(max-width:650px){.quote-head{align-items:flex-start}.quote-head>.actions{justify-content:flex-end}.quickshot-actions .btn{flex:1}}
