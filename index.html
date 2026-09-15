@@ -1,5 +1,68 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.11.3"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
-<div id="auth" class="auth card"><div class="brand"><img src="logo.png"><div><h1>Dynamic Tintz OS</h1><p>Secure team access</p></div></div><div class="field"><label>Email</label><input id="email" type="email"></div><div class="field"><label>Password</label><input id="password" type="password"></div><button id="login" class="btn primary wide">Sign In</button><button id="reset" class="btn" style="margin-top:10px">Send Password Reset</button><p id="message" class="muted"></p></div>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.11.5-login-polish"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
+<div id="auth" class="auth-stage">
+  <div class="auth-grid-glow" aria-hidden="true"></div>
+  <section class="auth-showcase" aria-label="Dynamic Tintz OS overview">
+    <div class="auth-brand-lockup">
+      <div class="auth-mark"><img src="dynamic-tintz-mark.png" alt="Dynamic Tintz"></div>
+      <div class="auth-brand-copy"><span>DYNAMIC TINTZ</span><strong>Business OS</strong></div>
+    </div>
+
+    <div class="auth-hero-copy">
+      <span class="auth-eyebrow">BUSINESS OPERATIONS SUITE</span>
+      <h1>One place to run the whole operation.</h1>
+      <p>Quotes, scheduling, customer follow up, inventory, roll optimization and Square workflows, built around how Dynamic Tintz actually works.</p>
+    </div>
+
+    <div class="auth-capabilities" aria-label="Platform capabilities">
+      <div class="auth-capability"><span class="auth-cap-icon">Q</span><div><b>Quotes &amp; CRM</b><small>Lead to approved project</small></div></div>
+      <div class="auth-capability"><span class="auth-cap-icon">C</span><div><b>Scheduling &amp; Crew</b><small>Jobs, assignments and field flow</small></div></div>
+      <div class="auth-capability"><span class="auth-cap-icon">R</span><div><b>Roll Optimization</b><small>Inventory aware material planning</small></div></div>
+      <div class="auth-capability"><span class="auth-cap-icon">$</span><div><b>Square Workflow</b><small>Draft invoices from approved quotes</small></div></div>
+    </div>
+
+    <div class="auth-showcase-footer"><span class="auth-live-dot"></span><span>Secure team workspace</span><i></i><span>Built for Dynamic Tintz</span></div>
+  </section>
+
+  <section class="auth-login-panel">
+    <div class="auth-login-card">
+      <div class="auth-mobile-brand">
+        <div class="auth-mobile-mark"><img src="dynamic-tintz-mark.png" alt=""></div>
+        <div><b>Dynamic Tintz</b><span>Business OS</span></div>
+      </div>
+      <div class="auth-login-heading">
+        <span>WELCOME BACK</span>
+        <h2>Sign in to your workspace</h2>
+        <p>Access quotes, operations and the tools that keep the business moving.</p>
+      </div>
+
+      <div class="auth-form-field">
+        <label for="email">Email address</label>
+        <div class="auth-input-shell">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16v11H4z"></path><path d="m5 7.5 7 5 7-5"></path></svg>
+          <input id="email" type="email" autocomplete="username" inputmode="email" placeholder="you@dynamictintz.com">
+        </div>
+      </div>
+
+      <div class="auth-form-field">
+        <label for="password">Password</label>
+        <div class="auth-input-shell">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+          <input id="password" type="password" autocomplete="current-password" placeholder="Enter your password">
+        </div>
+      </div>
+
+      <button id="login" class="btn primary wide auth-submit" type="button"><span>Sign In</span><span class="auth-submit-arrow">→</span></button>
+      <button id="reset" class="auth-reset" type="button">Forgot your password? <b>Send a reset link</b></button>
+      <p id="message" class="auth-message" role="status" aria-live="polite"></p>
+
+      <div class="auth-security-note">
+        <span class="auth-shield">✓</span>
+        <div><b>Protected access</b><small>Authorized Dynamic Tintz team members only</small></div>
+      </div>
+    </div>
+    <div class="auth-login-footer">Dynamic Tintz OS <span>•</span> Business operations, simplified.</div>
+  </section>
+</div>
 <div id="app" class="shell hidden"><div class="brand app-topbar"><button id="mobileMenuBrand" class="app-menu-glyph" type="button" aria-label="Open menu">☰</button><img src="dynamic-tintz-mark.png" alt="Dynamic Tintz mark"><div><h1>Dynamic Tintz</h1><p id="userline"></p></div><span class="topbar-spacer"></span></div>
 <main id="owner" class="view app-dashboard">
   <div class="app-screen-title">
@@ -171,21 +234,65 @@
 </aside>
 </div>
 
-<div id="quickShotModal" class="modal quickshot-modal" aria-hidden="true">
-  <div class="panel quickshot-panel">
-    <div class="head" style="margin-top:0"><div><h2>QuickShot Quote</h2><div class="muted">Create a polished picture quote in seconds.</div></div><button type="button" id="closeQuickShot" class="btn">Close</button></div>
-    <div class="grid2">
-      <div class="field"><label>Customer Name</label><input id="qsCustomer" placeholder="Customer name"></div>
-      <div class="field"><label>Project</label><input id="qsProject" placeholder="Home window tint"></div>
-      <div class="field"><label>Service / Film</label><input id="qsService" placeholder="25% Ceramic Tint Install"></div>
-      <div class="field"><label>Quote Amount Before Tax</label><input id="qsAmount" inputmode="decimal" placeholder="0.00"></div>
-      <div class="field"><label>Project Type</label><select id="qsType"><option>Residential</option><option>Commercial</option></select></div>
-      <div class="field"><label>Sales Tax</label><input value="6.25%" disabled></div>
+<div id="quickShotPicker" class="modal quickshot-modal" aria-hidden="true">
+  <div class="panel quickshot-picker-panel">
+    <div class="quickshot-modal-head">
+      <div><div class="quickshot-kicker">VISUAL QUOTE ONLY</div><h2>Select a Quote</h2><div class="muted">Choose any saved quote. QuickShot reads its information only. Nothing on the quote will be changed or saved.</div></div>
+      <button type="button" id="closeQuickShotPicker" class="btn">Close</button>
     </div>
-    <div class="field"><label>Customer Note</label><textarea id="qsNote" placeholder="Optional note, scope, or friend/family pricing details"></textarea></div>
-    <div class="actions quickshot-actions"><button type="button" id="previewQuickShot" class="btn">Preview</button><button type="button" id="shareQuickShot" class="btn primary">Share / Save Picture</button></div>
-    <div id="quickShotPreviewWrap" class="quickshot-preview-wrap hidden"><img id="quickShotPreview" alt="QuickShot quote preview"></div>
-    <div class="muted quickshot-footnote">QuickShot is a visual preliminary quote only. It does not create a cloud quote, Square invoice, or customer record.</div>
+    <div class="field"><label>Find Quote</label><input id="quickShotSearch" placeholder="Customer, project, address, film, status..."></div>
+    <div id="quickShotQuoteList" class="quickshot-quote-list"></div>
+  </div>
+</div>
+
+<div id="quickShotModal" class="modal quickshot-modal" aria-hidden="true">
+  <div class="panel quickshot-panel quickshot-v2">
+    <div class="quickshot-modal-head">
+      <div>
+        <div class="quickshot-kicker">FAST VISUAL ESTIMATE</div>
+        <h2>QuickShot Quote</h2>
+        <div class="muted">Build a polished, customer-ready quote with visible special pricing and savings.</div>
+      </div>
+      <button type="button" id="closeQuickShot" class="btn">Close</button>
+    </div>
+
+    <div class="quickshot-form-section">
+      <div class="quickshot-section-title"><span>1</span><div><b>Customer & project</b><small>Who this quote is for and what you are pricing.</small></div></div>
+      <div class="grid2 quickshot-grid">
+        <div class="field"><label>Customer Name</label><input id="qsCustomer" placeholder="Customer name"></div>
+        <div class="field"><label>Project</label><input id="qsProject" placeholder="Home window tint"></div>
+        <div class="field"><label>Service Address <small>(optional)</small></label><input id="qsAddress" placeholder="123 Main St, Anna, TX"></div>
+        <div class="field"><label>Service / Film</label><input id="qsService" placeholder="25% Ceramic Tint Install"></div>
+        <div class="field"><label>Project Type</label><select id="qsType"><option>Residential</option><option>Commercial</option></select></div>
+        <div class="field"><label>Special Pricing Label</label><input id="qsDealLabel" placeholder="Friend & Family Pricing" value="Special Pricing"></div>
+      </div>
+    </div>
+
+    <div class="quickshot-form-section">
+      <div class="quickshot-section-title"><span>2</span><div><b>Pricing</b><small>Standard Dynamic Tintz pricing is $12.00 per sq ft. Set the rate you want to offer.</small></div></div>
+      <div class="quickshot-pricing-grid">
+        <div class="field"><label>Total Square Feet</label><input id="qsSqft" inputmode="decimal" placeholder="0.00"></div>
+        <div class="field"><label>Standard Rate / Sq Ft</label><div class="quickshot-money-input"><span>$</span><input id="qsStandardRate" inputmode="decimal" value="12.00"></div></div>
+        <div class="field"><label>Your QuickShot Rate / Sq Ft</label><div class="quickshot-money-input deal"><span>$</span><input id="qsRate" inputmode="decimal" placeholder="10.00"></div></div>
+      </div>
+
+      <div class="quickshot-live-summary" aria-live="polite">
+        <div><span>Standard value</span><strong id="qsStandardValue">$0.00</strong></div>
+        <div><span>Your price</span><strong id="qsDealValue">$0.00</strong></div>
+        <div class="quickshot-saving"><span>Customer savings</span><strong id="qsSavingsValue">$0.00</strong><small id="qsSavingsPercent">0% savings</small></div>
+        <div><span>Tax 6.25%</span><strong id="qsTaxValue">$0.00</strong></div>
+        <div class="quickshot-total"><span>Estimated total</span><strong id="qsTotalValue">$0.00</strong></div>
+      </div>
+    </div>
+
+    <div class="quickshot-form-section">
+      <div class="quickshot-section-title"><span>3</span><div><b>Customer note</b><small>Add scope details, what is included, or why they are receiving special pricing.</small></div></div>
+      <div class="field"><textarea id="qsNote" rows="3" placeholder="Example: Friend & family pricing includes ceramic film installation on the windows discussed."></textarea></div>
+    </div>
+
+    <div class="actions quickshot-actions"><button type="button" id="previewQuickShot" class="btn">Preview Quote</button><button type="button" id="shareQuickShot" class="btn primary">Share / Save Picture</button></div>
+    <div id="quickShotPreviewWrap" class="quickshot-preview-wrap hidden"><div class="quickshot-preview-label">CUSTOMER VIEW</div><img id="quickShotPreview" alt="QuickShot quote preview"></div>
+    <div class="muted quickshot-footnote">QuickShot creates a visual preliminary estimate only. It does not create a cloud quote, Square invoice, or customer record.</div>
   </div>
 </div>
 

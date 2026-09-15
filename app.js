@@ -1316,29 +1316,93 @@ async function addInventoryRoll(){
 if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);$('inventoryAddRollModal')?.classList.remove('show');toast('Roll added to inventory.');await loadInventory();await dashboard()
 }
 
-// QuickShot Quote: lightweight branded picture estimate. This intentionally does not
+// QuickShot Quote: fast, polished visual estimate. This intentionally does not
 // write to Supabase or Square. A formal quote/invoice can be created later if accepted.
 let quickShotBlob=null;
-function quickShotPrefill(){
-  let customer=[$('qFirst')?.value,$('qLast')?.value].filter(Boolean).join(' ').trim();
-  $('qsCustomer').value=customer;
-  $('qsProject').value=$('qProject')?.value||'';
-  $('qsService').value=$('qSquareItem')?.value||'25% Ceramic Tint Install';
-  $('qsType').value=$('qType')?.value||'Residential';
-  let base=parseFloat((($('qCerPrice')?.textContent)||'$0').replace(/[^0-9.-]/g,''))||0;
-  $('qsAmount').value=base?base.toFixed(2):'';
+let quickShotReference='';
+function quickShotNumber(value){
+  let n=Number(String(value??'').replace(/[^0-9.-]/g,''));
+  return Number.isFinite(n)?n:0;
+}
+function quickShotMoney(n){return '$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function quickShotQuoteData(){
+  let sqft=Math.max(0,quickShotNumber($('qsSqft')?.value));
+  let standardRate=Math.max(0,quickShotNumber($('qsStandardRate')?.value)||12);
+  let rate=Math.max(0,quickShotNumber($('qsRate')?.value));
+  let standardValue=sqft*standardRate;
+  let subtotal=sqft*rate;
+  let savings=Math.max(0,standardValue-subtotal);
+  let savingsPct=standardValue>0?Math.max(0,(savings/standardValue)*100):0;
+  let tax=subtotal*.0625;
+  let total=subtotal+tax;
+  let deposit=total*.5;
+  return {sqft,standardRate,rate,standardValue,subtotal,savings,savingsPct,tax,total,deposit};
+}
+function updateQuickShotSummary(){
+  let d=quickShotQuoteData();
+  if($('qsStandardValue'))$('qsStandardValue').textContent=quickShotMoney(d.standardValue);
+  if($('qsDealValue'))$('qsDealValue').textContent=quickShotMoney(d.subtotal);
+  if($('qsSavingsValue'))$('qsSavingsValue').textContent=quickShotMoney(d.savings);
+  if($('qsSavingsPercent'))$('qsSavingsPercent').textContent=`${d.savingsPct.toFixed(d.savingsPct>=10?0:1)}% savings`;
+  if($('qsTaxValue'))$('qsTaxValue').textContent=quickShotMoney(d.tax);
+  if($('qsTotalValue'))$('qsTotalValue').textContent=quickShotMoney(d.total);
+}
+function quickShotOpenQuote(quote){
+  if(!quote)return toast('Quote not found.');
+  let customer=[quote.customer?.first_name,quote.customer?.last_name].filter(Boolean).join(' ').trim();
+  let sqft=Math.max(0,Number(quote.total_sqft)||0);
+  let base=Math.max(0,Number(quote.ceramic_price)||0);
+  $('qsCustomer').value=customer||quote.project_name||'Customer';
+  $('qsProject').value=quote.project_name||'Window Film Project';
+  $('qsAddress').value=quote.service_address||quote.customer?.service_address||'';
+  $('qsService').value=quote.square_catalog_item_name||'25% Ceramic Tint Install';
+  $('qsType').value=quote.project_type||'Residential';
+  $('qsDealLabel').value='Special Pricing';
+  $('qsSqft').value=sqft?sqft.toFixed(2):'';
+  $('qsStandardRate').value='12.00';
+  $('qsRate').value=(sqft>0&&base>0)?(base/sqft).toFixed(2):'';
   $('qsNote').value='';
   quickShotBlob=null;
+  quickShotReference='';
+  quickShotRef();
+  updateQuickShotSummary();
   $('quickShotPreviewWrap')?.classList.add('hidden');
   $('quickShotModal')?.classList.add('show');
   $('quickShotModal')?.setAttribute('aria-hidden','false');
-  setTimeout(()=>$('qsCustomer')?.focus(),50);
+  setTimeout(()=>$('qsRate')?.focus(),50);
+}
+function quickShotPrefill(){
+  let quotes=window._cloudQuotes||[];
+  if(!quotes.length)return toast('No saved quotes are available yet.');
+  $('quickShotPicker')?.classList.add('show');
+  $('quickShotPicker')?.setAttribute('aria-hidden','false');
+  renderQuickShotPicker();
+  setTimeout(()=>$('quickShotSearch')?.focus(),50);
+}
+function closeQuickShotPicker(){
+  $('quickShotPicker')?.classList.remove('show');
+  $('quickShotPicker')?.setAttribute('aria-hidden','true');
+}
+function renderQuickShotPicker(){
+  let search=String($('quickShotSearch')?.value||'').trim().toLowerCase();
+  let quotes=(window._cloudQuotes||[]).filter(q=>{
+    if(!search)return true;
+    let text=[q.customer?.first_name,q.customer?.last_name,q.project_name,q.service_address,q.customer?.service_address,q.square_catalog_item_name,q.status].filter(Boolean).join(' ').toLowerCase();
+    return text.includes(search);
+  });
+  let host=$('quickShotQuoteList');if(!host)return;
+  host.innerHTML=quotes.length?quotes.map(q=>{
+    let name=[q.customer?.first_name,q.customer?.last_name].filter(Boolean).join(' ').trim()||q.project_name||'Customer';
+    let address=q.service_address||q.customer?.service_address||'';
+    let sqft=Number(q.total_sqft)||0;
+    return `<button type="button" class="quickshot-quote-choice" data-quickshotquote="${q.id}"><span><b>${esc(name)}</b><small>${esc(q.project_name||'Window Film Project')}${address?` • ${esc(address)}`:''}</small></span><span><strong>${sqft.toFixed(2)} sq ft</strong><small>${esc(q.status||'')}</small></span></button>`;
+  }).join(''):'<div class="app-empty">No matching quotes.</div>';
+  host.querySelectorAll('[data-quickshotquote]').forEach(b=>b.onclick=()=>{let q=(window._cloudQuotes||[]).find(x=>x.id===b.dataset.quickshotquote);closeQuickShotPicker();quickShotOpenQuote(q)});
 }
 function closeQuickShot(){
   $('quickShotModal')?.classList.remove('show');
   $('quickShotModal')?.setAttribute('aria-hidden','true');
 }
-function quickShotMoney(n){return '$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function quickShotWrap(ctx,text,x,y,maxWidth,lineHeight,maxLines=4){
   let words=String(text||'').trim().split(/\s+/).filter(Boolean),line='',lines=[];
   for(let word of words){let test=line?line+' '+word:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word}else line=test}
@@ -1346,38 +1410,82 @@ function quickShotWrap(ctx,text,x,y,maxWidth,lineHeight,maxLines=4){
   lines.forEach((l,i)=>ctx.fillText(l,x,y+i*lineHeight));
   return y+lines.length*lineHeight;
 }
+function quickShotRef(){
+  if(quickShotReference)return quickShotReference;
+  let d=new Date(),pad=n=>String(n).padStart(2,'0');
+  quickShotReference=`QS-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return quickShotReference;
+}
+
 async function buildQuickShotImage(){
   let customer=$('qsCustomer')?.value.trim()||'Customer';
   let project=$('qsProject')?.value.trim()||'Window Film Project';
+  let address=$('qsAddress')?.value.trim()||'';
   let service=$('qsService')?.value.trim()||'Window Film Installation';
   let type=$('qsType')?.value||'Residential';
-  let amount=Number(String($('qsAmount')?.value||'').replace(/[^0-9.]/g,''));
-  if(!(amount>0))throw new Error('Enter the QuickShot quote amount first.');
+  let dealLabel=$('qsDealLabel')?.value.trim()||'Special Pricing';
   let note=$('qsNote')?.value.trim()||'';
-  let tax=amount*.0625,total=amount+tax;
-  const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1500;const ctx=canvas.getContext('2d');
-  let bg=ctx.createLinearGradient(0,0,1200,1500);bg.addColorStop(0,'#020909');bg.addColorStop(.55,'#071b1d');bg.addColorStop(1,'#020909');ctx.fillStyle=bg;ctx.fillRect(0,0,1200,1500);
-  ctx.strokeStyle='rgba(0,213,216,.32)';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(46,46,1108,1408,42);ctx.stroke();
-  try{let img=new Image();img.src='dynamic-tintz-mark.png';await img.decode();ctx.drawImage(img,76,76,190,190)}catch{}
-  ctx.fillStyle='#ffffff';ctx.font='800 58px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Dynamic Tintz',292,142);
-  ctx.fillStyle='#8ff9f3';ctx.font='700 27px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('QUICKSHOT QUOTE',294,190);
-  ctx.fillStyle='#91aaad';ctx.font='400 22px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Professional window film • DFW',294,230);
-  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(76,300);ctx.lineTo(1124,300);ctx.stroke();
-  ctx.fillStyle='#91aaad';ctx.font='700 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('PREPARED FOR',76,360);
-  ctx.fillStyle='#ffffff';ctx.font='800 46px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,customer,76,415,1048,55,2);
-  ctx.fillStyle='#91aaad';ctx.font='700 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('PROJECT',76,525);
-  ctx.fillStyle='#ffffff';ctx.font='700 31px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,project,76,570,1048,40,2);
-  ctx.fillStyle='#91aaad';ctx.font='700 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('SERVICE',76,680);
-  ctx.fillStyle='#eaffff';ctx.font='600 29px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,service,76,725,1048,38,2);
-  ctx.fillStyle='#08282b';ctx.beginPath();ctx.roundRect(76,820,1048,310,32);ctx.fill();ctx.strokeStyle='rgba(143,249,243,.22)';ctx.stroke();
-  ctx.fillStyle='#91aaad';ctx.font='600 24px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Project subtotal',118,884);ctx.fillStyle='#fff';ctx.textAlign='right';ctx.fillText(quickShotMoney(amount),1080,884);
-  ctx.fillStyle='#91aaad';ctx.textAlign='left';ctx.fillText('Texas sales tax 6.25%',118,946);ctx.fillStyle='#fff';ctx.textAlign='right';ctx.fillText(quickShotMoney(tax),1080,946);
-  ctx.strokeStyle='rgba(255,255,255,.13)';ctx.beginPath();ctx.moveTo(118,988);ctx.lineTo(1080,988);ctx.stroke();
-  ctx.fillStyle='#8ff9f3';ctx.textAlign='left';ctx.font='800 30px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('ESTIMATED TOTAL',118,1055);ctx.textAlign='right';ctx.font='900 58px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotMoney(total),1080,1060);ctx.textAlign='left';
-  let warranty=type==='Commercial'?'12-year manufacturer warranty':'Lifetime manufacturer warranty';ctx.fillStyle='#8ff9f3';ctx.font='700 24px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('✓ '+warranty,76,1205);
-  if(note){ctx.fillStyle='#c7d8da';ctx.font='400 23px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,note,76,1260,1048,32,3)}
-  ctx.fillStyle='#70888b';ctx.font='400 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Preliminary visual estimate. Final scope and pricing are confirmed before invoicing.',76,1370);
-  ctx.fillStyle='#ffffff';ctx.font='700 21px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('DynamicTintz.com   •   469-840-4008',76,1410);ctx.textAlign='right';ctx.fillStyle='#91aaad';ctx.font='400 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),1124,1410);ctx.textAlign='left';
+  let d=quickShotQuoteData();
+  if(!(d.sqft>0))throw new Error('Enter the total square footage first.');
+  if(!(d.rate>0))throw new Error('Enter the QuickShot price per square foot first.');
+
+  const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1800;const ctx=canvas.getContext('2d');
+  let bg=ctx.createLinearGradient(0,0,1200,1800);bg.addColorStop(0,'#020808');bg.addColorStop(.52,'#07191b');bg.addColorStop(1,'#020707');ctx.fillStyle=bg;ctx.fillRect(0,0,1200,1800);
+  let glow=ctx.createRadialGradient(1100,70,0,1100,70,480);glow.addColorStop(0,'rgba(20,219,215,.19)');glow.addColorStop(1,'rgba(20,219,215,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,1200,600);
+  ctx.strokeStyle='rgba(84,236,231,.34)';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(38,38,1124,1724,42);ctx.stroke();
+
+  // Header
+  try{let img=new Image();img.src='dynamic-tintz-mark.png';await img.decode();ctx.drawImage(img,72,72,170,170)}catch{}
+  ctx.fillStyle='#fff';ctx.font='800 54px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Dynamic Tintz',272,130);
+  ctx.fillStyle='#8ff9f3';ctx.font='800 25px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('QUICKSHOT ESTIMATE',274,176);
+  ctx.fillStyle='#8ba4a7';ctx.font='500 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Professional Residential & Commercial Window Film',274,216);
+  ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='700 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotRef(),1120,112);
+  ctx.fillStyle='#8ba4a7';ctx.font='500 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}),1120,145);ctx.textAlign='left';
+  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(72,270);ctx.lineTo(1128,270);ctx.stroke();
+
+  // Prepared for / project card
+  ctx.fillStyle='rgba(255,255,255,.045)';ctx.beginPath();ctx.roundRect(72,315,1056,250,28);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.09)';ctx.stroke();
+  ctx.fillStyle='#7e989b';ctx.font='800 17px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('PREPARED FOR',108,360);
+  ctx.fillStyle='#fff';ctx.font='800 39px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,customer,108,410,500,46,2);
+  ctx.fillStyle='#8ff9f3';ctx.font='700 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(type.toUpperCase()+' PROJECT',108,505);
+  ctx.fillStyle='#7e989b';ctx.font='800 17px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('PROJECT DETAILS',654,360);
+  ctx.fillStyle='#fff';ctx.font='700 25px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,project,654,402,430,32,2);
+  if(address){ctx.fillStyle='#a9babc';ctx.font='500 19px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,address,654,484,430,27,2)}
+
+  // Pricing table
+  ctx.fillStyle='#062326';ctx.beginPath();ctx.roundRect(72,610,1056,420,30);ctx.fill();ctx.strokeStyle='rgba(143,249,243,.22)';ctx.stroke();
+  ctx.fillStyle='#8ff9f3';ctx.font='800 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('PROJECT PRICING',108,656);
+  ctx.fillStyle='#fff';ctx.font='800 30px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,service,108,705,975,38,2);
+  ctx.strokeStyle='rgba(255,255,255,.10)';ctx.beginPath();ctx.moveTo(108,790);ctx.lineTo(1092,790);ctx.stroke();
+  ctx.fillStyle='#7e989b';ctx.font='800 15px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+  ctx.fillText('GLASS AREA',108,830);ctx.fillText('STANDARD RATE',370,830);ctx.fillText('YOUR RATE',650,830);ctx.textAlign='right';ctx.fillText('YOUR PROJECT PRICE',1092,830);ctx.textAlign='left';
+  ctx.fillStyle='#fff';ctx.font='800 28px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';
+  ctx.fillText(`${d.sqft.toLocaleString('en-US',{maximumFractionDigits:2})} sq ft`,108,880);ctx.fillText(`${quickShotMoney(d.standardRate)} / sq ft`,370,880);
+  ctx.fillStyle='#8ff9f3';ctx.fillText(`${quickShotMoney(d.rate)} / sq ft`,650,880);ctx.textAlign='right';ctx.font='900 36px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotMoney(d.subtotal),1092,882);ctx.textAlign='left';
+  ctx.strokeStyle='rgba(255,255,255,.10)';ctx.beginPath();ctx.moveTo(108,925);ctx.lineTo(1092,925);ctx.stroke();
+  ctx.fillStyle='#9cb1b3';ctx.font='600 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(`Standard Dynamic Tintz value at ${quickShotMoney(d.standardRate)} / sq ft`,108,972);ctx.textAlign='right';ctx.fillStyle='#dbe5e6';ctx.font='800 23px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotMoney(d.standardValue),1092,972);ctx.textAlign='left';
+
+  // Savings callout
+  let saveGrad=ctx.createLinearGradient(72,1060,1128,1205);saveGrad.addColorStop(0,'rgba(0,213,216,.23)');saveGrad.addColorStop(1,'rgba(0,213,216,.07)');ctx.fillStyle=saveGrad;ctx.beginPath();ctx.roundRect(72,1065,1056,145,28);ctx.fill();ctx.strokeStyle='rgba(143,249,243,.45)';ctx.stroke();
+  ctx.fillStyle='#8ff9f3';ctx.font='800 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(dealLabel.toUpperCase(),108,1110);
+  ctx.fillStyle='#fff';ctx.font='900 35px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(`You save ${quickShotMoney(d.savings)}`,108,1162);
+  ctx.textAlign='right';ctx.fillStyle='#8ff9f3';ctx.font='900 40px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(`${d.savingsPct.toFixed(d.savingsPct>=10?0:1)}% SAVINGS`,1092,1160);ctx.textAlign='left';
+
+  // Totals
+  ctx.fillStyle='rgba(255,255,255,.045)';ctx.beginPath();ctx.roundRect(72,1250,1056,275,28);ctx.fill();ctx.strokeStyle='rgba(255,255,255,.09)';ctx.stroke();
+  ctx.fillStyle='#98abad';ctx.font='600 21px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Project subtotal',108,1308);ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='700 22px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotMoney(d.subtotal),1092,1308);
+  ctx.textAlign='left';ctx.fillStyle='#98abad';ctx.font='600 21px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Texas sales tax 6.25%',108,1364);ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='700 22px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotMoney(d.tax),1092,1364);
+  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(108,1405);ctx.lineTo(1092,1405);ctx.stroke();
+  ctx.textAlign='left';ctx.fillStyle='#8ff9f3';ctx.font='900 27px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('ESTIMATED TOTAL',108,1468);ctx.textAlign='right';ctx.font='900 50px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(quickShotMoney(d.total),1092,1472);ctx.textAlign='left';
+
+  // Terms / warranty
+  let warranty=type==='Commercial'?'12 Year Commercial Warranty':'Residential Lifetime Manufacturer Warranty';
+  ctx.fillStyle='#8ff9f3';ctx.font='800 20px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('✓ '+warranty,72,1580);
+  ctx.fillStyle='#d3dfe0';ctx.font='600 19px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText(`50% deposit to reserve project: ${quickShotMoney(d.deposit)}`,72,1620);
+  if(note){ctx.fillStyle='#aebfc1';ctx.font='500 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';quickShotWrap(ctx,note,72,1664,1056,25,2)}
+  ctx.fillStyle='#677f82';ctx.font='500 15px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('Preliminary visual estimate. Final measurements, scope and pricing are confirmed before invoicing.',72,1718);
+  ctx.fillStyle='#fff';ctx.font='800 18px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif';ctx.fillText('dynamictintz.com  •  469-840-4008  •  Veteran Owned & Operated',72,1750);
+
   let blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png',1));if(!blob)throw new Error('Could not create the QuickShot picture.');quickShotBlob=blob;
   let url=URL.createObjectURL(blob);let img=$('quickShotPreview');if(img){let old=img.dataset.url;if(old)URL.revokeObjectURL(old);img.src=url;img.dataset.url=url}$('quickShotPreviewWrap')?.classList.remove('hidden');return blob;
 }
@@ -2195,6 +2303,7 @@ function renderQuoteResults(){
           ${phone?`<a class="btn primary quote-call-btn" href="tel:${esc(phone)}">Call Customer</a>`:''}
           <button class="btn primary" data-openquote="${q.id}">Open / Edit</button>
           <button class="btn" data-windowmeasurements="${q.id}">Window Measurements</button>
+          <button class="btn" data-quickshotdirect="${q.id}">QuickShot</button>
         </div>
 
         <div class="quote-index-detail">
@@ -2228,6 +2337,7 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=e=>{e.preventDefault();removeAssignment(b.dataset.removeassignment,b.dataset.jobid)});
   $('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteCloudQuote(b.dataset.deletequote)});
   $('savedQuotes').querySelectorAll('[data-windowmeasurements]').forEach(b=>b.onclick=e=>{e.preventDefault();openWindowMeasurements(b.dataset.windowmeasurements)});
+  $('savedQuotes').querySelectorAll('[data-quickshotdirect]').forEach(b=>b.onclick=e=>{e.preventDefault();let q=data.find(x=>x.id===b.dataset.quickshotdirect);quickShotOpenQuote(q)});
   $('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=e=>{e.preventDefault();navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied'))});
 }
 let currentWindowMeasurementText='';
@@ -3593,7 +3703,7 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
   let el=$(id);if(!el)return;
   el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleQuoteAutosave);
 });
@@ -3723,5 +3833,5 @@ function showCalendarSyncDiagnostic(error){
 }
 
 
-$('quickShotModal')?.addEventListener('click',e=>{if(e.target?.id==='quickShotModal')closeQuickShot()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('quickShotModal')?.classList.contains('show'))closeQuickShot()});
+$('quickShotModal')?.addEventListener('click',e=>{if(e.target?.id==='quickShotModal')closeQuickShot()});$('quickShotPicker')?.addEventListener('click',e=>{if(e.target?.id==='quickShotPicker')closeQuickShotPicker()});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if($('quickShotModal')?.classList.contains('show'))closeQuickShot();else if($('quickShotPicker')?.classList.contains('show'))closeQuickShotPicker()});
