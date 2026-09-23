@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.12.3"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.12.4"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}</style><title>Dynamic Tintz OS</title></head><body>
 <div id="auth" class="auth-stage">
   <div class="auth-grid-glow" aria-hidden="true"></div>
   <section class="auth-showcase" aria-label="Dynamic Tintz OS overview">
@@ -152,61 +152,8 @@
     </div>
   </div>
 
-  <details id="careBuilderPanel" class="app-builder-sheet">
-    <summary><span>Window Care Quote</span><small>Tap to open / close</small></summary>
-    <div class="app-builder-inner care-builder">
-      <div class="head"><div><h2>Window Care</h2><div class="muted">Choose a package, then the details this visit needs.</div></div><span class="pill">SERVICE</span></div>
-      <div class="card">
-        <div class="field"><label>Find an existing customer</label><input id="careCustomerSearch" type="search" placeholder="Name, email, or phone" autocomplete="off"><small class="muted">Searches Dynamic Tintz OS; enter a full email or phone number to check Square.</small></div>
-        <div id="careCustomerResults" class="care-customer-results" aria-live="polite"></div>
-        <div id="careCustomerSelected" class="care-customer-selected hidden"></div>
-        <div class="grid2">
-          <div class="field"><label>First name</label><input id="careFirst" autocomplete="given-name"></div>
-          <div class="field"><label>Last name</label><input id="careLast" autocomplete="family-name"></div>
-          <div class="field"><label>Email</label><input id="careEmail" type="email" autocomplete="email"></div>
-          <div class="field"><label>Phone</label><input id="carePhone" type="tel" autocomplete="tel"></div>
-          <div class="field"><label>Service address</label><input id="careAddress" autocomplete="street-address"></div>
-          <div class="field"><label>Project name</label><input id="careProject" placeholder="Window cleaning"></div>
-          <div class="field"><label>Lead source</label><select id="careLeadSource"><option>Angi</option><option selected>Organic</option><option>Google Ads</option><option>Google</option><option>Website</option><option>Referral</option><option>Facebook</option><option>Nextdoor</option><option>Repeat Customer</option><option>Other</option></select></div>
-          <div class="field"><label>Quote status</label><select id="careStatus"><option>New Lead</option><option selected>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-        </div>
-        <div class="field"><label>Location</label><select id="careMarket"><option value="residential">Residential</option><option value="commercial">Commercial</option></select></div>
-        <div class="field"><label>Service</label><select id="carePackage"></select></div>
-        <div class="field"><label>Visit</label><div class="care-segment"><label><input type="radio" name="careVisit" value="initial" checked> First visit</label><label><input type="radio" name="careVisit" value="return"> Return / route</label></div></div>
-        <div class="field"><label>Internal notes</label><textarea id="careNotes" rows="2" placeholder="Access, glass condition, route notes"></textarea></div>
-      </div>
-      <div class="card"><div class="head"><div><h2>Customize the visit</h2><div class="muted">Only selected additions go on the quote.</div></div></div>
-        <div id="careResidentialExtras">
-          <div class="care-step"><div><b>Additional standard windows</b><small>Beyond the windows included in the package</small></div><input id="careExtraWindows" type="number" min="0" step="1" value="0" aria-label="Additional standard windows"></div>
-          <div class="field"><label>Additional window cleaning</label><select id="careExtraSides"><option value="exterior">Exterior only</option><option value="both">Interior and exterior</option></select></div>
-        </div>
-        <div class="care-check"><label><input type="checkbox" id="careScreens"> Screen cleaning <small>$6 per screen</small></label><input id="careScreenQty" type="number" min="0" step="1" value="0" aria-label="Number of screens"></div>
-        <div class="care-check"><label><input type="checkbox" id="careTracks"> Track detailing <small>$7 per track</small></label><input id="careTrackQty" type="number" min="0" step="1" value="0" aria-label="Number of tracks"></div>
-        <div class="care-check"><label><input type="checkbox" id="careCombo"> Screen and track detail <small>$11 per set</small></label><input id="careComboQty" type="number" min="0" step="1" value="0" aria-label="Number of screen and track sets"></div>
-        <div class="care-check"><label><input type="checkbox" id="careHardWater"> Hard-water spot treatment <small>$20 per pane, starting price</small></label><input id="careHardWaterQty" type="number" min="0" step="1" value="0" aria-label="Hard water panes"></div>
-        <div class="care-check"><label><input type="checkbox" id="careRepellent"> Exterior Glass Water-Repellent Finish <small>$8 per window, $40 minimum</small></label><input id="careRepellentQty" type="number" min="0" step="1" value="0" aria-label="Water-repellent windows"></div>
-        <div class="care-check"><label><input type="checkbox" id="careTravel"> Extended Service Area <small>$65 per visit</small></label></div>
-      </div>
-      <div class="card care-total-card"><div class="summary-line"><span>Package</span><strong id="careBasePrice">$0.00</strong></div><div class="summary-line"><span>Additions</span><strong id="careExtrasPrice">$0.00</strong></div><div class="summary-line featured"><span>Estimated total</span><strong id="careTotalPrice">$0.00</strong></div><small class="muted">Hard-water pricing may change after inspecting the glass. Square tax settings determine any tax on a draft.</small></div>
-      <div class="actions"><button id="saveCareQuote" type="button" class="btn primary">Save cleaning quote</button><button id="careQuickShotButton" type="button" class="btn">QuickShot picture</button><button id="copyCareQuote" type="button" class="btn">Copy summary</button><button id="resetCareQuote" type="button" class="btn">New quote</button></div>
-    </div>
-  </details>
-
-  <section class="app-quote-list-panel">
-    <div class="head"><h2>Saved Quotes</h2></div>
-<div class="card">
-<div class="grid2">
-<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
-<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="" selected>All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-</div>
-<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
-</div>
-<div id="savedQuotes"></div>
-
-  </section>
-
   <details id="quoteBuilderPanel" class="app-builder-sheet">
-    <summary><span>Quote Builder</span><small>Tap to open / close</small></summary>
+    <summary><span>Window Tint Quote</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner">
       <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="newQuote" class="btn primary">New Quote</button></div></div>
       <div id="quoteEditorTop" class="quote-editor-top-anchor"></div>
@@ -359,6 +306,60 @@
 </div>
     </div>
   </details>
+
+  <details id="careBuilderPanel" class="app-builder-sheet">
+    <summary><span>Window Care Quote</span><small>Tap to open / close</small></summary>
+    <div class="app-builder-inner care-builder">
+      <div class="head"><div><h2>Window Care</h2><div class="muted">Choose a package, then the details this visit needs.</div></div><span class="pill">SERVICE</span></div>
+      <div class="card">
+        <div class="field"><label>Find an existing customer</label><input id="careCustomerSearch" type="search" placeholder="Name, email, or phone" autocomplete="off"><small class="muted">Searches Dynamic Tintz OS; enter a full email or phone number to check Square.</small></div>
+        <div id="careCustomerResults" class="care-customer-results" aria-live="polite"></div>
+        <div id="careCustomerSelected" class="care-customer-selected hidden"></div>
+        <div class="grid2">
+          <div class="field"><label>First name</label><input id="careFirst" autocomplete="given-name"></div>
+          <div class="field"><label>Last name</label><input id="careLast" autocomplete="family-name"></div>
+          <div class="field"><label>Email</label><input id="careEmail" type="email" autocomplete="email"></div>
+          <div class="field"><label>Phone</label><input id="carePhone" type="tel" autocomplete="tel"></div>
+          <div class="field"><label>Service address</label><input id="careAddress" autocomplete="street-address"></div>
+          <div class="field"><label>Project name</label><input id="careProject" placeholder="Window cleaning"></div>
+          <div class="field"><label>Lead source</label><select id="careLeadSource"><option>Angi</option><option selected>Organic</option><option>Google Ads</option><option>Google</option><option>Website</option><option>Referral</option><option>Facebook</option><option>Nextdoor</option><option>Repeat Customer</option><option>Other</option></select></div>
+          <div class="field"><label>Quote status</label><select id="careStatus"><option>New Lead</option><option selected>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
+        </div>
+        <div class="field"><label>Location</label><select id="careMarket"><option value="residential">Residential</option><option value="commercial">Commercial</option></select></div>
+        <div class="field"><label>Service</label><select id="carePackage"></select></div>
+        <div class="field"><label>Visit</label><div class="care-segment"><label><input type="radio" name="careVisit" value="initial" checked> First visit</label><label><input type="radio" name="careVisit" value="return"> Return / route</label></div></div>
+        <div class="field"><label>Internal notes</label><textarea id="careNotes" rows="2" placeholder="Access, glass condition, route notes"></textarea></div>
+      </div>
+      <div class="card"><div class="head"><div><h2>Customize the visit</h2><div class="muted">Only selected additions go on the quote.</div></div></div>
+        <div id="careResidentialExtras">
+          <div class="care-step"><div><b>Additional standard windows</b><small>Beyond the windows included in the package</small></div><input id="careExtraWindows" type="number" min="0" step="1" value="0" aria-label="Additional standard windows"></div>
+          <div class="field"><label>Additional window cleaning</label><select id="careExtraSides"><option value="exterior">Exterior only</option><option value="both">Interior and exterior</option></select></div>
+        </div>
+        <div class="care-check"><label><input type="checkbox" id="careScreens"> Screen cleaning <small>$6 per screen</small></label><input id="careScreenQty" type="number" min="0" step="1" value="0" aria-label="Number of screens"></div>
+        <div class="care-check"><label><input type="checkbox" id="careTracks"> Track detailing <small>$7 per track</small></label><input id="careTrackQty" type="number" min="0" step="1" value="0" aria-label="Number of tracks"></div>
+        <div class="care-check"><label><input type="checkbox" id="careCombo"> Screen and track detail <small>$11 per set</small></label><input id="careComboQty" type="number" min="0" step="1" value="0" aria-label="Number of screen and track sets"></div>
+        <div class="care-check"><label><input type="checkbox" id="careHardWater"> Hard-water spot treatment <small>$20 per pane, starting price</small></label><input id="careHardWaterQty" type="number" min="0" step="1" value="0" aria-label="Hard water panes"></div>
+        <div class="care-check"><label><input type="checkbox" id="careRepellent"> Exterior Glass Water-Repellent Finish <small>$8 per window, $40 minimum</small></label><input id="careRepellentQty" type="number" min="0" step="1" value="0" aria-label="Water-repellent windows"></div>
+        <div class="care-check"><label><input type="checkbox" id="careTravel"> Extended Service Area <small>$65 per visit</small></label></div>
+      </div>
+      <div class="card care-total-card"><div class="summary-line"><span>Package</span><strong id="careBasePrice">$0.00</strong></div><div class="summary-line"><span>Additions</span><strong id="careExtrasPrice">$0.00</strong></div><div class="summary-line featured"><span>Estimated total</span><strong id="careTotalPrice">$0.00</strong></div><small class="muted">Hard-water pricing may change after inspecting the glass. Square tax settings determine any tax on a draft.</small></div>
+      <div class="actions"><button id="saveCareQuote" type="button" class="btn primary">Save cleaning quote</button><button id="careQuickShotButton" type="button" class="btn">QuickShot picture</button><button id="copyCareQuote" type="button" class="btn">Copy summary</button><button id="resetCareQuote" type="button" class="btn">New quote</button></div>
+    </div>
+  </details>
+
+  <section class="app-quote-list-panel">
+    <div class="head"><h2>Saved Quotes</h2></div>
+<div class="card">
+<div class="grid2">
+<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
+<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="" selected>All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
+</div>
+<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
+</div>
+<div id="savedQuotes"></div>
+
+  </section>
+
 </main>
 
 <main id="optimizer" class="view">
@@ -713,4 +714,4 @@
 <div id="organicLeadModal" class="modal"><div class="modal-card"><div class="head"><div><h2>Add Organic Lead</h2><div class="muted">Google, Facebook, Nextdoor, referrals, repeat customers, word of mouth, etc.</div></div><button class="btn" data-close="organicLeadModal">Close</button></div><div class="grid2"><div class="field"><label>First Name</label><input id="organicFirstName"></div><div class="field"><label>Last Name</label><input id="organicLastName"></div></div><div class="grid2"><div class="field"><label>Phone</label><input id="organicPhone"></div><div class="field"><label>Email</label><input id="organicEmail"></div></div><div class="field"><label>Lead Source</label><select id="organicSource"><option>Google</option><option>Google Ads</option><option>Angi</option><option>Facebook</option><option>Nextdoor</option><option>Referral</option><option>Repeat Customer</option><option>Word of Mouth</option><option>Website</option><option>Other Organic</option></select></div><div class="field"><label>Service requested</label><select id="organicService"><option>Window Film</option><option>Window Cleaning</option><option>Other</option></select></div><div class="field"><label>Service Address</label><input id="organicAddress"></div><div class="field"><label>Notes</label><textarea id="organicNotes" rows="3"></textarea></div><div id="organicLeadMessage" class="muted"></div><div class="actions"><button id="saveOrganicLeadBtn" class="btn primary">Save Organic Lead</button></div></div></div><div id="scheduleJobModal" class="modal"><div class="panel"><div class="head"><div><h2>Schedule & Assign Job</h2><div id="scheduleQuoteName" class="muted"></div></div><button class="btn" data-close="scheduleJobModal">Close</button></div><input id="scheduleQuoteId" type="hidden"><div class="field"><label>Assign Installers</label><div id="scheduleInstallers" class="installer-picker"></div></div><div class="grid2"><div class="field"><label>Start Date & Time</label><input id="scheduleStart" type="datetime-local"></div><div class="field"><label>Estimated End</label><input id="scheduleEnd" type="datetime-local"></div></div><div class="field"><label>Job Title</label><input id="scheduleTitle" placeholder="Smith Residence — Window Film Installation"></div><div class="field"><label>Installer Notes</label><textarea id="scheduleNotes" placeholder="Entry instructions, parking, scaffolding, film selection, priority rooms..."></textarea></div><div class="card job-material-card"><div class="head" style="margin-top:0"><div><h3>Film Material Plan</h3><div class="muted">Used for inventory forecasting and final deduction.</div></div><span class="pill">Inventory</span></div><div class="field"><label>Film / Shade</label><select id="scheduleFilmProduct"><option value="">Select film…</option></select></div><div class="grid2"><div class="field"><label>Planned Material Used (sq ft)</label><input id="scheduleMaterialLinearFt" type="number" min="0" step="0.01" placeholder="Auto-filled from Roll Optimizer including waste"></div><div class="field"><label>Actual Material Used (sq ft, optional)</label><input id="scheduleMaterialActualFt" type="number" min="0" step="0.01" placeholder="Leave blank to use planned amount"></div></div><div id="scheduleMaterialHint" class="muted"></div><div id="scheduleMaterialProjection" class="inventory-material-projection"></div></div><div class="field"><label>Job Status</label><select id="scheduleStatus"><option>Scheduled</option><option>Confirmed</option><option>In Progress</option><option>Completed</option><option>Rescheduled</option><option>Canceled</option></select></div><button id="saveScheduledJob" class="btn primary wide">Save & Assign Job</button><div id="scheduleMessage" class="muted" style="margin-top:10px"></div></div></div>
 <div id="jobDetailModal" class="modal"><div class="modal-panel"><div class="head"><div><h2 id="jobDetailTitle">Job Details</h2><div id="jobDetailMeta" class="muted"></div></div><button class="btn" data-close="jobDetailModal">Close</button></div><div class="field"><label>Job Status</label><select id="jobStatusSelect"><option>Scheduled</option><option>En Route</option><option>In Progress</option><option>Completed</option></select></div><div class="field"><label>Installer Notes</label><textarea id="jobInstallerNotes" placeholder="Access issues, film notes, customer requests, completion notes..."></textarea></div><button id="saveInstallerJobUpdate" class="btn primary clock-button">Save Job Update</button><div class="head"><h2>Rooms & Dimensions</h2></div><div id="jobDimensionList"></div></div></div>
 <div id="leadModal" class="modal"><div class="panel"><div class="head"><h2>New Angi Lead</h2><button data-close="leadModal" class="btn">Close</button></div><div class="field"><label>First Name</label><input id="lfn"></div><div class="field"><label>Last Name</label><input id="lln"></div><div class="field"><label>Phone</label><input id="lphone"></div><div class="field"><label>Email</label><input id="lemail"></div><div class="field"><label>City</label><input id="lcity"></div><div class="field"><label>Service Requested</label><input id="lservice"></div><div class="field"><label>Original Message</label><textarea id="lmessage"></textarea></div><button id="saveLead" class="btn primary wide">Save Lead</button></div></div>
-<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=7.12.3"></script></body></html>
+<div id="activityModal" class="modal"><div class="panel"><div class="head"><h2>Log Attempt</h2><button data-close="activityModal" class="btn">Close</button></div><input id="activityId" type="hidden"><div class="field"><label>Result</label><select id="activityType"><option value="call_no_answer">Called — No Answer</option><option value="voicemail">Voicemail Left</option><option value="text_sent">Text Sent</option><option value="contacted">Contacted</option><option value="estimate_scheduled">Estimate Scheduled</option><option value="quote_sent">Quote Sent</option><option value="approved">Approved</option><option value="lost">Lost</option></select></div><div class="field"><label>Notes</label><textarea id="activityNotes"></textarea></div><button id="saveActivity" class="btn primary wide">Save Activity</button></div></div><div id="shortcutModal" class="modal"><div class="panel"><div class="head"><h2 id="shortcutModalTitle">Add Shortcut</h2><button data-close="shortcutModal" class="btn">Close</button></div><input id="shortcutIndex" type="hidden"><div class="field"><label>Keyword</label><input id="shortcutKey"></div><div class="field"><label>Category</label><input id="shortcutCategory" value="Custom" placeholder="Custom"></div><div class="field"><label>Message</label><textarea id="shortcutText"></textarea></div><button id="saveShortcut" class="btn primary wide">Save Shortcut</button></div></div><div id="toast" class="toast"></div><script type="module" src="app.js?v=7.12.4"></script></body></html>
