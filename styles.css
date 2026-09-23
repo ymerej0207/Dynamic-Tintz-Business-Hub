@@ -1693,8 +1693,6 @@ button.app-kpi-card{cursor:pointer}
 .quickshot-quote-choice small{color:var(--muted,#8ea2a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:560px}
 @media(max-width:640px){.quickshot-quote-choice{align-items:flex-start;flex-direction:column}.quickshot-quote-choice span:last-child{text-align:left}.quickshot-quote-choice small{max-width:78vw}}
 /* Window Care extends the existing dark glass and cyan visual language. */
-.care-launch{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}
-.care-launch span{color:#d5eeee;font-size:12px}
 .care-builder{max-width:980px;margin:auto}
 .care-builder .card{background:linear-gradient(160deg,#0b2529,#061718);border-color:rgba(120,239,235,.2)}
 .care-builder .head h2,.care-builder b,.care-builder strong,.care-builder .field label{color:#fff}
@@ -1709,4 +1707,6 @@ button.app-kpi-card{cursor:pointer}
 .care-step small{display:block;margin-top:3px;font-size:11px;color:#c7e0e1}
 .care-total-card .summary-line{color:#fff}
 .care-total-card .summary-line strong{color:#fff}
-@media(max-width:550px){.care-builder .grid2{grid-template-columns:1fr}.care-launch .btn{width:100%}}
+@media(max-width:550px){.care-builder .grid2{grid-template-columns:1fr}.quote-top-actions{justify-content:flex-start}}
+
+@media(max-width:680px){#quotes .app-screen-title{align-items:flex-start;flex-wrap:wrap;gap:10px}#quotes .quote-top-actions{width:100%;justify-content:flex-start;gap:8px}#quotes .quote-top-actions .btn{flex:1 1 auto;min-width:0;padding:10px 8px;font-size:12px;white-space:nowrap}#quotes .quote-top-actions .app-round-action{flex:none}}
