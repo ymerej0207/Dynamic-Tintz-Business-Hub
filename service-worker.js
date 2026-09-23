@@ -3,7 +3,7 @@
  * Release: 7.11.4-quickshot-quote
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.12.1-";
+const CACHE_PREFIX = "dynamic-tintz-v7.12.3-";
 const CACHE_NAME = `${CACHE_PREFIX}window-care`; 
 
 const APP_SHELL = [
