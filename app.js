@@ -1745,6 +1745,103 @@ async function loadEmployee(){renderClock($('employeeClock'),await openShift());
 async function loadTeam(){let{data,error}=await sb.from('time_entry_totals').select('*,employee:profiles!time_entries_employee_id_fkey(full_name,email)').gte('clock_in',week()).order('clock_in',{ascending:false});if(error)return toast(error.message);teamTimeCache=data||[];let groups={};teamTimeCache.forEach(x=>{let id=x.employee_id;groups[id]??={name:x.employee?.full_name||x.employee?.email||'Employee',total:0,entries:[]};groups[id].total+=Number(x.net_hours||0);groups[id].entries.push(x)});$('teamList').innerHTML=Object.values(groups).length?Object.values(groups).map(g=>`<div class="card"><div class="head"><h2>${esc(g.name)}</h2><span class="pill">${g.total.toFixed(2)} hrs</span></div>${g.entries.map(x=>`<div class="time-row"><span>${when(x.clock_in)} → ${when(x.clock_out)}</span><b>${Number(x.net_hours||0).toFixed(2)} hrs</b></div>`).join('')}</div>`).join(''):'<div class="card muted">No time entries this week.</div>'}
 function exportTimeCsv(){if(!teamTimeCache.length)return toast('No weekly time records to export.');let rows=[['Employee','Clock In','Clock Out','Net Hours','Status'],...teamTimeCache.map(x=>[x.employee?.full_name||x.employee?.email||'Employee',when(x.clock_in),when(x.clock_out),Number(x.net_hours||0).toFixed(2),x.status||''])],csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`dynamic-tintz-time-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('Weekly time CSV exported.')}
 
+// Window Care uses the existing quote/customer tables. Its line items live in
+// additional_services, leaving film measurements and roll inventory untouched.
+const CARE_PACKAGES={
+ residential:[
+  {id:'res-ext',name:'Residential Exterior Window Cleaning',initial:[{name:'Standard',price:219}],return:[{name:'Standard',price:189}],sides:'exterior'},
+  {id:'res-both',name:'Residential Interior and Exterior Window Cleaning',initial:[{name:'Standard',price:309}],return:[{name:'Standard',price:269}],sides:'both'}
+ ],
+ commercial:[
+  {id:'store-ext',name:'Commercial Storefront Exterior Window Cleaning',initial:[{name:'Smaller storefront',price:115},{name:'Larger storefront',price:145}],return:[{name:'Smaller storefront',price:85},{name:'Larger storefront',price:115}],sides:'exterior'},
+  {id:'store-both',name:'Commercial Storefront Interior and Exterior Window Cleaning',initial:[{name:'Smaller storefront',price:155},{name:'Larger storefront',price:225}],return:[{name:'Smaller storefront',price:115},{name:'Larger storefront',price:175}],sides:'both'},
+  {id:'office',name:'Commercial Office Window Cleaning',initial:[{name:'Standard',price:235},{name:'Large',price:275}],return:[{name:'Standard',price:235},{name:'Large',price:275}],sides:'both'}
+ ]
+};
+let careEditingId=null,careCustomerId=null,careLineItems=[];
+function careVisit(){return document.querySelector('input[name="careVisit"]:checked')?.value||'initial'}
+function careInt(id){return Math.max(0,Math.floor(Number($(id)?.value)||0))}
+function carePackage(){return [...CARE_PACKAGES.residential,...CARE_PACKAGES.commercial].find(p=>p.id===$('carePackage')?.value)}
+function careSelectOptions(){
+ let market=$('careMarket').value,old=$('carePackage').value;
+ $('carePackage').innerHTML=CARE_PACKAGES[market].map(p=>'<optgroup label="'+esc(p.name)+'">'+p.initial.map((variant,i)=>'<option value="'+p.id+':'+i+'">'+esc(variant.name)+'</option>').join('')+'</optgroup>').join('');
+ if([...$('carePackage').options].some(o=>o.value===old))$('carePackage').value=old;
+ careRender();
+}
+function careSelection(){let [id,index]=($('carePackage').value||'').split(':'),pkg=[...CARE_PACKAGES.residential,...CARE_PACKAGES.commercial].find(p=>p.id===id);return pkg?{pkg,index:Number(index)||0,variant:pkg[careVisit()][Number(index)||0]}:null}
+function careLines(){
+ let s=careSelection();if(!s)return[];
+ let visit=careVisit(),lines=[{name:s.pkg.name,variation:s.variant.name+' · '+(visit==='initial'?'First visit':'Return / route'),qty:1,price:s.variant.price,kind:'package',sku:'DTC-WC-'+s.pkg.id.toUpperCase()+'-'+s.index+'-'+visit.toUpperCase()}];
+ let n=careInt('careExtraWindows');
+ if($('careMarket').value==='residential'&&n){let both=$('careExtraSides').value==='both';lines.push({name:'Additional Standard Window, '+(both?'Both Sides':'Exterior')+(visit==='return'?' Return':''),qty:n,price:both?(visit==='return'?15:18):12,kind:'addition'})}
+ for(const [check,qty,name,price] of [['careScreens','careScreenQty','Window Screen Cleaning',6],['careTracks','careTrackQty','Window Track Detailing',7],['careCombo','careComboQty','Screen and Track Detail',11],['careHardWater','careHardWaterQty','Hard-Water Spot Treatment',20]]){
+  if($(check).checked&&careInt(qty))lines.push({name,qty:careInt(qty),price,kind:'addition'});
+ }
+ if($('careRepellent').checked&&careInt('careRepellentQty')){let qty=careInt('careRepellentQty');lines.push({name:'Exterior Glass Water-Repellent Finish',sku:'DTC-WC-REPEL-EXT',qty,price:8,minimum:40,kind:'addition'})}
+ if($('careTravel').checked)lines.push({name:'Extended Service Area',sku:'DTC-TRAVEL',qty:1,price:65,kind:'addition'});
+ return lines;
+}
+function careLineTotal(line){return Math.max(Number(line.minimum)||0,line.price*line.qty)}
+function careRender(){
+ let lines=careLines(),base=lines.filter(l=>l.kind==='package').reduce((t,l)=>t+careLineTotal(l),0),extras=lines.filter(l=>l.kind!=='package').reduce((t,l)=>t+careLineTotal(l),0);
+ $('careResidentialExtras')?.classList.toggle('hidden',$('careMarket')?.value!=='residential');
+ if($('careBasePrice'))$('careBasePrice').textContent=money(base);
+ if($('careExtrasPrice'))$('careExtrasPrice').textContent=money(extras);
+ if($('careTotalPrice'))$('careTotalPrice').textContent=money(base+extras);
+ return{lines,base,extras,total:base+extras};
+}
+function careReset(){
+ careEditingId=null;careCustomerId=null;
+ for(const id of ['careFirst','careLast','careEmail','carePhone','careAddress','careProject','careNotes'])$(id).value='';
+ $('careMarket').value='residential';careSelectOptions();
+ document.querySelector('input[name="careVisit"][value="initial"]').checked=true;
+ for(const id of ['careScreens','careTracks','careCombo','careHardWater','careRepellent','careTravel'])$(id).checked=false;
+ for(const id of ['careExtraWindows','careScreenQty','careTrackQty','careComboQty','careHardWaterQty','careRepellentQty'])$(id).value=0;
+ careRender();
+}
+function careSavedSummary(q){return ['Dynamic Tintz Window Care Proposal',q.project_name||'',q.service_address||'',...(q.additional_services||[]).map(l=>l.name+' · '+l.qty+' × '+money(l.price)+' = '+money(careLineTotal(l))),'Estimated total: '+money(q.ceramic_price||0),'Dynamic Tintz • 469-840-4008'].join('\n')}
+function cloudQuoteText(q){return ['Dynamic Tintz Window Film Proposal',q.project_name||'',q.service_address||'',Number(q.total_sqft||0).toFixed(2)+' sq ft',q.square_catalog_item_name||'',money(q.ceramic_price||0),'Dynamic Tintz • 469-840-4008'].join('\n')}
+function careSummary(){let c=careRender();return ['Dynamic Tintz Window Care Proposal','',[$('careFirst').value,$('careLast').value].filter(Boolean).join(' '),$('careAddress').value,'',...c.lines.map(l=>l.name+' · '+(l.variation||'')+' · '+l.qty+' × '+money(l.price)+(l.minimum?' (minimum '+money(l.minimum)+')':'')+' = '+money(careLineTotal(l))),'','Estimated total: '+money(c.total),'Water-repellent finish is temporary and can be refreshed on future visits.','Dynamic Tintz • 469-840-4008'].join('\n')}
+async function careSave(){
+ let name=$('careFirst').value.trim(),address=$('careAddress').value.trim(),c=careRender(),button=$('saveCareQuote');
+ if(!name||!address)return toast('Enter a first name and service address.');
+ if(!c.lines.length)return toast('Choose a service package.');
+ if(careEditingId&&window._cloudQuotes?.find(q=>q.id===careEditingId)?.square_invoice_id)return toast('Release the existing Square draft before changing this cleaning quote.');
+ button.disabled=true;button.textContent='Saving…';
+ try{
+  let customer={first_name:name,last_name:$('careLast').value.trim(),email:$('careEmail').value.trim(),phone:$('carePhone').value.trim(),service_address:address,lead_source:'Organic',updated_at:new Date().toISOString()};
+  let customerId=careCustomerId;
+  if(customerId){let r=await sb.from('customers').update(customer).eq('id',customerId);if(r.error)throw r.error}
+  else{let r=await sb.from('customers').insert(customer).select('id').single();if(r.error)throw r.error;customerId=r.data.id}
+  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||selected.pkg.name,project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:'New Lead',service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:0,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value}],updated_at:new Date().toISOString()};
+  let r=careEditingId?await sb.from('quotes').update(payload).eq('id',careEditingId):await sb.from('quotes').insert(payload).select('id').single();
+  if(r.error)throw r.error;careEditingId=careEditingId||r.data.id;careCustomerId=customerId;
+  await loadQuotes();toast('Cleaning quote saved.');
+ }catch(e){toast(e.message||'Could not save cleaning quote.')}finally{button.disabled=false;button.textContent='Save cleaning quote'}
+}
+async function openCareQuote(id){
+ let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);
+ $('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;careReset();
+ careEditingId=q.id;careCustomerId=q.customer_id;
+ for(const [id,v] of Object.entries({careFirst:q.customer?.first_name,careLast:q.customer?.last_name,careEmail:q.customer?.email,carePhone:q.customer?.phone,careAddress:q.service_address,careProject:q.project_name,careNotes:q.notes}))$(id).value=v||'';
+ let meta=Array.isArray(q.measurements)?q.measurements.find(x=>x.service==='window_care'):null,market=meta?.market||(/Commercial/i.test(q.project_type)?'commercial':'residential');
+ $('careMarket').value=market;careSelectOptions();
+ if(meta){let key=meta.package_id+':'+meta.variant_index;if([...$('carePackage').options].some(o=>o.value===key))$('carePackage').value=key;document.querySelector('input[name="careVisit"][value="'+(meta.visit||'initial')+'"]').checked=true;$('careExtraSides').value=meta.extra_sides||'exterior'}
+ let map={'careExtraWindows':/^Additional Standard Window/,'careScreenQty':/^Window Screen Cleaning$/,'careTrackQty':/^Window Track Detailing$/,'careComboQty':/^Screen and Track Detail$/,'careHardWaterQty':/^Hard-Water Spot Treatment$/,'careRepellentQty':/^Exterior Glass Water-Repellent Finish$/};
+ for(const [id,pattern] of Object.entries(map)){let line=(q.additional_services||[]).find(x=>pattern.test(x.name));$(id).value=line?.qty||0}
+ for(const [id,qty] of [['careScreens','careScreenQty'],['careTracks','careTrackQty'],['careCombo','careComboQty'],['careHardWater','careHardWaterQty'],['careRepellent','careRepellentQty']])$(id).checked=careInt(qty)>0;
+ $('careTravel').checked=(q.additional_services||[]).some(x=>x.name==='Extended Service Area');careRender();$('careBuilderPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function setupCareBuilder(){
+ if(!$('careBuilderPanel'))return;
+ $('careMarket').addEventListener('change',careSelectOptions);careSelectOptions();
+ $('careBuilderPanel').addEventListener('input',careRender);$('careBuilderPanel').addEventListener('change',careRender);
+ $('newCareQuote').onclick=()=>{careReset();$('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;$('careBuilderPanel').scrollIntoView({behavior:'smooth',block:'start'})};
+ $('saveCareQuote').onclick=careSave;$('resetCareQuote').onclick=careReset;
+ $('copyCareQuote').onclick=()=>navigator.clipboard.writeText(careSummary()).then(()=>toast('Cleaning quote copied.'));
+}
+setupCareBuilder();
+
 const QUOTE_ADDON_CATALOG=[
  {key:'removal',name:'Tint removal',squareName:'Tint removal',unit:'hr',price:100},{key:'removal-reapply',name:'Tint removal w/reapplication',squareName:'Tint removal w/reapplication',unit:'hr',price:50},{key:'shop-min',name:'Shop Minimum',squareName:'Shop Minimum',unit:'ea',price:250},{key:'shop-min-50',name:'Shop Minimum 50+',squareName:'Shop Minimum 50+',unit:'ea',price:350},{key:'scaffold',name:'Scaffolding Usage',squareName:'Scaffolding Usage',unit:'ea',price:250},{key:'manlift',name:'Manlift Rental 4 week term',squareName:'Manlift Rental 4 week term',unit:'ea',price:5000},{key:'custom-film',name:'Custom Film Order Fee',squareName:'Custom Film Order Fee',unit:'ea',price:450},{key:'half-roll',name:'Half Roll Order — Special Order Film',squareName:'Roll Order (Special Order Film)',unit:'ea',price:150},{key:'full-roll',name:'Full Roll Order — Special Order Film',squareName:'Roll Order (Special Order Film)',unit:'ea',price:250}];
 let quoteAddons=[];
@@ -2186,6 +2283,7 @@ async function createSquareDraft(quoteId,button){
   let quote=(window._cloudQuotes||[]).find(q=>q.id===quoteId);
   if(!quote)return toast('Quote not found.');
   if(quote.square_invoice_id)return toast(`Square draft ${quote.square_invoice_number||'already exists'}.`);
+  if(/Cleaning$/.test(quote.project_type||''))return createSquareCleaningDraft(quoteId,button);
   let actual=Number(quote.total_sqft)||0,billed=Math.ceil(actual);
   if(!billed)return toast('Add window measurements before creating the Square draft.');
   let item=quote.square_catalog_item_name||'25% Ceramic Tint Install';
@@ -2222,6 +2320,23 @@ async function createSquareDraft(quoteId,button){
   }
 }
 
+async function createSquareCleaningDraft(quoteId,button){
+ let quote=(window._cloudQuotes||[]).find(q=>q.id===quoteId),lines=quote?.additional_services||[];
+ if(!lines.length)return toast('Add cleaning services before creating a Square draft.');
+ if(!confirm('Create a Square draft with '+lines.length+' window care line item(s)?\n\nNothing will be sent to the customer.'))return;
+ let original=button?.textContent||'Create Square Draft';
+ if(button){button.disabled=true;button.textContent='Creating…'}
+ try{
+  let{data:{session:activeSession},error:authError}=await sb.auth.getSession();
+  if(authError||!activeSession?.access_token)throw new Error('Sign in again before creating a Square draft.');
+  let{data,error}=await sb.functions.invoke('create-square-cleaning-draft',{body:{quoteId},headers:{Authorization:'Bearer '+activeSession.access_token}});
+  if(error){let msg=error.message;try{let details=await error.context?.json();msg=details?.error||details?.message||msg}catch{}throw new Error(msg)}
+  if(data?.status!=='success')throw new Error(data?.error||'Square did not create the draft.');
+  toast(data.duplicate?'Square draft already exists.':'Square cleaning draft created.');
+  await loadQuotes();
+ }catch(e){alert(e.message||'Could not create the Square draft.')}finally{if(button&&document.body.contains(button)){button.disabled=false;button.textContent=original}}
+}
+
 
 async function releaseSquareDraft(quoteId){
   let quote=(window._cloudQuotes||[]).find(q=>q.id===quoteId);
@@ -2248,7 +2363,7 @@ async function releaseSquareDraft(quoteId){
 
 
 function quoteProjectIcon(type){
-  let commercial=String(type||'').toLowerCase()==='commercial';
+  let commercial=String(type||'').toLowerCase().startsWith('commercial');
   return commercial
     ? `<span class="quote-type-icon commercial" aria-label="Commercial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V7l8-4v18M12 9h8v12M7 9h2M7 13h2M7 17h2M15 12h2M15 16h2M15 20h2M2 21h20"/></svg></span>`
     : `<span class="quote-type-icon residential" aria-label="Residential"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10.5V21h13V10.5M9 21v-6h6v6"/></svg></span>`;
@@ -2278,6 +2393,7 @@ function renderQuoteResults(){
         cityOrAddress=q.service_address||q.customer?.service_address||'',
         squareItem=q.square_catalog_item_name||'25% Ceramic Tint Install',
         billed=Math.ceil(actual),
+        isCare=/Cleaning$/.test(q.project_type||''),
         squareButton=q.square_invoice_id
           ?`<button class="btn" disabled>Square Draft ${esc(q.square_invoice_number||q.square_status||'Created')}</button><button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
           :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
@@ -2290,7 +2406,7 @@ function renderQuoteResults(){
           <small>${esc(cityOrAddress)}</small>
         </span>
         <span class="quote-index-size">
-          <strong>${actual.toFixed(0)} sq ft</strong>
+          <strong>${isCare?'Window care':actual.toFixed(0)+' sq ft'}</strong>
           <small>${q.created_at?new Date(q.created_at).toLocaleDateString():''}</small>
         </span>
         <span class="quote-index-status status-${String(q.status||'').toLowerCase().replaceAll(' ','-')}">${esc(q.status||'')}</span>
@@ -2302,22 +2418,21 @@ function renderQuoteResults(){
         <div class="quote-index-top-actions">
           ${phone?`<a class="btn primary quote-call-btn" href="tel:${esc(phone)}">Call Customer</a>`:''}
           <button class="btn primary" data-openquote="${q.id}">Open / Edit</button>
-          <button class="btn" data-windowmeasurements="${q.id}">Window Measurements</button>
-          <button class="btn" data-quickshotdirect="${q.id}">QuickShot</button>
+          ${isCare?'':`<button class="btn" data-windowmeasurements="${q.id}">Window Measurements</button><button class="btn" data-quickshotdirect="${q.id}">QuickShot</button>`}
         </div>
 
         <div class="quote-index-detail">
           <span><b>Project</b>${esc(q.project_name||'Window Film Project')}</span>
-          <span><b>Glass</b>${actual.toFixed(2)} sq ft</span>
+          <span><b>${isCare?'Service':'Glass'}</b>${isCare?'Window cleaning':actual.toFixed(2)+' sq ft'}</span>
           <span><b>Price</b>${money(q.ceramic_price)}</span>
           <span><b>Status</b>${esc(q.status||'')}</span>
-          <span><b>Film</b>${esc(squareItem.replace(' Tint Install',''))}</span>
+          <span><b>${isCare?'Package':'Film'}</b>${esc(isCare?squareItem:squareItem.replace(' Tint Install',''))}</span>
           <span><b>Schedule</b>${job?`${when(job.scheduled_start)} • ${esc(job.status)}`:'Not scheduled'}</span>
         </div>
 
         <div class="actions quote-index-more-actions">
           ${squareButton}
-          <button class="btn" data-optimizequote="${q.id}">Optimize Roll</button>
+          ${isCare?'':`<button class="btn" data-optimizequote="${q.id}">Optimize Roll</button>`}
           <button class="btn" data-duplicatequote="${q.id}">Duplicate</button>
           <button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>
           ${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}
@@ -2338,7 +2453,7 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteCloudQuote(b.dataset.deletequote)});
   $('savedQuotes').querySelectorAll('[data-windowmeasurements]').forEach(b=>b.onclick=e=>{e.preventDefault();openWindowMeasurements(b.dataset.windowmeasurements)});
   $('savedQuotes').querySelectorAll('[data-quickshotdirect]').forEach(b=>b.onclick=e=>{e.preventDefault();let q=data.find(x=>x.id===b.dataset.quickshotdirect);quickShotOpenQuote(q)});
-  $('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=e=>{e.preventDefault();navigator.clipboard.writeText(cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied'))});
+  $('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=e=>{e.preventDefault();navigator.clipboard.writeText(/Cleaning$/.test(data[Number(b.dataset.copycloud)]?.project_type||'')?careSavedSummary(data[Number(b.dataset.copycloud)]):cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied'))});
 }
 let currentWindowMeasurementText='';
 
@@ -2401,7 +2516,7 @@ async function shareWindowMeasurements(){
   }
 }
 
-async function duplicateCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);let customer={first_name:q.customer?.first_name||'',last_name:q.customer?.last_name||'',email:q.customer?.email||'',phone:q.customer?.phone||'',service_address:q.customer?.service_address||q.service_address||'',lead_source:q.customer?.lead_source||'',notes:q.customer?.notes||''},{data:newCustomer,error:customerError}=await sb.from('customers').insert(customer).select().single();if(customerError)return toast(customerError.message);let payload={customer_id:newCustomer.id,project_name:(q.project_name||'Project')+' — Copy',project_type:q.project_type,square_catalog_item_name:q.square_catalog_item_name||'25% Ceramic Tint Install',status:'New Lead',service_address:q.service_address,miles:q.miles,total_sqft:q.total_sqft,ceramic_list_price:q.ceramic_list_price,ceramic_price:q.ceramic_price,ceramic_savings:q.ceramic_savings,solar_price:q.solar_price,tax_rate:q.tax_rate,notes:q.notes,measurements:q.measurements,assigned_to:null},{error:quoteError}=await sb.from('quotes').insert(payload);if(quoteError)return toast(quoteError.message);toast('Quote duplicated as a new project.');await loadQuotes()}
+async function duplicateCloudQuote(id){let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);let customer={first_name:q.customer?.first_name||'',last_name:q.customer?.last_name||'',email:q.customer?.email||'',phone:q.customer?.phone||'',service_address:q.customer?.service_address||q.service_address||'',lead_source:q.customer?.lead_source||'',notes:q.customer?.notes||''},{data:newCustomer,error:customerError}=await sb.from('customers').insert(customer).select().single();if(customerError)return toast(customerError.message);let payload={customer_id:newCustomer.id,project_name:(q.project_name||'Project')+' — Copy',project_type:q.project_type,square_catalog_item_name:q.square_catalog_item_name||'25% Ceramic Tint Install',status:'New Lead',service_address:q.service_address,miles:q.miles,total_sqft:q.total_sqft,ceramic_list_price:q.ceramic_list_price,ceramic_price:q.ceramic_price,ceramic_savings:q.ceramic_savings,solar_price:q.solar_price,tax_rate:q.tax_rate,notes:q.notes,measurements:q.measurements,additional_services:q.additional_services||[],additional_services_total:q.additional_services_total||0,assigned_to:null},{error:quoteError}=await sb.from('quotes').insert(payload);if(quoteError)return toast(quoteError.message);toast('Quote duplicated as a new project.');await loadQuotes()}
 function calendarActionForJobStatus(status){
   if(status==='Scheduled'||status==='Confirmed')return 'sync';
   if(status==='Canceled')return 'delete';
@@ -2485,7 +2600,7 @@ async function syncCalendarJob(jobId,action='sync'){
   if(errors.length)throw new Error(errors.join(' | '));
   return {ok:true,providers:results};
 }
-async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x=>x.id===quoteId),name=`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||q?.project_name||'this quote';if(!confirm(`Remove the scheduled assignment for ${name}?\n\nThis will remove the job from the installer dashboard, but it will keep the quote and customer record.`))return;try{await syncCalendarJob(jobId,'delete')}catch(e){console.warn('Calendar delete warning:',e)}let{error:jobError}=await sb.from('jobs').delete().eq('id',jobId);if(jobError)return toast(jobError.message);let{error:quoteError}=await sb.from('quotes').update({assigned_to:null,status:'Approved',updated_at:new Date().toISOString()}).eq('id',quoteId);if(quoteError)return toast('Assignment removed, but quote update failed: '+quoteError.message);toast('Assignment removed. Quote remains available.');await loadQuotes()}async function deleteCloudQuote(quoteId){let q=window._cloudQuotes?.find(x=>x.id===quoteId),name=`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||q?.project_name||'this quote';let confirmed=confirm(`Permanently delete the quote for ${name}?\n\nThis will also remove any linked scheduled job and immediately remove it from the installer dashboard. The customer record will remain available for future work.\n\nThis cannot be undone.`);if(!confirmed)return;let{error:jobError}=await sb.from('jobs').delete().eq('quote_id',quoteId);if(jobError)return toast('Quote was not deleted because the linked job could not be removed: '+jobError.message);let{error:quoteError}=await sb.from('quotes').delete().eq('id',quoteId);if(quoteError)return toast(quoteError.message);if(editingQuoteId===quoteId)clearQuoteForm(false);toast('Quote and linked assignment permanently deleted.');await loadQuotes()}async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loading installers…';let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name)').eq('id',quoteId).single();if(error)return toast(error.message);quote=data}let[{data:people,error:peopleError},{data:existing,error:jobError}]=await Promise.all([sb.from('profiles').select('id,full_name,email,role,active').eq('active',true).in('role',['installer','manager','owner']).order('full_name'),sb.from('jobs').select('*').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle()]);if(peopleError||jobError)return toast((peopleError||jobError).message);if(!people?.length)return toast('No active installer accounts were found.');let selected=existing?.assigned_installers?.length?existing.assigned_installers:(existing?.assigned_to?[existing.assigned_to]:[people.find(p=>String(p.role)==='installer')?.id||people[0].id]);$('scheduleInstallers').innerHTML=(people||[]).map(p=>`<label class="installer-option"><input type="checkbox" value="${p.id}" ${selected.includes(p.id)?'checked':''}><span>${esc(p.full_name||p.email)}<small>${esc(String(p.role))}</small></span></label>`).join('');$('scheduleQuoteId').value=quoteId;$('scheduleQuoteName').textContent=`${quote.customer?.first_name||''} ${quote.customer?.last_name||''} • ${quote.project_name||'Project'}`.trim();$('scheduleTitle').value=existing?.title||`${quote.customer?.last_name||quote.customer?.first_name||'Customer'} — ${quote.project_name||'Window Film Installation'}`;$('scheduleNotes').value=existing?.notes||quote.notes||'';$('scheduleStatus').value=existing?.status||'Scheduled';$('scheduleStart').value=toLocalInput(existing?.scheduled_start);$('scheduleEnd').value=toLocalInput(existing?.scheduled_end);$('scheduleJobModal').dataset.jobId=existing?.id||'';$('scheduleJobModal').dataset.originalStatus=existing?.status||'Scheduled';$('scheduleMessage').textContent=existing?'This quote already has an assigned job. Saving will update it.':'Choose one or more installers and the installation time.';$('scheduleJobModal').classList.add('show');loadScheduleMaterialPlan(quote,existing?.id||'')}function toLocalInput(value){if(!value)return'';let d=new Date(value),off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}async function saveScheduledJob(){
+async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x=>x.id===quoteId),name=`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||q?.project_name||'this quote';if(!confirm(`Remove the scheduled assignment for ${name}?\n\nThis will remove the job from the installer dashboard, but it will keep the quote and customer record.`))return;try{await syncCalendarJob(jobId,'delete')}catch(e){console.warn('Calendar delete warning:',e)}let{error:jobError}=await sb.from('jobs').delete().eq('id',jobId);if(jobError)return toast(jobError.message);let{error:quoteError}=await sb.from('quotes').update({assigned_to:null,status:'Approved',updated_at:new Date().toISOString()}).eq('id',quoteId);if(quoteError)return toast('Assignment removed, but quote update failed: '+quoteError.message);toast('Assignment removed. Quote remains available.');await loadQuotes()}async function deleteCloudQuote(quoteId){let q=window._cloudQuotes?.find(x=>x.id===quoteId),name=`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||q?.project_name||'this quote';let confirmed=confirm(`Permanently delete the quote for ${name}?\n\nThis will also remove any linked scheduled job and immediately remove it from the installer dashboard. The customer record will remain available for future work.\n\nThis cannot be undone.`);if(!confirmed)return;let{error:jobError}=await sb.from('jobs').delete().eq('quote_id',quoteId);if(jobError)return toast('Quote was not deleted because the linked job could not be removed: '+jobError.message);let{error:quoteError}=await sb.from('quotes').delete().eq('id',quoteId);if(quoteError)return toast(quoteError.message);if(editingQuoteId===quoteId)clearQuoteForm(false);toast('Quote and linked assignment permanently deleted.');await loadQuotes()}async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loading installers…';let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name)').eq('id',quoteId).single();if(error)return toast(error.message);quote=data}let[{data:people,error:peopleError},{data:existing,error:jobError}]=await Promise.all([sb.from('profiles').select('id,full_name,email,role,active').eq('active',true).in('role',['installer','manager','owner']).order('full_name'),sb.from('jobs').select('*').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle()]);if(peopleError||jobError)return toast((peopleError||jobError).message);if(!people?.length)return toast('No active installer accounts were found.');let selected=existing?.assigned_installers?.length?existing.assigned_installers:(existing?.assigned_to?[existing.assigned_to]:[people.find(p=>String(p.role)==='installer')?.id||people[0].id]);$('scheduleInstallers').innerHTML=(people||[]).map(p=>`<label class="installer-option"><input type="checkbox" value="${p.id}" ${selected.includes(p.id)?'checked':''}><span>${esc(p.full_name||p.email)}<small>${esc(String(p.role))}</small></span></label>`).join('');$('scheduleQuoteId').value=quoteId;$('scheduleQuoteName').textContent=`${quote.customer?.first_name||''} ${quote.customer?.last_name||''} • ${quote.project_name||'Project'}`.trim();$('scheduleTitle').value=existing?.title||`${quote.customer?.last_name||quote.customer?.first_name||'Customer'} — ${quote.project_name||(/Cleaning$/.test(quote.project_type||'')?'Window Cleaning':'Window Film Installation')}`;$('scheduleNotes').value=existing?.notes||quote.notes||'';$('scheduleStatus').value=existing?.status||'Scheduled';$('scheduleStart').value=toLocalInput(existing?.scheduled_start);$('scheduleEnd').value=toLocalInput(existing?.scheduled_end);$('scheduleJobModal').dataset.jobId=existing?.id||'';$('scheduleJobModal').dataset.originalStatus=existing?.status||'Scheduled';$('scheduleMessage').textContent=existing?'This quote already has an assigned job. Saving will update it.':'Choose one or more installers and the installation time.';$('scheduleJobModal').querySelector('.job-material-card')?.classList.toggle('hidden',/Cleaning$/.test(quote.project_type||''));$('scheduleJobModal').classList.add('show');if(!/Cleaning$/.test(quote.project_type||''))loadScheduleMaterialPlan(quote,existing?.id||'')}function toLocalInput(value){if(!value)return'';let d=new Date(value),off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}async function saveScheduledJob(){
   let quoteId=$('scheduleQuoteId').value,assigned=[...$('scheduleInstallers').querySelectorAll('input:checked')].map(x=>x.value),start=$('scheduleStart').value,title=$('scheduleTitle').value.trim();
   if(!quoteId||!assigned.length||!start||!title){$('scheduleMessage').textContent='At least one installer, start time, and job title are required.';return}
   let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data}=await sb.from('quotes').select('*').eq('id',quoteId).single();quote=data}
@@ -2493,7 +2608,7 @@ async function removeAssignment(quoteId,jobId){let q=window._cloudQuotes?.find(x
   let payload={quote_id:quoteId,title,service_address:quote?.service_address||'',scheduled_start:new Date(start).toISOString(),scheduled_end:$('scheduleEnd').value?new Date($('scheduleEnd').value).toISOString():null,status:interimStatus,archived_at:null,notes:$('scheduleNotes').value.trim(),assigned_to:assigned[0],assigned_installers:assigned,updated_at:now},res;
   if(existingJobId)res=await sb.from('jobs').update(payload).eq('id',existingJobId).select('id').single();else res=await sb.from('jobs').insert(payload).select('id').single();
   if(res.error){$('scheduleMessage').textContent=res.error.message;return}
-  let jobId=res.data?.id||existingJobId;try{await saveScheduleMaterialPlan(jobId)}catch(e){$('scheduleMessage').textContent='Job saved, but material plan failed: '+e.message;return}
+  let jobId=res.data?.id||existingJobId;try{if(!/Cleaning$/.test(quote?.project_type||''))await saveScheduleMaterialPlan(jobId)}catch(e){$('scheduleMessage').textContent='Job saved, but material plan failed: '+e.message;return}
   if(selectedStatus==='Completed'){
     try{
       let actualRaw=$('scheduleMaterialActualFt')?.value??'',
@@ -2874,7 +2989,7 @@ function renderOperations(){
 
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this job completed and move it to the archive?\n\nYou will confirm the actual film used before inventory is finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled. Inventory was not changed.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
-async function openCloudQuote(id,options={}){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem')){
+async function openCloudQuote(id,options={}){$('quoteBuilderPanel')?.setAttribute('open','');let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);if(/Cleaning$/.test(q.project_type||''))return openCareQuote(id);$('careBuilderPanel').open=false;editingQuoteId=q.id;editingCustomerId=q.customer_id;$('qFirst').value=q.customer?.first_name||'';$('qLast').value=q.customer?.last_name||'';$('qEmail').value=q.customer?.email||'';$('qPhone').value=q.customer?.phone||'';$('qAddress').value=q.service_address||'';$('qProject').value=q.project_name||'';$('qType').value=q.project_type||'Residential';if($('qSquareItem')){
   let canonical=q.square_catalog_item_name||'25% Ceramic Tint Install';
   try{
     let products=inventoryProductCache.length?inventoryProductCache:await inventoryProducts(),

@@ -1692,3 +1692,21 @@ button.app-kpi-card{cursor:pointer}
 .quickshot-quote-choice b,.quickshot-quote-choice strong{color:#fff}
 .quickshot-quote-choice small{color:var(--muted,#8ea2a5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:560px}
 @media(max-width:640px){.quickshot-quote-choice{align-items:flex-start;flex-direction:column}.quickshot-quote-choice span:last-child{text-align:left}.quickshot-quote-choice small{max-width:78vw}}
+/* Window Care extends the existing dark glass and cyan visual language. */
+.care-launch{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}
+.care-launch span{color:#d5eeee;font-size:12px}
+.care-builder{max-width:980px;margin:auto}
+.care-builder .card{background:linear-gradient(160deg,#0b2529,#061718);border-color:rgba(120,239,235,.2)}
+.care-builder .head h2,.care-builder b,.care-builder strong,.care-builder .field label{color:#fff}
+.care-builder .field small,.care-builder small{display:block;color:#c7e0e1}
+.care-segment{display:flex;gap:8px;flex-wrap:wrap}
+.care-segment label{display:flex;align-items:center;gap:8px;background:#103136;border:1px solid rgba(130,246,240,.28);padding:10px 14px;border-radius:12px;color:#fff;font-size:13px;letter-spacing:0;text-transform:none}
+.care-segment input,.care-check input[type="checkbox"]{width:auto;accent-color:#00d5d8}
+.care-check,.care-step{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+.care-check label{display:flex;align-items:center;gap:10px;margin:0;color:#fff;font-size:13px;letter-spacing:0;text-transform:none;flex-wrap:wrap}
+.care-check label small{width:100%;padding-left:25px;font-size:11px;color:#c7e0e1}
+.care-check>input[type="number"],.care-step>input[type="number"]{width:78px;flex:none;text-align:center}
+.care-step small{display:block;margin-top:3px;font-size:11px;color:#c7e0e1}
+.care-total-card .summary-line{color:#fff}
+.care-total-card .summary-line strong{color:#fff}
+@media(max-width:550px){.care-builder .grid2{grid-template-columns:1fr}.care-launch .btn{width:100%}}
