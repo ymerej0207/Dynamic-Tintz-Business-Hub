@@ -29,7 +29,7 @@ function auditNavigation(){
   else console.info('Dynamic Tintz navigation audit: all permitted pages exist.');
   return missing;
 }
-async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();auditNavigation();setupEmployeeAdmin();if(owner()){$("calendarIntegrationCard")?.classList.remove("hidden");$("icloudCalendarCard")?.classList.remove("hidden");}let saved=localStorage.getItem(lastViewKey()),fallback=owner()?"owner":"employee";show(saved&&allowedView(saved)?saved:fallback)}
+async function enter(){let{data,error}=await sb.from("profiles").select("*").eq("id",session.user.id).single();if(error)throw error;profile=data;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("userline").textContent=`${profile.full_name||profile.email} • ${profile.role}`;$("accountInfo").innerHTML=`<b>${esc(profile.full_name)}</b><br>${esc(profile.email)}<br><span class="pill">${profile.role}</span>`;renderNav();auditNavigation();setupEmployeeAdmin();if(owner()){$("calendarIntegrationCard")?.classList.remove("hidden");$("icloudCalendarCard")?.classList.remove("hidden");$("googleLsaCard")?.classList.remove("hidden");}let saved=localStorage.getItem(lastViewKey()),fallback=owner()?"owner":"employee";show(saved&&allowedView(saved)?saved:fallback)}
 
 const VAPID_PUBLIC_KEY='BAVc1W5wH-ch_X7G_t2gwEzV5QQejck8Mc05JQj8ghLnx9pbD98QFoGB_M6DvtDXwDGruqXo33c2oLtmV8U-LoY';
 function base64UrlToUint8Array(value){
@@ -170,7 +170,7 @@ function renderNav(){
   $("nav").innerHTML=t.map(x=>`<button data-v="${x[0]}"><b class="nav-icon">${navIcon(x[1])}</b><span>${x[2]}</span></button>`).join('');
   /* Navigation clicks are handled by delegated app-level routing. */
 }
-async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
+async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
 function mondayWeekBounds(reference=new Date()){
   let d=new Date(reference);d.setHours(0,0,0,0);
   let day=d.getDay(),diff=day===0?-6:1-day;
@@ -1699,7 +1699,7 @@ function card(l,due=false){
     <div class="head lead-card-head">
       <div>
         <h2>${esc(name)}</h2>
-        <div class="muted">${esc(source)} • ${when(l.received_at)}</div>
+        <div class="muted lead-source-row"><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><span>• ${when(l.received_at)}</span></div>
       </div>
       <span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span>
     </div>
@@ -3917,6 +3917,48 @@ async function testIcloudCalendarConnection(){
   m.textContent=`Job sync connected to ${data.calendars.join(', ')}. View-only calendars remain read-only.`;
 }
 
+
+async function loadGoogleLsaStatus(){
+  let st=$('googleLsaStatus'),msg=$('googleLsaMessage'),meta=$('googleLsaMeta'),sync=$('syncGoogleLsa'),connect=$('connectGoogleLsa');
+  if(!st)return;
+  st.textContent='Checking…';
+  let {data,error}=await sb.from('google_lsa_integrations').select('customer_id,connected_email,connected_at,last_sync_at,last_sync_status,last_sync_error').eq('user_id',session.user.id).maybeSingle();
+  if(error){st.textContent='Needs attention';msg.textContent=error.message;meta.innerHTML='';return}
+  let connected=!!data?.connected_at;
+  st.textContent=connected?'Connected':'Not connected';
+  st.classList.toggle('lsa-connected',connected);
+  connect.textContent=connected?'Reconnect Google LSA':'Connect Google LSA';
+  sync.disabled=!connected;
+  if(!data){msg.textContent='Google Local Services has not been connected for this account.';meta.innerHTML='';return}
+  let last=data.last_sync_at?when(data.last_sync_at):'Waiting for first sync';
+  let status=data.last_sync_status||'Connected';
+  meta.innerHTML=`<div><span>Google Ads account</span><b>${esc(data.customer_id||'1717104115')}</b></div><div><span>Connected account</span><b>${esc(data.connected_email||'Google account')}</b></div><div><span>Last sync</span><b>${esc(last)}</b></div><div><span>Sync status</span><b>${esc(status)}</b></div>`;
+  msg.textContent=data.last_sync_error?`Last sync error: ${data.last_sync_error}`:'Google Local Services is checked automatically every minute. New leads flow directly into Leads.';
+}
+async function syncGoogleLsaNow(){
+  let b=$('syncGoogleLsa'),msg=$('googleLsaMessage');if(!b)return;
+  b.disabled=true;b.textContent='Syncing…';msg.textContent='Checking Google Local Services for new leads…';
+  try{
+    let {data,error}=await sb.functions.invoke('google-lsa-sync',{body:{}});
+    if(error)throw error;if(data?.ok===false)throw new Error(data.error||'Google LSA sync failed.');
+    let imported=Number(data?.imported||0),fetched=Number(data?.fetched||0);
+    toast(imported?`${imported} new Google LSA lead${imported===1?'':'s'} imported.`:`Google LSA checked • ${fetched} lead${fetched===1?'':'s'} found • nothing new.`);
+    await Promise.all([loadGoogleLsaStatus(),loadLeads()]);
+  }catch(e){msg.textContent=e?.message||String(e);toast('Google LSA sync failed.')}
+  finally{b.disabled=false;b.textContent='Sync Now'}
+}
+async function connectGoogleLsa(){
+  let b=$('connectGoogleLsa'),msg=$('googleLsaMessage');if(!b)return;
+  b.disabled=true;msg.textContent='Opening Google authorization…';
+  try{
+    let {data,error}=await sb.functions.invoke('google-lsa-auth',{body:{action:'start'}});
+    if(error)throw error;let url=data?.authorization_url||data?.auth_url;if(!url)throw new Error(data?.error||'Could not start Google LSA authorization.');
+    let popup=window.open(url,'dynamicTintzGoogleLsa','width=620,height=760');
+    if(!popup){location.href=url;return}
+    let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>90){clearInterval(timer);await loadGoogleLsaStatus()}},2000);
+  }catch(e){msg.textContent=e?.message||String(e)}
+  finally{b.disabled=false}
+}
 async function loadCalendarStatus(){let st=$('calendarStatus'),m=$('calendarMessage'),connect=$('connectCalendar'),disconnect=$('disconnectCalendar'),test=$('testCalendar'),wrap=$('calendarPickerWrap'),refresh=$('refreshCalendars');if(!st)return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'status'}});if(error||data?.ok===false){st.textContent='Needs setup';m.textContent=error?.message||data?.error||'Could not read calendar connection status.';connect?.classList.remove('hidden');disconnect?.classList.add('hidden');refresh?.classList.add('hidden');wrap?.classList.add('hidden');test.disabled=true;return}if(data.connected){let selected=data.selected_calendars||[];st.textContent=selected.length?`${selected.length} Selected`:'Connected';m.textContent=`${data.email||'Google account connected'}${selected.length?' • '+selected.map(c=>c.name).join(', '):' • Choose calendars below'}`;connect?.classList.add('hidden');disconnect?.classList.remove('hidden');refresh?.classList.remove('hidden');wrap?.classList.remove('hidden');test.disabled=!selected.length;await loadCalendarChoices(selected)}else{st.textContent='Not connected';m.textContent='Connect dynamictintzllc@gmail.com to choose which calendars receive scheduled jobs.';connect?.classList.remove('hidden');disconnect?.classList.add('hidden');refresh?.classList.add('hidden');wrap?.classList.add('hidden');test.disabled=true}}
 async function loadCalendarChoices(selected=[]){let picker=$('calendarPicker'),m=$('calendarMessage');if(!picker)return;picker.innerHTML='<div class="muted">Loading calendars…</div>';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'calendars'}});if(error||data?.ok===false){picker.innerHTML='';m.textContent=error?.message||data?.error||'Could not load calendars.';return}let selectedIds=new Set((selected.length?selected:data.selected_calendars||[]).map(c=>c.id));picker.innerHTML=(data.calendars||[]).map(c=>`<label class="installer-option ${c.writable?'':'calendar-readonly'}"><input type="checkbox" value="${esc(c.id)}" ${selectedIds.has(c.id)?'checked':''} ${c.writable?'':'disabled'}><span>${esc(c.name)}${c.primary?' <b>Primary</b>':''}<small>${c.writable?'Can sync jobs':`Read only • ${esc(c.access_role)}`}</small></span></label>`).join('')||'<div class="muted">No Google calendars were found.</div>'}
 async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySelectorAll('input:checked')].map(x=>x.value),b=$('saveCalendarSelection'),m=$('calendarMessage');if(!ids.length){m.textContent='Choose at least one calendar you can edit.';return}b.disabled=true;m.textContent='Saving calendar selection…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'select',calendar_ids:ids}});b.disabled=false;if(error||data?.ok===false){m.textContent=error?.message||data?.error||'Could not save calendar selection.';return}toast(`${data.selected_calendars.length} calendar${data.selected_calendars.length===1?'':'s'} selected.`);await loadCalendarStatus()}
@@ -3954,7 +3996,7 @@ bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);document.querySelectorA
 bind('operationsNextMonth','onclick',()=>{operationsCalendarDate=new Date(operationsCalendarDate.getFullYear(),operationsCalendarDate.getMonth()+1,1);operationsSelectedDate=null;loadIcloudViewEvents().then(renderOperations)});
 bind('operationsToday','onclick',async()=>{operationsCalendarDate=new Date();operationsSelectedDate=operationLocalDateKey(new Date());renderOperationsCalendar();await renderSelectedCalendarDate();});
 bind('operationsClearDate','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});
-bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('windowMeasurementsCloseX','onclick',closeWindowMeasurementsModal);bind('copyWindowMeasurements','onclick',copyWindowMeasurements);bind('shareWindowMeasurements','onclick',shareWindowMeasurements);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('notifyFollowups','onchange',savePushPreferences);bind('notifyAssignments','onchange',savePushPreferences);bind('notifyJobTomorrow','onchange',savePushPreferences);bind('notifyJobSoon','onchange',savePushPreferences);bind('notifyScheduleChanges','onchange',savePushPreferences);bind('notifyLowInventory','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
+bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;renderOperationsCalendar();renderOperations()});bind('refreshOperations','onclick',refreshOperationsSchedule);bind('windowMeasurementsCloseX','onclick',closeWindowMeasurementsModal);bind('copyWindowMeasurements','onclick',copyWindowMeasurements);bind('shareWindowMeasurements','onclick',shareWindowMeasurements);bind('enablePushNotifications','onclick',enablePushNotifications);bind('disablePushNotifications','onclick',disablePushNotifications);bind('testPushNotification','onclick',testPushNotification);bind('notifyNewLeads','onchange',savePushPreferences);bind('notifyFollowups','onchange',savePushPreferences);bind('notifyAssignments','onchange',savePushPreferences);bind('notifyJobTomorrow','onchange',savePushPreferences);bind('notifyJobSoon','onchange',savePushPreferences);bind('notifyScheduleChanges','onchange',savePushPreferences);bind('notifyLowInventory','onchange',savePushPreferences);bind('refreshIcloudCalendars','onclick',()=>loadIcloudCalendarStatus());bind('saveIcloudCalendarSelection','onclick',saveIcloudCalendarSelection);bind('testIcloudCalendar','onclick',testIcloudCalendarConnection);bind('connectGoogleLsa','onclick',connectGoogleLsa);bind('syncGoogleLsa','onclick',syncGoogleLsaNow);bind('refreshGoogleLsa','onclick',loadGoogleLsaStatus);bind('connectCalendar','onclick',connectGoogleCalendar);bind('disconnectCalendar','onclick',disconnectGoogleCalendar);bind('testCalendar','onclick',testCalendarConnection);bind('refreshCalendars','onclick',()=>loadCalendarStatus());bind('saveCalendarSelection','onclick',saveCalendarSelection);bind('exportTimeCsv','onclick',exportTimeCsv);document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));document.addEventListener('click',e=>{
   let navButton=e.target.closest('#nav [data-v]');
   if(navButton){
     e.preventDefault();
