@@ -1911,13 +1911,15 @@ function careLines(){
 }
 function careLineTotal(line){return Math.max(Number(line.minimum)||0,line.price*line.qty)}
 function careRender(){
- let lines=careLines(),base=lines.filter(l=>l.kind==='package').reduce((t,l)=>t+careLineTotal(l),0),extras=lines.filter(l=>l.kind!=='package').reduce((t,l)=>t+careLineTotal(l),0);
+ let lines=careLines(),base=lines.filter(l=>l.kind==='package').reduce((t,l)=>t+careLineTotal(l),0),extras=lines.filter(l=>l.kind!=='package').reduce((t,l)=>t+careLineTotal(l),0),subtotal=base+extras,taxRate=6.25,tax=Math.round(subtotal*taxRate)/100,total=subtotal+tax;
  $('careResidentialScope')?.classList.toggle('hidden',$('careMarket')?.value!=='residential');
  $('careResidentialExtras')?.classList.toggle('hidden',$('careMarket')?.value!=='residential'||$('careScope')?.value==='partial');
  if($('careBasePrice'))$('careBasePrice').textContent=money(base);
  if($('careExtrasPrice'))$('careExtrasPrice').textContent=money(extras);
- if($('careTotalPrice'))$('careTotalPrice').textContent=money(base+extras);
- return{lines,base,extras,total:base+extras};
+ if($('careSubtotalPrice'))$('careSubtotalPrice').textContent=money(subtotal);
+ if($('careTaxPrice'))$('careTaxPrice').textContent=money(tax);
+ if($('careTotalPrice'))$('careTotalPrice').textContent=money(total);
+ return{lines,base,extras,subtotal,taxRate,tax,total};
 }
 function careReset(){
  careEditingId=null;careLeadId=null;careCustomerId=null;careSquareCustomerId=null;careSearchSequence++;careVisitCheckSequence++;careVisitManuallySet=false;
@@ -1962,7 +1964,7 @@ async function careSave(){
    if(matching)customerId=matching.id;
   }
   if(!customerId){let r=await sb.from('customers').insert(customer).select('id').single();if(r.error)throw r.error;customerId=r.data.id}else if(careCustomerId){let r=await sb.from('customers').update(customer).eq('id',customerId);if(r.error)throw r.error}
-  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||'Window Cleaning - Interior and/or Exterior',project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:$('careStatus').value,service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:0,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,scope:$('careScope')?.value||'whole',window_count:careInt('careWindowCount'),square_customer_id:careSquareCustomerId||null,lead_source:$('careLeadSource').value,lead_id:careLeadId||null}],updated_at:new Date().toISOString()};
+  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||'Window Cleaning - Interior and/or Exterior',project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:$('careStatus').value,service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:6.25,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,scope:$('careScope')?.value||'whole',window_count:careInt('careWindowCount'),square_customer_id:careSquareCustomerId||null,lead_source:$('careLeadSource').value,lead_id:careLeadId||null}],updated_at:new Date().toISOString()};
   let r=careEditingId?await sb.from('quotes').update(payload).eq('id',careEditingId):await sb.from('quotes').insert(payload).select('id').single();
   if(r.error)throw r.error;careEditingId=careEditingId||r.data.id;careCustomerId=customerId;await ensureCareLead(customerId);
   await loadQuotes();toast('Cleaning quote saved.');
