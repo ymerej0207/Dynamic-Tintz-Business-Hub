@@ -253,7 +253,7 @@ async function dashboard(){
       week=mondayWeekBounds(now);
   let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult]=await Promise.all([
     sb.from('leads').select('*',{count:'exact',head:true}).eq('status','new'),
-    sb.from('leads').select('*',{count:'exact',head:true}).lte('next_follow_up_at',iso).not('status','in','("approved","lost","do_not_contact","no_response")'),
+    sb.from('leads').select('*',{count:'exact',head:true}).lte('next_follow_up_at',iso).not('status','in','("approved","deposit_paid","scheduled","completed","lost","bad_lead","do_not_contact","no_response")'),
     sb.from('time_entries').select('*',{count:'exact',head:true}).eq('status','open'),
     sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved']),
     sb.from('jobs').select('*',{count:'exact',head:true}).in('status',['Scheduled','Confirmed','En Route','In Progress']),
@@ -1684,55 +1684,64 @@ function leadSourceLabel(l){
   if(l.source==='organic')return l.source_detail||'Organic';
   return l.source||'Angi';
 }
-function leadRequestText(l){
-  return String(l.original_message||l.message||l.notes||'').trim();
+function leadRequestText(l){return String(l.original_message||l.message||l.notes||'').trim()}
+function leadStatusLabel(status){
+  const labels={new:'New',attempted:'Attempted',no_answer:'No Answer',voicemail:'Voicemail Left',text_sent:'Text Sent',contacted:'Contacted',estimate_scheduled:'Estimate Scheduled',quote_sent:'Quote Sent',follow_up:'Follow Up',follow_up_due:'Follow Up',approved:'Won / Approved',deposit_paid:'Deposit Paid',scheduled:'Scheduled',completed:'Completed',lost:'Lost',bad_lead:'Bad Lead',no_response:'No Response',do_not_contact:'Do Not Contact'};
+  return labels[status]||String(status||'new').replaceAll('_',' ');
+}
+function leadAge(l){
+  let d=new Date(l.received_at||l.created_at||l.updated_at||Date.now()),ms=Math.max(0,Date.now()-d.getTime()),mins=Math.floor(ms/60000);
+  if(mins<60)return `${mins}m old`;let hrs=Math.floor(mins/60);if(hrs<24)return `${hrs}h old`;let days=Math.floor(hrs/24);return `${days}d old`;
+}
+function leadIsTerminal(l){return ['completed','lost','bad_lead','do_not_contact','no_response'].includes(String(l.status||''))}
+function leadNeedsAttention(l){
+  if(leadIsTerminal(l)||['approved','deposit_paid','scheduled'].includes(String(l.status||'')))return false;
+  if(String(l.status||'new')==='new')return true;
+  return !!l.next_follow_up_at&&new Date(l.next_follow_up_at)<=new Date();
+}
+function leadLastTouch(l){return l.last_activity_at||l.updated_at||l.received_at||l.created_at}
+function renderLeadMetrics(){
+  let active=leads||[],set=(id,n)=>{let el=$(id);if(el)el.textContent=n};
+  set('leadNeedsAttention',active.filter(leadNeedsAttention).length);
+  set('leadNewCount',active.filter(x=>String(x.status||'new')==='new').length);
+  set('leadFollowCount',active.filter(x=>['attempted','no_answer','voicemail','text_sent','contacted','estimate_scheduled','quote_sent','follow_up','follow_up_due'].includes(String(x.status||''))).length);
+  set('leadWonCount',active.filter(x=>['approved','deposit_paid','scheduled','completed'].includes(String(x.status||''))).length);
 }
 function card(l,due=false){
-  let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',
-      source=leadSourceLabel(l),
-      request=String(l.service_requested||'').trim(),
-      description=leadRequestText(l),
-      location=l.service_address||l.city||'',
-      hasDescription=!!description;
-
-  return `<article class="item lead-app-card">
-    <div class="head lead-card-head">
-      <div>
-        <h2>${esc(name)}</h2>
-        <div class="muted lead-source-row"><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><span>• ${when(l.received_at)}</span></div>
-      </div>
-      <span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span>
-    </div>
-
-    <div class="lead-contact-line">
-      ${l.phone?`<a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>`:''}
-      ${l.email?`<span>${esc(l.email)}</span>`:''}
-      ${location?`<span>${esc(location)}</span>`:''}
-    </div>
-
-    ${request?`<section class="lead-request-block">
-      <span class="lead-detail-label">PROJECT REQUEST</span>
-      <b>${esc(request)}</b>
-    </section>`:''}
-
-    ${hasDescription?`<section class="lead-description-block">
-      <span class="lead-detail-label">${String(source).toLowerCase().includes('angi')?'ANGI DESCRIPTION / CUSTOMER MESSAGE':'CUSTOMER MESSAGE / NOTES'}</span>
-      <div>${esc(description)}</div>
-    </section>`:`<section class="lead-description-block is-empty">
-      <span class="lead-detail-label">CUSTOMER MESSAGE</span>
-      <div>No additional description was submitted.</div>
-    </section>`}
-
-    <div class="lead-attempt-line">Attempts: <b>${l.attempt_count||0}</b>${due?` • Follow-up: <b>${when(l.next_follow_up_at)}</b>`:''}</div>
-
-    <div class="actions lead-actions">
-      ${l.phone?`<a class="btn primary lead-call-btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
-      ${location?`<a class="btn lead-directions-btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(location)}">Directions</a>`:''}
-      <button class="btn" data-log="${l.id}">Log Attempt</button>
-      <button class="btn" data-leadquote="${l.id}">Create Quote</button><button class="btn" data-leadcare="${l.id}">Window Care Quote</button>
-      ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}
-    </div>
+  let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',source=leadSourceLabel(l),request=String(l.service_requested||'').trim(),description=leadRequestText(l),location=l.service_address||l.city||'',hasDescription=!!description,attention=leadNeedsAttention(l),follow=l.next_follow_up_at?new Date(l.next_follow_up_at):null,overdue=follow&&follow<=new Date();
+  return `<article class="item lead-app-card ${attention?'needs-attention':''}">
+    <div class="head lead-card-head"><div><h2>${esc(name)}</h2><div class="muted lead-source-row"><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><span>• ${leadAge(l)}</span>${attention?'<span class="lead-attention-flag">NEEDS ATTENTION</span>':''}</div></div><span class="pill">${esc(leadStatusLabel(l.status))}</span></div>
+    <div class="lead-contact-line">${l.phone?`<a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>`:''}${l.email?`<span>${esc(l.email)}</span>`:''}${location?`<span>${esc(location)}</span>`:''}</div>
+    ${request?`<section class="lead-request-block"><span class="lead-detail-label">PROJECT REQUEST</span><b>${esc(request)}</b></section>`:''}
+    ${hasDescription?`<section class="lead-description-block"><span class="lead-detail-label">${String(source).toLowerCase().includes('angi')?'ANGI DESCRIPTION / CUSTOMER MESSAGE':'CUSTOMER MESSAGE / NOTES'}</span><div>${esc(description)}</div></section>`:`<section class="lead-description-block is-empty"><span class="lead-detail-label">CUSTOMER MESSAGE</span><div>No additional description was submitted.</div></section>`}
+    <div class="lead-management-strip"><span><small>ATTEMPTS</small><b>${l.attempt_count||0}</b></span><span><small>LAST TOUCH</small><b>${when(leadLastTouch(l))}</b></span><span class="${overdue?'is-overdue':''}"><small>NEXT FOLLOW UP</small><b>${follow?when(follow):'Not set'}</b></span></div>
+    <div class="actions lead-actions"><button class="btn primary" data-managelead="${l.id}">Manage Lead</button>${l.phone?`<a class="btn lead-call-btn" href="tel:${esc(l.phone)}">Call</a><a class="btn" href="sms:${esc(l.phone)}">Text</a>`:''}<button class="btn" data-leadquote="${l.id}">Create Quote</button>${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete</button>`:''}</div>
   </article>`
+}
+function leadMatchesFilter(l,status){
+  if(!status)return true;if(status==='attention')return leadNeedsAttention(l);if(status==='follow')return ['attempted','no_answer','voicemail','text_sent','contacted','estimate_scheduled','quote_sent','follow_up','follow_up_due'].includes(String(l.status||''));if(status==='won')return ['approved','deposit_paid','scheduled','completed'].includes(String(l.status||''));return l.status===status;
+}
+function renderLeadResults(){let q=($('leadSearch')?.value||'').toLowerCase(),status=$('leadStatusFilter')?.value||'',items=leads.filter(l=>leadMatchesFilter(l,status)&&JSON.stringify(l).toLowerCase().includes(q)).sort((a,b)=>{let aa=leadNeedsAttention(a)?1:0,bb=leadNeedsAttention(b)?1:0;if(aa!==bb)return bb-aa;return new Date(b.received_at||b.created_at||b.updated_at||0)-new Date(a.received_at||a.created_at||a.updated_at||0)});renderLeadMetrics();$('leadList').innerHTML=items.length?items.map(x=>card(x)).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'))}
+async function loadLeads(){let{data,error}=await sb.from('leads').select('*').order('received_at',{ascending:false});if(error)return toast(error.message);leads=data||[];renderLeadResults()}
+async function loadFollowups(){let now=new Date(),future=new Date(now);future.setDate(future.getDate()+7);let{data,error}=await sb.from('leads').select('*').not('status','in','("approved","deposit_paid","scheduled","completed","lost","bad_lead","do_not_contact","no_response")').not('next_follow_up_at','is',null).lte('next_follow_up_at',future.toISOString()).order('next_follow_up_at');if(error)return toast(error.message);let due=(data||[]).filter(x=>new Date(x.next_follow_up_at)<=now),upcoming=(data||[]).filter(x=>new Date(x.next_follow_up_at)>now);$('overdueFollowups').textContent=due.length;$('upcomingFollowups').textContent=upcoming.length;$('followList').innerHTML=due.length?due.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups due right now.</div>';$('upcomingFollowList').innerHTML=upcoming.length?upcoming.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups scheduled in the next seven days.</div>';bindLeadActions($('followList'));bindLeadActions($('upcomingFollowList'))}
+async function openLeadWorkspace(id){
+  let l=leads.find(x=>x.id===id);if(!l)return toast('Lead not found.');
+  $('leadWorkspaceId').value=id;$('leadWorkspaceName').textContent=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead';$('leadWorkspaceStatus').value=l.status||'new';
+  $('leadWorkspaceFollowup').value=l.next_follow_up_at?new Date(new Date(l.next_follow_up_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
+  let source=leadSourceLabel(l),loc=l.service_address||l.city||'',lsa=String(source).toLowerCase().includes('google local services');
+  $('leadWorkspaceSummary').innerHTML=`<div><span>Source</span><b>${esc(source)}</b></div><div><span>Lead Age</span><b>${leadAge(l)}</b></div><div><span>Attempts</span><b>${l.attempt_count||0}</b></div><div><span>Received</span><b>${when(l.received_at||l.created_at)}</b></div>${lsa&&l.external_lead_id?`<div class="wide"><span>Google Lead ID</span><b>${esc(l.external_lead_id)}</b></div>`:''}${loc?`<div class="wide"><span>Service Location</span><b>${esc(loc)}</b></div>`:''}`;
+  $('leadWorkspaceActions').innerHTML=`${l.phone?`<a class="btn primary" href="tel:${esc(l.phone)}">Call</a><a class="btn" href="sms:${esc(l.phone)}">Text</a>`:''}<button class="btn" data-workquote="${l.id}">Create Quote</button>${loc?`<a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(loc)}">Directions</a>`:''}`;
+  $('leadWorkspaceActions').querySelector('[data-workquote]')?.addEventListener('click',()=>createQuoteFromLead(id));
+  $('workspaceLogAttempt').onclick=()=>{$('activityId').value=id;$('activityNotes').value='';$('activityModal').classList.add('show')};
+  $('leadWorkspaceHistory').innerHTML='<div class="muted">Loading history…</div>';$('leadWorkspaceModal').classList.add('show');
+  let{data,error}=await sb.from('lead_activities').select('*').eq('lead_id',id).order('created_at',{ascending:false});
+  $('leadWorkspaceHistory').innerHTML=error?`<div class="muted">${esc(error.message)}</div>`:(data||[]).length?(data||[]).map(a=>`<div class="lead-history-item"><div><b>${esc(leadStatusLabel(a.activity_type==='call_no_answer'?'no_answer':a.activity_type))}</b><span>${when(a.created_at)}</span></div>${a.notes?`<p>${esc(a.notes)}</p>`:''}</div>`).join(''):'<div class="muted">No activity logged yet.</div>';
+}
+async function saveLeadWorkspace(){
+  let id=$('leadWorkspaceId').value,status=$('leadWorkspaceStatus').value,raw=$('leadWorkspaceFollowup').value,next=raw?new Date(raw).toISOString():null;
+  if(['approved','deposit_paid','scheduled','completed','lost','bad_lead','do_not_contact','no_response'].includes(status))next=null;
+  let{error}=await sb.from('leads').update({status,next_follow_up_at:next,updated_at:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);
+  await sb.from('lead_activities').insert({lead_id:id,activity_type:status,notes:'Lead management status updated.'});$('leadWorkspaceModal').classList.remove('show');toast('Lead management updated.');await loadLeads();
 }
 async function copyText(value){
   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);return}
@@ -1746,7 +1755,7 @@ async function copyPhone(phone){
 function bindLeadActions(container=document){container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
 function renderLeadResults(){let q=($('leadSearch')?.value||'').toLowerCase(),status=$('leadStatusFilter')?.value||'',items=leads.filter(l=>(!status||l.status===status)&&JSON.stringify(l).toLowerCase().includes(q)).sort((a,b)=>new Date(b.received_at||b.created_at||b.updated_at||0)-new Date(a.received_at||a.created_at||a.updated_at||0));$('leadList').innerHTML=items.length?items.map(x=>card(x)).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'))}
 async function loadLeads(){let{data,error}=await sb.from('leads').select('*').order('received_at',{ascending:false});if(error)return toast(error.message);leads=data||[];renderLeadResults()}
-async function loadFollowups(){let now=new Date(),future=new Date(now);future.setDate(future.getDate()+7);let{data,error}=await sb.from('leads').select('*').not('status','in','("approved","lost","do_not_contact","no_response")').not('next_follow_up_at','is',null).lte('next_follow_up_at',future.toISOString()).order('next_follow_up_at');if(error)return toast(error.message);let due=(data||[]).filter(x=>new Date(x.next_follow_up_at)<=now),upcoming=(data||[]).filter(x=>new Date(x.next_follow_up_at)>now);$('overdueFollowups').textContent=due.length;$('upcomingFollowups').textContent=upcoming.length;$('followList').innerHTML=due.length?due.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups due right now.</div>';$('upcomingFollowList').innerHTML=upcoming.length?upcoming.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups scheduled in the next seven days.</div>';bindLeadActions($('followList'));bindLeadActions($('upcomingFollowList'))}
+async function loadFollowups(){let now=new Date(),future=new Date(now);future.setDate(future.getDate()+7);let{data,error}=await sb.from('leads').select('*').not('status','in','("approved","deposit_paid","scheduled","completed","lost","bad_lead","do_not_contact","no_response")').not('next_follow_up_at','is',null).lte('next_follow_up_at',future.toISOString()).order('next_follow_up_at');if(error)return toast(error.message);let due=(data||[]).filter(x=>new Date(x.next_follow_up_at)<=now),upcoming=(data||[]).filter(x=>new Date(x.next_follow_up_at)>now);$('overdueFollowups').textContent=due.length;$('upcomingFollowups').textContent=upcoming.length;$('followList').innerHTML=due.length?due.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups due right now.</div>';$('upcomingFollowList').innerHTML=upcoming.length?upcoming.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups scheduled in the next seven days.</div>';bindLeadActions($('followList'));bindLeadActions($('upcomingFollowList'))}
 async function createCareQuoteFromLead(id){let l=leads.find(x=>x.id===id);if(!l){let r=await sb.from('leads').select('*').eq('id',id).maybeSingle();l=r.data}if(!l)return toast('Lead not found.');careReset();careLeadId=l.id;careCustomerId=l.customer_id||null;careCustomerChosen();for(let [field,value] of Object.entries({careFirst:l.first_name,careLast:l.last_name,careEmail:l.email,carePhone:l.phone,careAddress:l.service_address||l.city,careProject:l.service_requested,careNotes:l.original_message||l.notes}))if(value)$(field).value=value;let source=leadSourceLabel(l);$('careLeadSource').value=[...$('careLeadSource').options].some(o=>o.value===source)?source:'Other';$('careStatus').value='Estimate Requested';if(/store|office|business|commercial/i.test(l.service_requested||'')){$('careMarket').value='commercial';careSelectOptions()}show('quotes');$('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;$('careBuilderPanel').scrollIntoView({behavior:'smooth',block:'start'});toast('Lead loaded into Window Care.')}
 function createQuoteFromLead(id){let l=leads.find(x=>x.id===id);if(!l)return toast('Lead not found.');if(/clean|wash|window care/i.test(l.service_requested||''))return createCareQuoteFromLead(id);clearQuoteForm(false);editingLeadId=l.id;$('qFirst').value=l.first_name||'';$('qLast').value=l.last_name||'';$('qEmail').value=l.email||'';$('qPhone').value=l.phone||'';$('qAddress').value=l.service_address||l.city||'';$('qProject').value=l.service_requested||'Window Film Project';let source=leadSourceLabel(l);$('qLead').value=[...$('qLead').options].some(o=>o.value===source)?source:(String(source).toLowerCase().includes('angi')?'Angi':'Other');$('qNotes').value=l.original_message||l.notes||'';$('qStatus').value='Estimate Requested';quoteMilesManual=false;autoFillQuoteMiles(l.service_address||l.city||'',true);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');toast('Lead loaded into Quote Builder.')}
 async function saveLead(){let p={source:'Angi',first_name:$('lfn').value.trim(),last_name:$('lln').value.trim(),phone:$('lphone').value.trim(),email:$('lemail').value.trim(),city:$('lcity').value.trim(),service_requested:$('lservice').value.trim(),original_message:$('lmessage').value.trim(),status:'new',attempt_count:0,next_follow_up_at:new Date().toISOString()};let{error}=await sb.from('leads').insert(p);if(error)return toast(error.message);$('leadModal').classList.remove('show');toast('Lead added to immediate follow-up.');loadLeads()}
@@ -3972,7 +3981,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('addQuoteAddon','onclick',addQuoteAddon);bind('quoteBackToTop','onclick',scrollToCurrentQuoteTop);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);document.querySelectorAll('[data-leadview]').forEach(b=>b.onclick=()=>{if($('leadStatusFilter'))$('leadStatusFilter').value=b.dataset.leadview;renderLeadResults()});bind('saveLeadWorkspace','onclick',saveLeadWorkspace);bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';
