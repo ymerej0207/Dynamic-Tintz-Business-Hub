@@ -1507,7 +1507,7 @@ function openCareQuickShot(q){
  careQuickShotLines=lines.map(l=>({name:l.name,variation:l.variation||'',qty:Number(l.qty)||1,price:Number(l.price)||0,minimum:Number(l.minimum)||0}));
  $('cqsCustomer').value=fromQuote?([q.customer?.first_name,q.customer?.last_name].filter(Boolean).join(' ')||q.project_name||'Customer'):[ $('careFirst').value,$('careLast').value].filter(Boolean).join(' ')||'Customer';
  $('cqsAddress').value=fromQuote?(q.service_address||q.customer?.service_address||''):$('careAddress').value;
- $('cqsProject').value=fromQuote?(q.project_name||'Window cleaning'):$('careProject').value||'Window cleaning';
+ $('cqsProject').value=fromQuote?(q.project_name||'Window Cleaning - Interior and/or Exterior'):$('careProject').value||'Window Cleaning - Interior and/or Exterior';
  $('cqsNote').value='';$('cqsSavings').value='0';quickShotReference='';quickShotRef();
  $('careQuickShotPreviewWrap').classList.add('hidden');$('careQuickShotModal').classList.add('show');$('careQuickShotModal').setAttribute('aria-hidden','false');renderCareQuickShot();
 }
@@ -1520,7 +1520,7 @@ function renderCareQuickShot(){
 }
 function closeCareQuickShot(){$('careQuickShotModal').classList.remove('show');$('careQuickShotModal').setAttribute('aria-hidden','true')}
 async function buildCareQuickShotImage(){
- const customer=$('cqsCustomer').value.trim()||'Customer',address=$('cqsAddress').value.trim(),project=$('cqsProject').value.trim()||'Window cleaning',note=$('cqsNote').value.trim();
+ const customer=$('cqsCustomer').value.trim()||'Customer',address=$('cqsAddress').value.trim(),project=$('cqsProject').value.trim()||'Window Cleaning - Interior and/or Exterior',note=$('cqsNote').value.trim();
  const subtotal=careQuickShotLines.reduce((n,l)=>n+careLineTotal(l),0),savings=Math.min(subtotal,Math.max(0,Number($('cqsSavings').value)||0));
  if(!subtotal)throw new Error('Add a priced cleaning service first.');
  const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=Math.max(1450,1080+careQuickShotLines.length*105);const ctx=canvas.getContext('2d');let h=canvas.height;
@@ -1807,7 +1807,7 @@ const CARE_PACKAGES={
  commercial:[
   {id:'store-ext',name:'Commercial Storefront Exterior Window Cleaning',initial:[{name:'Smaller storefront',price:115},{name:'Larger storefront',price:145}],return:[{name:'Smaller storefront',price:85},{name:'Larger storefront',price:115}],sides:'exterior'},
   {id:'store-both',name:'Commercial Storefront Interior and Exterior Window Cleaning',initial:[{name:'Smaller storefront',price:155},{name:'Larger storefront',price:225}],return:[{name:'Smaller storefront',price:115},{name:'Larger storefront',price:175}],sides:'both'},
-  {id:'office',name:'Commercial Office Window Cleaning',initial:[{name:'Standard',price:235},{name:'Large',price:275}],return:[{name:'Standard',price:235},{name:'Large',price:275}],sides:'both'}
+  {id:'office',name:'Commercial Office Window Cleaning',initial:[{name:'First/Initial',price:275}],return:[{name:'Return',price:235}],sides:'both'}
  ]
 };
 let careLeadId=null,careEditingId=null,careCustomerId=null,careSquareCustomerId=null,careCustomerMatches=[],careSearchTimer=null,careSearchSequence=0;
@@ -1892,7 +1892,7 @@ function cloudQuoteText(q){return ['Dynamic Tintz Window Film Proposal',q.projec
 function careSummary(){let c=careRender();return ['Dynamic Tintz Window Care Proposal','',[$('careFirst').value,$('careLast').value].filter(Boolean).join(' '),$('careAddress').value,'',...c.lines.map(l=>l.name+' · '+(l.variation||'')+' · '+l.qty+' × '+money(l.price)+(l.minimum?' (minimum '+money(l.minimum)+')':'')+' = '+money(careLineTotal(l))),'','Estimated total: '+money(c.total),'Water-repellent finish is temporary and can be refreshed on future visits.','Dynamic Tintz • 469-840-4008'].join('\n')}
 async function ensureCareLead(customerId){
  const source=$('careLeadSource').value,now=new Date().toISOString(),status=$('careStatus').value==='Quote Sent'?'quote_sent':'contacted';
- const lead={customer_id:customerId,source,first_name:$('careFirst').value.trim(),last_name:$('careLast').value.trim(),phone:$('carePhone').value.trim(),email:$('careEmail').value.trim(),service_address:$('careAddress').value.trim(),service_requested:$('careProject').value.trim()||'Window Cleaning',original_message:$('careNotes').value.trim(),status,attempt_count:0,next_follow_up_at:now,updated_at:now};
+ const lead={customer_id:customerId,source,first_name:$('careFirst').value.trim(),last_name:$('careLast').value.trim(),phone:$('carePhone').value.trim(),email:$('careEmail').value.trim(),service_address:$('careAddress').value.trim(),service_requested:$('careProject').value.trim()||'Window Cleaning - Interior and/or Exterior',original_message:$('careNotes').value.trim(),status,attempt_count:0,next_follow_up_at:now,updated_at:now};
  if(careLeadId){const r=await sb.from('leads').update({customer_id:customerId,first_name:lead.first_name,last_name:lead.last_name,phone:lead.phone,email:lead.email,service_address:lead.service_address,service_requested:lead.service_requested,status,updated_at:now}).eq('id',careLeadId);if(r.error)console.warn('Window care lead update:',r.error);return}
  if(careEditingId&&window._cloudQuotes?.some(q=>q.id===careEditingId))return;
  let r=await sb.from('leads').insert(lead).select('id').single();
@@ -1918,7 +1918,7 @@ async function careSave(){
    if(matching)customerId=matching.id;
   }
   if(!customerId){let r=await sb.from('customers').insert(customer).select('id').single();if(r.error)throw r.error;customerId=r.data.id}else if(careCustomerId){let r=await sb.from('customers').update(customer).eq('id',customerId);if(r.error)throw r.error}
-  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||selected.pkg.name,project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:$('careStatus').value,service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:0,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,square_customer_id:careSquareCustomerId||null,lead_source:$('careLeadSource').value,lead_id:careLeadId||null}],updated_at:new Date().toISOString()};
+  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||'Window Cleaning - Interior and/or Exterior',project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:$('careStatus').value,service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:0,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,square_customer_id:careSquareCustomerId||null,lead_source:$('careLeadSource').value,lead_id:careLeadId||null}],updated_at:new Date().toISOString()};
   let r=careEditingId?await sb.from('quotes').update(payload).eq('id',careEditingId):await sb.from('quotes').insert(payload).select('id').single();
   if(r.error)throw r.error;careEditingId=careEditingId||r.data.id;careCustomerId=customerId;await ensureCareLead(customerId);
   await loadQuotes();toast('Cleaning quote saved.');
