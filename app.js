@@ -2157,6 +2157,38 @@ function scheduleQuoteMileageAutofill(){
   clearTimeout(quoteMileageTimer);
   quoteMileageTimer=setTimeout(()=>autoFillQuoteMiles($('qAddress')?.value||''),350);
 }
+function openNewServiceQuote(){
+  const modal=$('newServiceQuoteModal');
+  if(!modal)return;
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden','false');
+}
+function closeNewServiceQuote(){
+  const modal=$('newServiceQuoteModal');
+  if(!modal)return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden','true');
+}
+function startNewTintQuote(){
+  closeNewServiceQuote();
+  clearQuoteForm(false);
+  editingLeadId=null;
+  quoteMilesManual=false;
+  if($('qLead'))$('qLead').value='Organic';
+  if($('qStatus'))$('qStatus').value='Estimate Requested';
+  show('quotes');
+  if($('careBuilderPanel'))$('careBuilderPanel').open=false;
+  $('quoteBuilderPanel')?.setAttribute('open','');
+  setTimeout(()=>$('qFirst')?.focus(),80);
+}
+function startNewCleaningQuote(){
+  closeNewServiceQuote();
+  show('quotes');
+  if($('quoteBuilderPanel'))$('quoteBuilderPanel').open=false;
+  careReset();
+  if($('careBuilderPanel'))$('careBuilderPanel').open=true;
+  setTimeout(()=>$('careFirst')?.focus(),80);
+}
 function openNewLeadQuote(source='Angi'){
   clearQuoteForm(false);
   editingLeadId=null;
@@ -4010,7 +4042,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('addQuoteAddon','onclick',addQuoteAddon);bind('quoteBackToTop','onclick',scrollToCurrentQuoteTop);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-bind('addOrganicLeadBtn','onclick',openOrganicLeadModal);document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';
@@ -4053,7 +4085,7 @@ bind('operationsSelectedDayClose','onclick',()=>{operationsSelectedDate=null;ren
     show(goButton.dataset.go);
   }
 });
-bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',()=>openNewLeadQuote('Angi'));bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
+bind('login','onclick',login);bind('reset','onclick',reset);bind('logout','onclick',()=>sb.auth.signOut());bind('addLead','onclick',openNewServiceQuote);bind('newTintQuoteChoice','onclick',startNewTintQuote);bind('newCleaningQuoteChoice','onclick',startNewCleaningQuote);bind('saveLead','onclick',saveLead);bind('saveActivity','onclick',saveActivity);document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close)?.classList.remove('show'));sb.auth.onAuthStateChange(async(_,s)=>{session=s;if(s){try{await enter()}catch(e){$('message').textContent=e.message}}else{$('app').classList.add('hidden');$('auth').classList.remove('hidden')}});session=(await sb.auth.getSession()).data.session;if(session){try{await enter()}catch(e){$('message').textContent=e.message}}if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js');
 
 function routePushTarget(target){
   let raw=typeof target==='string'?target:(target?.url||'./'),
