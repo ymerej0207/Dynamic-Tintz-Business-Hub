@@ -1770,3 +1770,99 @@ button.app-kpi-card{cursor:pointer}
     overflow:visible!important;
   }
 }
+
+/* v7.13.3 — desktop/mobile action layout cleanup */
+/* Leads: consistent action grid instead of a loose wrapping button row. */
+.lead-actions{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px!important;
+  align-items:stretch;
+  margin-top:10px!important;
+}
+.lead-actions .btn,
+.lead-actions a.btn{
+  width:100%!important;
+  min-width:0!important;
+  min-height:42px!important;
+  margin:0!important;
+  padding:9px 10px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  line-height:1.15!important;
+  white-space:normal;
+}
+
+/* Quotes: primary customer actions stay on one clean row on desktop. */
+.quote-index-top-actions{
+  display:grid!important;
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:8px!important;
+  align-items:stretch;
+}
+.quote-index-top-actions .btn,
+.quote-index-top-actions a.btn{
+  width:100%!important;
+  min-width:0!important;
+  min-height:44px!important;
+  margin:0!important;
+  padding:9px 10px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  line-height:1.15!important;
+  white-space:normal;
+}
+
+/* Quote workflow actions use a compact, aligned grid. */
+.quote-index-more-actions{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:8px!important;
+  align-items:stretch;
+  margin-top:0!important;
+}
+.quote-index-more-actions .btn,
+.quote-index-more-actions a.btn{
+  width:100%!important;
+  min-width:0!important;
+  min-height:40px!important;
+  margin:0!important;
+  padding:8px 10px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  line-height:1.15!important;
+  white-space:normal;
+}
+
+@media(max-width:760px){
+  .lead-actions,
+  .quote-index-top-actions,
+  .quote-index-more-actions{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:7px!important;
+  }
+  .lead-actions .btn,
+  .lead-actions a.btn,
+  .quote-index-top-actions .btn,
+  .quote-index-top-actions a.btn,
+  .quote-index-more-actions .btn,
+  .quote-index-more-actions a.btn{
+    min-height:44px!important;
+    padding:9px 8px!important;
+    font-size:11px!important;
+  }
+}
+
+@media(max-width:390px){
+  .lead-actions,
+  .quote-index-top-actions,
+  .quote-index-more-actions{
+    gap:6px!important;
+  }
+}
