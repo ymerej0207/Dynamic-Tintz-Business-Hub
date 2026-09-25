@@ -1801,8 +1801,8 @@ function exportTimeCsv(){if(!teamTimeCache.length)return toast('No weekly time r
 // additional_services, leaving film measurements and roll inventory untouched.
 const CARE_PACKAGES={
  residential:[
-  {id:'res-ext',name:'Residential Exterior Window Cleaning',initial:[{name:'Standard',price:219}],return:[{name:'Standard',price:189}],sides:'exterior'},
-  {id:'res-both',name:'Residential Interior and Exterior Window Cleaning',initial:[{name:'Standard',price:309}],return:[{name:'Standard',price:269}],sides:'both'}
+  {id:'res-ext',name:'Residential Exterior Window Cleaning',initial:[{name:'First/Initial',price:219,sku:'DTC-RES-EXT-FIRST'}],return:[{name:'Return Visit',price:189,sku:'DTC-RES-EXT-RETURN'}],sides:'exterior'},
+  {id:'res-both',name:'Residential Interior and Exterior Window Cleaning',initial:[{name:'First/Initial',price:309,sku:'DTC-RES-FULL-FIRST'}],return:[{name:'Return',price:269,sku:'DTC-RES-FULL-RETURN'}],sides:'both'}
  ],
  commercial:[
   {id:'store-ext',name:'Commercial Storefront Exterior Window Cleaning',initial:[{name:'Smaller storefront',price:115},{name:'Larger storefront',price:145}],return:[{name:'Smaller storefront',price:85},{name:'Larger storefront',price:115}],sides:'exterior'},
@@ -1810,7 +1810,7 @@ const CARE_PACKAGES={
   {id:'office',name:'Commercial Office Window Cleaning',initial:[{name:'First/Initial',price:275}],return:[{name:'Return',price:235}],sides:'both'}
  ]
 };
-let careLeadId=null,careEditingId=null,careCustomerId=null,careSquareCustomerId=null,careCustomerMatches=[],careSearchTimer=null,careSearchSequence=0;
+let careLeadId=null,careEditingId=null,careCustomerId=null,careSquareCustomerId=null,careCustomerMatches=[],careSearchTimer=null,careSearchSequence=0,careVisitCheckSequence=0,careVisitManuallySet=false;
 function carePhoneDigits(value){return String(value||'').replace(/\D/g,'').slice(-10)}
 function careCustomerChosen(){
  let box=$('careCustomerSelected');if(!box)return;
@@ -1843,8 +1843,40 @@ async function careFindCustomers(){
   let c=careCustomerMatches[Number(button.dataset.careCustomer)];if(!c)return;
   careCustomerId=c.source==='os'?c.id:null;careSquareCustomerId=c.source==='square'?c.id:null;
   for(let [id,value] of Object.entries({careFirst:c.first_name,careLast:c.last_name,careEmail:c.email,carePhone:c.phone,careAddress:c.service_address}))if(value)$(id).value=value;
-  results.replaceChildren();$('careCustomerSearch').value='';careCustomerChosen();careRender();
+  results.replaceChildren();$('careCustomerSearch').value='';careCustomerChosen();careVisitManuallySet=false;careAutoVisitForCustomer();careRender();
  });
+}
+async function careAutoVisitForCustomer(){
+ const seq=++careVisitCheckSequence,status=$('careVisitStatus');
+ if(careEditingId||careVisitManuallySet)return;
+ if(!careCustomerId){
+  document.querySelector('input[name="careVisit"][value="initial"]').checked=true;if($('careVisitStatus'))$('careVisitStatus').textContent='First visit selected for a new customer.';
+  if(status)status.textContent=careSquareCustomerId?'First visit selected. No completed Dynamic Tintz cleaning history is linked to this Square-only customer.':'First visit selected for a new customer.';
+  careRender();return;
+ }
+ if(status)status.textContent='Checking completed cleaning history…';
+ try{
+  const cutoff=new Date();cutoff.setFullYear(cutoff.getFullYear()-1);
+  let {data:quotes,error:qError}=await sb.from('quotes').select('id').eq('customer_id',careCustomerId).in('project_type',['Residential Cleaning','Commercial Cleaning']);
+  if(qError)throw qError;
+  if(seq!==careVisitCheckSequence)return;
+  const quoteIds=(quotes||[]).map(q=>q.id);
+  let eligible=false,lastCompleted=null;
+  if(quoteIds.length){
+   let {data:jobs,error:jError}=await sb.from('jobs').select('scheduled_start,updated_at').in('quote_id',quoteIds).eq('status','Completed').gte('scheduled_start',cutoff.toISOString()).order('scheduled_start',{ascending:false}).limit(1);
+   if(jError)throw jError;
+   if(seq!==careVisitCheckSequence)return;
+   if(jobs?.length){eligible=true;lastCompleted=jobs[0].scheduled_start||jobs[0].updated_at}
+  }
+  document.querySelector('input[name="careVisit"][value="'+(eligible?'return':'initial')+'"]').checked=true;
+  if(status)status.textContent=eligible?'Return visit selected automatically. Completed window cleaning found within the last 12 months'+(lastCompleted?' ('+new Date(lastCompleted).toLocaleDateString()+').':'.'):'First visit selected. No completed window cleaning found within the last 12 months.';
+  careRender();
+ }catch(e){
+  console.warn('Window cleaning visit eligibility:',e);
+  document.querySelector('input[name="careVisit"][value="initial"]').checked=true;
+  if(status)status.textContent='First visit selected. Cleaning history could not be verified automatically.';
+  careRender();
+ }
 }
 function careVisit(){return document.querySelector('input[name="careVisit"]:checked')?.value||'initial'}
 function careInt(id){return Math.max(0,Math.floor(Number($(id)?.value)||0))}
@@ -1855,10 +1887,19 @@ function careSelectOptions(){
  if([...$('carePackage').options].some(o=>o.value===old))$('carePackage').value=old;
  careRender();
 }
-function careSelection(){let [id,index]=($('carePackage').value||'').split(':'),pkg=[...CARE_PACKAGES.residential,...CARE_PACKAGES.commercial].find(p=>p.id===id);return pkg?{pkg,index:Number(index)||0,variant:pkg[careVisit()][Number(index)||0]}:null}
+function careSelection(){
+ let [id,index]=($('carePackage').value||'').split(':'),pkg=[...CARE_PACKAGES.residential,...CARE_PACKAGES.commercial].find(p=>p.id===id);if(!pkg)return null;
+ let visit=careVisit(),variant=pkg[visit][Number(index)||0];
+ if($('careMarket').value==='residential'&&$('careScope')?.value==='partial'){
+  let count=Math.max(1,Math.min(15,careInt('careWindowCount')||1)),range=count<=5?'01-05':count<=10?'06-10':'11-15',label=count<=5?'1 to 5 Windows':count<=10?'6 to 10 Windows':'11 to 15 Windows';
+  let both=pkg.id==='res-both',prices=both?(visit==='initial'?{'01-05':149,'06-10':219,'11-15':269}:{'01-05':119,'06-10':175,'11-15':215}):(visit==='initial'?{'01-05':99,'06-10':149,'11-15':189}:{'01-05':79,'06-10':119,'11-15':149});
+  variant={name:label+', '+(visit==='initial'?'First Visit':'Return Visit'),price:prices[range],sku:'DTC-WC-RES-'+(both?'BOTH':'EXT')+'-'+range+'-'+(visit==='initial'?'FIRST':'RETURN')};
+ }
+ return{pkg,index:Number(index)||0,variant};
+}
 function careLines(){
  let s=careSelection();if(!s)return[];
- let visit=careVisit(),lines=[{name:s.pkg.name,variation:s.variant.name+' · '+(visit==='initial'?'First visit':'Return / route'),qty:1,price:s.variant.price,kind:'package',sku:'DTC-WC-'+s.pkg.id.toUpperCase()+'-'+s.index+'-'+visit.toUpperCase()}];
+ let visit=careVisit(),lines=[{name:s.pkg.name,variation:s.variant.name,qty:1,price:s.variant.price,kind:'package',sku:s.variant.sku||('DTC-WC-'+s.pkg.id.toUpperCase()+'-'+s.index+'-'+visit.toUpperCase())}];
  let n=careInt('careExtraWindows');
  if($('careMarket').value==='residential'&&n){let both=$('careExtraSides').value==='both';lines.push({name:'Additional Standard Window, '+(both?'Both Sides':'Exterior')+(visit==='return'?' Return':''),qty:n,price:both?(visit==='return'?15:18):12,kind:'addition'})}
  for(const [check,qty,name,price] of [['careScreens','careScreenQty','Window Screen Cleaning',6],['careTracks','careTrackQty','Window Track Detailing',7],['careCombo','careComboQty','Screen and Track Detail',11],['careHardWater','careHardWaterQty','Hard-Water Spot Treatment',20]]){
@@ -1871,18 +1912,20 @@ function careLines(){
 function careLineTotal(line){return Math.max(Number(line.minimum)||0,line.price*line.qty)}
 function careRender(){
  let lines=careLines(),base=lines.filter(l=>l.kind==='package').reduce((t,l)=>t+careLineTotal(l),0),extras=lines.filter(l=>l.kind!=='package').reduce((t,l)=>t+careLineTotal(l),0);
- $('careResidentialExtras')?.classList.toggle('hidden',$('careMarket')?.value!=='residential');
+ $('careResidentialScope')?.classList.toggle('hidden',$('careMarket')?.value!=='residential');
+ $('careResidentialExtras')?.classList.toggle('hidden',$('careMarket')?.value!=='residential'||$('careScope')?.value==='partial');
  if($('careBasePrice'))$('careBasePrice').textContent=money(base);
  if($('careExtrasPrice'))$('careExtrasPrice').textContent=money(extras);
  if($('careTotalPrice'))$('careTotalPrice').textContent=money(base+extras);
  return{lines,base,extras,total:base+extras};
 }
 function careReset(){
- careEditingId=null;careLeadId=null;careCustomerId=null;careSquareCustomerId=null;careSearchSequence++;
+ careEditingId=null;careLeadId=null;careCustomerId=null;careSquareCustomerId=null;careSearchSequence++;careVisitCheckSequence++;careVisitManuallySet=false;
  for(const id of ['careFirst','careLast','careEmail','carePhone','careAddress','careProject','careNotes'])$(id).value='';
  $('careCustomerSearch').value='';$('careCustomerResults').replaceChildren();careCustomerChosen();
  $('careLeadSource').value='Organic';$('careStatus').value='Estimate Requested';$('careMarket').value='residential';careSelectOptions();
- document.querySelector('input[name="careVisit"][value="initial"]').checked=true;
+ if($('careScope'))$('careScope').value='whole';if($('careWindowCount'))$('careWindowCount').value=1;document.querySelectorAll('input[name="careScopeChoice"]').forEach(r=>r.checked=r.value==='whole');$('carePartialCount')?.classList.add('hidden');
+ document.querySelector('input[name="careVisit"][value="initial"]').checked=true;if($('careVisitStatus'))$('careVisitStatus').textContent='First visit selected for a new customer.';
  for(const id of ['careScreens','careTracks','careCombo','careHardWater','careRepellent','careTravel'])$(id).checked=false;
  for(const id of ['careExtraWindows','careScreenQty','careTrackQty','careComboQty','careHardWaterQty','careRepellentQty'])$(id).value=0;
  careRender();
@@ -1900,12 +1943,13 @@ async function ensureCareLead(customerId){
  if(r.error){console.warn('Window care lead creation:',r.error);return}
  careLeadId=r.data.id;
  const q=window._cloudQuotes?.find(x=>x.id===careEditingId);
- if(!q){let current=careSelection();let metaUpdate=await sb.from('quotes').update({measurements:[{service:'window_care',package_id:current.pkg.id,variant_index:current.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,square_customer_id:careSquareCustomerId||null,lead_source:source,lead_id:careLeadId}]}).eq('id',careEditingId);if(metaUpdate.error)console.warn('Window care lead link:',metaUpdate.error)}
+ if(!q){let current=careSelection();let metaUpdate=await sb.from('quotes').update({measurements:[{service:'window_care',package_id:current.pkg.id,variant_index:current.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,scope:$('careScope')?.value||'whole',window_count:careInt('careWindowCount'),square_customer_id:careSquareCustomerId||null,lead_source:source,lead_id:careLeadId}]}).eq('id',careEditingId);if(metaUpdate.error)console.warn('Window care lead link:',metaUpdate.error)}
 }
 async function careSave(){
  let name=$('careFirst').value.trim(),address=$('careAddress').value.trim(),c=careRender(),button=$('saveCareQuote');
  if(!name||!address)return toast('Enter a first name and service address.');
  if(!c.lines.length)return toast('Choose a service package.');
+ if($('careMarket').value==='residential'&&$('careScope')?.value==='partial'&&(careInt('careWindowCount')<1||careInt('careWindowCount')>15))return toast('Partial-home cleaning supports 1 to 15 standard windows.');
  if(careEditingId&&window._cloudQuotes?.find(q=>q.id===careEditingId)?.square_invoice_id)return toast('Release the existing Square draft before changing this cleaning quote.');
  button.disabled=true;button.textContent='Saving…';
  try{
@@ -1918,7 +1962,7 @@ async function careSave(){
    if(matching)customerId=matching.id;
   }
   if(!customerId){let r=await sb.from('customers').insert(customer).select('id').single();if(r.error)throw r.error;customerId=r.data.id}else if(careCustomerId){let r=await sb.from('customers').update(customer).eq('id',customerId);if(r.error)throw r.error}
-  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||'Window Cleaning - Interior and/or Exterior',project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:$('careStatus').value,service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:0,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,square_customer_id:careSquareCustomerId||null,lead_source:$('careLeadSource').value,lead_id:careLeadId||null}],updated_at:new Date().toISOString()};
+  let selected=careSelection(),payload={customer_id:customerId,project_name:$('careProject').value.trim()||'Window Cleaning - Interior and/or Exterior',project_type:$('careMarket').value==='commercial'?'Commercial Cleaning':'Residential Cleaning',square_catalog_item_name:selected.pkg.name,inventory_product_id:null,status:$('careStatus').value,service_address:address,miles:0,total_sqft:0,ceramic_list_price:c.total,ceramic_price:c.total,ceramic_savings:0,solar_price:0,tax_rate:0,notes:$('careNotes').value.trim(),additional_services:c.lines,additional_services_total:c.extras,measurements:[{service:'window_care',package_id:selected.pkg.id,variant_index:selected.index,visit:careVisit(),market:$('careMarket').value,extra_sides:$('careExtraSides').value,scope:$('careScope')?.value||'whole',window_count:careInt('careWindowCount'),square_customer_id:careSquareCustomerId||null,lead_source:$('careLeadSource').value,lead_id:careLeadId||null}],updated_at:new Date().toISOString()};
   let r=careEditingId?await sb.from('quotes').update(payload).eq('id',careEditingId):await sb.from('quotes').insert(payload).select('id').single();
   if(r.error)throw r.error;careEditingId=careEditingId||r.data.id;careCustomerId=customerId;await ensureCareLead(customerId);
   await loadQuotes();toast('Cleaning quote saved.');
@@ -1927,12 +1971,12 @@ async function careSave(){
 async function openCareQuote(id){
  let{data:q,error}=await sb.from('quotes').select('*,customer:customers(*)').eq('id',id).single();if(error)return toast(error.message);
  $('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;careReset();
- careEditingId=q.id;careCustomerId=q.customer_id;$('careStatus').value=[...$('careStatus').options].some(o=>o.value===q.status)?q.status:'Estimate Requested';
+ careEditingId=q.id;careVisitManuallySet=true;careCustomerId=q.customer_id;if($('careVisitStatus'))$('careVisitStatus').textContent='Saved visit type loaded from this quote. You can override it manually.';$('careStatus').value=[...$('careStatus').options].some(o=>o.value===q.status)?q.status:'Estimate Requested';
  for(const [id,v] of Object.entries({careFirst:q.customer?.first_name,careLast:q.customer?.last_name,careEmail:q.customer?.email,carePhone:q.customer?.phone,careAddress:q.service_address,careProject:q.project_name,careNotes:q.notes}))$(id).value=v||'';
  let meta=Array.isArray(q.measurements)?q.measurements.find(x=>x.service==='window_care'):null,market=meta?.market||(/Commercial/i.test(q.project_type)?'commercial':'residential');
  careSquareCustomerId=meta?.square_customer_id||null;careLeadId=meta?.lead_id||null;$('careLeadSource').value=[...$('careLeadSource').options].some(o=>o.value===meta?.lead_source)?meta.lead_source:'Organic';careCustomerChosen();
  $('careMarket').value=market;careSelectOptions();
- if(meta){let key=meta.package_id+':'+meta.variant_index;if([...$('carePackage').options].some(o=>o.value===key))$('carePackage').value=key;document.querySelector('input[name="careVisit"][value="'+(meta.visit||'initial')+'"]').checked=true;$('careExtraSides').value=meta.extra_sides||'exterior'}
+ if(meta){let key=meta.package_id+':'+meta.variant_index;if([...$('carePackage').options].some(o=>o.value===key))$('carePackage').value=key;document.querySelector('input[name="careVisit"][value="'+(meta.visit||'initial')+'"]').checked=true;$('careExtraSides').value=meta.extra_sides||'exterior';if($('careScope'))$('careScope').value=meta.scope||'whole';if($('careWindowCount'))$('careWindowCount').value=meta.window_count||1;document.querySelectorAll('input[name="careScopeChoice"]').forEach(r=>r.checked=r.value===($('careScope')?.value||'whole'));$('carePartialCount')?.classList.toggle('hidden',($('careScope')?.value||'whole')!=='partial')}
  let map={'careExtraWindows':/^Additional Standard Window/,'careScreenQty':/^Window Screen Cleaning$/,'careTrackQty':/^Window Track Detailing$/,'careComboQty':/^Screen and Track Detail$/,'careHardWaterQty':/^Hard-Water Spot Treatment$/,'careRepellentQty':/^Exterior Glass Water-Repellent Finish$/};
  for(const [id,pattern] of Object.entries(map)){let line=(q.additional_services||[]).find(x=>pattern.test(x.name));$(id).value=line?.qty||0}
  for(const [id,qty] of [['careScreens','careScreenQty'],['careTracks','careTrackQty'],['careCombo','careComboQty'],['careHardWater','careHardWaterQty'],['careRepellent','careRepellentQty']])$(id).checked=careInt(qty)>0;
@@ -1946,6 +1990,8 @@ function setupCareBuilder(){
   const term=$(id).value.trim();if(term.length>=3){$('careCustomerSearch').value=term;clearTimeout(careSearchTimer);careSearchTimer=setTimeout(careFindCustomers,350)}
  });
  $('careMarket').addEventListener('change',careSelectOptions);careSelectOptions();
+ document.querySelectorAll('input[name="careVisit"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked){careVisitManuallySet=true;if($('careVisitStatus'))$('careVisitStatus').textContent='Visit type manually selected.';careRender()}}));
+ document.querySelectorAll('input[name="careScopeChoice"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked){$('careScope').value=r.value;$('carePartialCount').classList.toggle('hidden',r.value!=='partial');careRender()}}));
  $('careBuilderPanel').addEventListener('input',careRender);$('careBuilderPanel').addEventListener('change',careRender);
  $('newCareQuote').onclick=()=>{careReset();$('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;$('careBuilderPanel').scrollIntoView({behavior:'smooth',block:'start'})};
  $('saveCareQuote').onclick=careSave;$('resetCareQuote').onclick=careReset;$('careQuickShotButton').onclick=()=>openCareQuickShot();
