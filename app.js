@@ -1687,7 +1687,66 @@ function leadSourceLabel(l){
 function leadRequestText(l){
   return String(l.original_message||l.message||l.notes||'').trim();
 }
+function card(l,due=false){
+  let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',
+      source=leadSourceLabel(l),
+      request=String(l.service_requested||'').trim(),
+      description=leadRequestText(l),
+      location=l.service_address||l.city||'',
+      hasDescription=!!description;
 
+  return `<article class="item lead-app-card">
+    <div class="head lead-card-head">
+      <div>
+        <h2>${esc(name)}</h2>
+        <div class="muted lead-source-row"><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><span>• ${when(l.received_at)}</span></div>
+      </div>
+      <div>${angiFlagged(l)?`<span class="angi-credit-badge">ANGI CREDIT</span> `:''}${angiNoticeSent(l)?`<span class="notice-sent-badge">NOTICE SENT</span> `:''}<span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span></div>
+    </div>
+
+    <div class="lead-contact-line">
+      ${l.phone?`<a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>`:''}
+      ${l.email?`<span>${esc(l.email)}</span>`:''}
+      ${location?`<span>${esc(location)}</span>`:''}
+    </div>
+
+    ${request?`<section class="lead-request-block">
+      <span class="lead-detail-label">PROJECT REQUEST</span>
+      <b>${esc(request)}</b>
+    </section>`:''}
+
+    ${hasDescription?`<section class="lead-description-block">
+      <span class="lead-detail-label">${String(source).toLowerCase().includes('angi')?'ANGI DESCRIPTION / CUSTOMER MESSAGE':'CUSTOMER MESSAGE / NOTES'}</span>
+      <div>${esc(description)}</div>
+    </section>`:`<section class="lead-description-block is-empty">
+      <span class="lead-detail-label">CUSTOMER MESSAGE</span>
+      <div>No additional description was submitted.</div>
+    </section>`}
+
+    <div class="lead-attempt-line">Attempts: <b>${l.attempt_count||0}</b>${due?` • Follow-up: <b>${when(l.next_follow_up_at)}</b>`:''}</div>
+
+    <div class="actions lead-actions quote-style-actions">
+      ${l.phone?`<a class="btn primary lead-call-btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
+      ${location?`<a class="btn lead-directions-btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(location)}">Directions</a>`:''}
+      <button class="btn" data-log="${l.id}">Log Attempt</button>
+      <button class="btn" data-leadquote="${l.id}">Create Quote</button>
+      <button class="btn" data-leadcare="${l.id}">Window Care Quote</button>
+      ${angiLead(l)?`<span class="lead-credit-separator" aria-hidden="true"></span><button class="btn ${angiFlagged(l)?'warn':''}" data-angicredit="${l.id}">${angiFlagged(l)?'Credit Flagged':'Flag for Angi Credit'}</button>${angiFlagged(l)&&!angiNoticeSent(l)?`<button class="btn primary" data-anginotice="${l.id}" ${l.email?'':'disabled'}>${l.email?'Send Automotive Notice':'No Email on File'}</button>`:''}`:''}
+      ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete</button>`:''}
+    </div>
+  </article>`
+}
+async function copyText(value){
+  if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);return}
+  let area=document.createElement('textarea');area.value=value;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();let copied=document.execCommand('copy');area.remove();if(!copied)throw new Error('Copy failed')
+}
+async function copyPhone(phone){
+  let number=String(phone||'').trim();
+  if(!number)return toast('No phone number is saved for this lead.');
+  try{await copyText(number);toast('Phone number copied.')}catch(error){toast('Could not copy automatically. Press and hold the number to copy it.')}
+}
+function bindLeadActions(container=document){container.querySelectorAll('[data-angicredit]').forEach(b=>b.onclick=()=>toggleAngiCredit(b.dataset.angicredit));container.querySelectorAll('[data-anginotice]').forEach(b=>b.onclick=()=>sendAngiAutomotiveNotice(b.dataset.anginotice,b));container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
+function leadDate(l){return new Date(l.received_at||l.created_at||l.updated_at||0)}
 function angiLead(l){return String(leadSourceLabel(l)).toLowerCase().includes('angi')}
 function angiFee(l){
   let raw=l?.raw_payload||{},meta=raw?._dynamicTintzMetadata||{},v=meta.fee??raw.fee??'';
@@ -1793,66 +1852,6 @@ async function markAngiAdjustmentRequested(c,flagged){
   await loadLeads();
 }
 
-function card(l,due=false){
-  let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',
-      source=leadSourceLabel(l),
-      request=String(l.service_requested||'').trim(),
-      description=leadRequestText(l),
-      location=l.service_address||l.city||'',
-      hasDescription=!!description;
-
-  return `<article class="item lead-app-card">
-    <div class="head lead-card-head">
-      <div>
-        <h2>${esc(name)}</h2>
-        <div class="muted lead-source-row"><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><span>• ${when(l.received_at)}</span></div>
-      </div>
-      <div>${angiFlagged(l)?`<span class="angi-credit-badge">ANGI CREDIT</span> `:''}${angiNoticeSent(l)?`<span class="notice-sent-badge">NOTICE SENT</span> `:''}<span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span></div>
-    </div>
-
-    <div class="lead-contact-line">
-      ${l.phone?`<a href="tel:${esc(l.phone)}">${esc(l.phone)}</a>`:''}
-      ${l.email?`<span>${esc(l.email)}</span>`:''}
-      ${location?`<span>${esc(location)}</span>`:''}
-    </div>
-
-    ${request?`<section class="lead-request-block">
-      <span class="lead-detail-label">PROJECT REQUEST</span>
-      <b>${esc(request)}</b>
-    </section>`:''}
-
-    ${hasDescription?`<section class="lead-description-block">
-      <span class="lead-detail-label">${String(source).toLowerCase().includes('angi')?'ANGI DESCRIPTION / CUSTOMER MESSAGE':'CUSTOMER MESSAGE / NOTES'}</span>
-      <div>${esc(description)}</div>
-    </section>`:`<section class="lead-description-block is-empty">
-      <span class="lead-detail-label">CUSTOMER MESSAGE</span>
-      <div>No additional description was submitted.</div>
-    </section>`}
-
-    <div class="lead-attempt-line">Attempts: <b>${l.attempt_count||0}</b>${due?` • Follow-up: <b>${when(l.next_follow_up_at)}</b>`:''}</div>
-
-    <div class="actions lead-actions quote-style-actions">
-      ${l.phone?`<a class="btn primary lead-call-btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
-      ${location?`<a class="btn lead-directions-btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(location)}">Directions</a>`:''}
-      <button class="btn" data-log="${l.id}">Log Attempt</button>
-      <button class="btn" data-leadquote="${l.id}">Create Quote</button>
-      <button class="btn" data-leadcare="${l.id}">Window Care Quote</button>
-      ${angiLead(l)?`<span class="lead-credit-separator" aria-hidden="true"></span><button class="btn ${angiFlagged(l)?'warn':''}" data-angicredit="${l.id}">${angiFlagged(l)?'Credit Flagged':'Flag for Angi Credit'}</button>${angiFlagged(l)&&!angiNoticeSent(l)?`<button class="btn primary" data-anginotice="${l.id}" ${l.email?'':'disabled'}>${l.email?'Send Automotive Notice':'No Email on File'}</button>`:''}`:''}
-      ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete</button>`:''}
-    </div>
-  </article>
-}
-async function copyText(value){
-  if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);return}
-  let area=document.createElement('textarea');area.value=value;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();let copied=document.execCommand('copy');area.remove();if(!copied)throw new Error('Copy failed')
-}
-async function copyPhone(phone){
-  let number=String(phone||'').trim();
-  if(!number)return toast('No phone number is saved for this lead.');
-  try{await copyText(number);toast('Phone number copied.')}catch(error){toast('Could not copy automatically. Press and hold the number to copy it.')}
-}
-function bindLeadActions(container=document){container.querySelectorAll('[data-angicredit]').forEach(b=>b.onclick=()=>toggleAngiCredit(b.dataset.angicredit));container.querySelectorAll('[data-anginotice]').forEach(b=>b.onclick=()=>sendAngiAutomotiveNotice(b.dataset.anginotice,b));container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
-function leadDate(l){return new Date(l.received_at||l.created_at||l.updated_at||0)}
 function leadIsTerminal(l){return ['approved','deposit_paid','scheduled','completed','lost','bad_lead','do_not_contact','no_response'].includes(l.status)}
 function leadNeedsAttention(l){let due=l.next_follow_up_at&&new Date(l.next_follow_up_at)<=new Date();return l.status==='new'||(!leadIsTerminal(l)&&due)}
 function leadAgeText(l){let ms=Date.now()-leadDate(l).getTime();if(!Number.isFinite(ms)||ms<0)return '—';let h=Math.floor(ms/36e5);if(h<1)return 'Just now';if(h<24)return `${h}h`;let d=Math.floor(h/24);return `${d}d`}
