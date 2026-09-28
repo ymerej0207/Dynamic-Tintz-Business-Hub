@@ -1687,6 +1687,112 @@ function leadSourceLabel(l){
 function leadRequestText(l){
   return String(l.original_message||l.message||l.notes||'').trim();
 }
+
+function angiLead(l){return String(leadSourceLabel(l)).toLowerCase().includes('angi')}
+function angiFee(l){
+  let raw=l?.raw_payload||{},meta=raw?._dynamicTintzMetadata||{},v=meta.fee??raw.fee??'';
+  let n=Number(String(v).replace(/[$,\s]/g,''));
+  if(Number.isFinite(n))return n;
+  let m=String(l?.original_message||'').match(/Lead Fee:\s*\$?([\d,.]+)/i);
+  return m?Number(m[1].replace(/,/g,''))||0:0;
+}
+function angiCleanMessage(value){
+  return String(value||'').split(/\n{2,}|\n/).filter(x=>!/^Lead Fee:/i.test(x.trim())).join('\n').trim();
+}
+function angiCycleForDate(value=new Date()){
+  let d=new Date(value),y=d.getFullYear(),m=d.getMonth(),day=d.getDate(),start,end;
+  if(day>=7){start=new Date(y,m,7,0,0,0,0);end=new Date(y,m+1,6,23,59,59,999)}
+  else{start=new Date(y,m-1,7,0,0,0,0);end=new Date(y,m,6,23,59,59,999)}
+  return {start,end};
+}
+function angiDateKey(d){let x=new Date(d),y=x.getFullYear(),m=String(x.getMonth()+1).padStart(2,'0'),day=String(x.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+function angiCycleLabel(c){return `${c.start.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})} through ${c.end.toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}`}
+function angiInCycle(l,c){let d=leadDate(l);return d>=c.start&&d<=c.end}
+function angiFlagged(l){return !!l.credit_flagged}
+function angiCurrentCycleLeads(){let c=angiCycleForDate();return leads.filter(l=>angiLead(l)&&angiInCycle(l,c))}
+function angiCurrentFlagged(){return angiCurrentCycleLeads().filter(angiFlagged)}
+
+function angiNoticeSent(l){return !!l.automotive_notice_sent_at}
+async function sendAngiAutomotiveNotice(id,button){
+  let l=leads.find(x=>x.id===id);
+  if(!l||!angiLead(l))return toast('This notice is only for Angi leads.');
+  if(!angiFlagged(l))return toast('Flag this lead for Angi credit first.');
+  if(!l.email)return toast('This Angi lead does not have an email address.');
+  if(angiNoticeSent(l))return toast('The automotive notice was already sent.');
+  if(!confirm(`Send the automotive service notice to ${l.email}?`))return;
+  let old=button?.textContent;if(button){button.disabled=true;button.textContent='Sending…'}
+  let {data,error}=await sb.functions.invoke('send-angi-automotive-notice',{body:{lead_id:id}});
+  if(button){button.disabled=false;button.textContent=old||'Send Automotive Notice'}
+  if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not send the automotive notice.');
+  toast('Automotive notice sent.');
+  await loadLeads();
+}
+
+async function toggleAngiCredit(id){
+  let l=leads.find(x=>x.id===id);if(!l||!angiLead(l))return toast('Only Angi leads can be flagged for Angi credit.');
+  let flag=!angiFlagged(l),c=angiCycleForDate(leadDate(l));
+  let payload=flag?{
+    credit_flagged:true,credit_provider:'Angi',credit_reason:'Automotive / Service Not Offered',
+    credit_flagged_at:new Date().toISOString(),credit_status:'flagged',
+    credit_cycle_start:angiDateKey(c.start),credit_cycle_end:angiDateKey(c.end)
+  }:{
+    credit_flagged:false,credit_provider:null,credit_reason:null,credit_flagged_at:null,credit_status:null,
+    credit_cycle_start:null,credit_cycle_end:null,credit_resolved_at:null,credit_amount_received:null
+  };
+  let {error}=await sb.from('leads').update(payload).eq('id',id);
+  if(error)return toast(error.message);
+  toast(flag?'Flagged for Angi credit.':'Angi credit flag removed.');
+  await loadLeads();
+}
+function updateAngiCreditCenter(){
+  let c=angiCycleForDate(),all=angiCurrentCycleLeads(),flagged=all.filter(angiFlagged),spend=all.reduce((s,l)=>s+angiFee(l),0),bad=flagged.reduce((s,l)=>s+angiFee(l),0);
+  if($('angiCreditCycleLabel'))$('angiCreditCycleLabel').textContent=`${angiCycleLabel(c)} • ${flagged.length} flagged`;
+  let banner=$('angiCreditBanner');if(!banner)return;
+  if(new Date().getDate()===6){
+    banner.classList.remove('hidden');
+    banner.innerHTML=`<strong>Angi credit adjustment is due today.</strong><span>${esc(angiCycleLabel(c))} • ${flagged.length} automotive lead${flagged.length===1?'':'s'} flagged. Your report is ready.</span> <button class="btn" id="angiBannerReport" style="margin-left:8px">View Report</button>`;
+    $('angiBannerReport').onclick=openAngiCreditReport;
+  }else banner.classList.add('hidden');
+}
+function angiReportRows(flagged,includePrice=true){
+  return flagged.map(l=>{
+    let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',loc=l.service_address||l.city||'',msg=angiCleanMessage(l.original_message||'');
+    return `<tr><td>${esc(new Date(l.received_at||l.created_at).toLocaleDateString())}</td><td><b>${esc(name)}</b><br><small>${esc(l.external_lead_id||'No lead ID')}</small></td><td>${esc(l.phone||'—')}<br>${esc(l.email||'')}</td><td>${esc(loc||'—')}</td><td>${esc(l.service_requested||'—')}${msg?`<br><small>${esc(msg)}</small>`:''}</td><td>${angiNoticeSent(l)?`Yes<br><small>${esc(new Date(l.automotive_notice_sent_at).toLocaleString())}</small>`:'No'}</td>${includePrice?`<td><b>$${angiFee(l).toFixed(2)}</b></td>`:''}</tr>`
+  }).join('');
+}
+function openAngiCreditReport(){
+  let c=angiCycleForDate(),all=angiCurrentCycleLeads(),flagged=all.filter(angiFlagged),allSpend=all.reduce((s,l)=>s+angiFee(l),0),flagSpend=flagged.reduce((s,l)=>s+angiFee(l),0);
+  let pct=all.length?Math.round(flagged.length/all.length*100):0;
+  $('angiCreditReportBody').innerHTML=`
+    <div class="angi-credit-metrics">
+      <div class="angi-credit-metric"><span>Angi Leads</span><b>${all.length}</b></div>
+      <div class="angi-credit-metric"><span>Automotive Flagged</span><b>${flagged.length}</b></div>
+      <div class="angi-credit-metric"><span>Invalid Rate</span><b>${pct}%</b></div>
+      <div class="angi-credit-metric"><span>Internal Flagged Spend</span><b>$${flagSpend.toFixed(2)}</b></div>
+    </div>
+    <div class="angi-credit-internal"><b>Internal only</b><div>Total Angi spend this cycle: $${allSpend.toFixed(2)}. Flagged automotive spend: $${flagSpend.toFixed(2)}. These prices are not included on the Angi-facing print report.</div></div>
+    <div class="head"><div><h3>${esc(angiCycleLabel(c))}</h3><div class="muted">Automotive / Service Not Offered</div></div><div class="actions"><button class="btn" id="printAngiCreditReport">Print / PDF for Angi</button><button class="btn primary" id="markAngiCreditRequested">Mark Adjustment Requested</button></div></div>
+    <div class="angi-credit-table-wrap"><table class="angi-credit-table"><thead><tr><th>Received</th><th>Customer / Lead ID</th><th>Contact</th><th>Location</th><th>Angi Request</th><th>Customer Notified</th><th>Internal Cost</th></tr></thead><tbody>${flagged.length?angiReportRows(flagged,true):'<tr><td colspan="7">No automotive leads have been flagged in this cycle yet.</td></tr>'}</tbody></table></div>`;
+  $('angiCreditReportModal').classList.add('show');
+  $('printAngiCreditReport').onclick=()=>printAngiCreditReport(c,flagged);
+  $('markAngiCreditRequested').onclick=()=>markAngiAdjustmentRequested(c,flagged);
+}
+function printAngiCreditReport(c,flagged){
+  let w=window.open('','_blank','width=1000,height=760');if(!w)return toast('Allow pop-ups to print the Angi report.');
+  let rows=angiReportRows(flagged,false);
+  w.document.write(`<!doctype html><html><head><title>Angi Credit Report</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#111}h1{margin-bottom:4px}.muted{color:#555;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #ccc;padding:8px}th{background:#f3f3f3}small{white-space:pre-wrap}</style></head><body><h1>Angi Credit Adjustment Report</h1><div class="muted">Billing cycle: ${esc(angiCycleLabel(c))}<br>Reason: Automotive / Service Not Offered<br>Flagged customers: ${flagged.length}</div><table><thead><tr><th>Received</th><th>Customer / Lead ID</th><th>Contact</th><th>Location</th><th>Angi Request</th><th>Customer Notified</th></tr></thead><tbody>${rows||'<tr><td colspan="6">No flagged leads.</td></tr>'}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+async function markAngiAdjustmentRequested(c,flagged){
+  if(!flagged.length)return toast('There are no flagged Angi leads in this cycle.');
+  if(!confirm(`Mark ${flagged.length} flagged Angi lead${flagged.length===1?'':'s'} as adjustment requested?`))return;
+  let ids=flagged.map(l=>l.id),{error}=await sb.from('leads').update({credit_status:'requested',credit_resolved_at:new Date().toISOString()}).in('id',ids);
+  if(error)return toast(error.message);
+  toast('Angi adjustment marked requested.');
+  $('angiCreditReportModal').classList.remove('show');
+  await loadLeads();
+}
+
 function card(l,due=false){
   let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',
       source=leadSourceLabel(l),
@@ -1701,7 +1807,7 @@ function card(l,due=false){
         <h2>${esc(name)}</h2>
         <div class="muted lead-source-row"><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><span>• ${when(l.received_at)}</span></div>
       </div>
-      <span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span>
+      <div>${angiFlagged(l)?`<span class="angi-credit-badge">ANGI CREDIT</span> `:''}${angiNoticeSent(l)?`<span class="notice-sent-badge">NOTICE SENT</span> `:''}<span class="pill">${esc(String(l.status||'new').replaceAll('_',' '))}</span></div>
     </div>
 
     <div class="lead-contact-line">
@@ -1725,14 +1831,16 @@ function card(l,due=false){
 
     <div class="lead-attempt-line">Attempts: <b>${l.attempt_count||0}</b>${due?` • Follow-up: <b>${when(l.next_follow_up_at)}</b>`:''}</div>
 
-    <div class="actions lead-actions">
+    <div class="actions lead-actions quote-style-actions">
       ${l.phone?`<a class="btn primary lead-call-btn" href="tel:${esc(l.phone)}">Call</a><button class="btn" data-copyphone="${esc(l.phone)}">Copy Phone</button>`:''}
       ${location?`<a class="btn lead-directions-btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(location)}">Directions</a>`:''}
       <button class="btn" data-log="${l.id}">Log Attempt</button>
-      <button class="btn" data-leadquote="${l.id}">Create Quote</button><button class="btn" data-leadcare="${l.id}">Window Care Quote</button>
-      ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete Lead</button>`:''}
+      <button class="btn" data-leadquote="${l.id}">Create Quote</button>
+      <button class="btn" data-leadcare="${l.id}">Window Care Quote</button>
+      ${angiLead(l)?`<span class="lead-credit-separator" aria-hidden="true"></span><button class="btn ${angiFlagged(l)?'warn':''}" data-angicredit="${l.id}">${angiFlagged(l)?'Credit Flagged':'Flag for Angi Credit'}</button>${angiFlagged(l)&&!angiNoticeSent(l)?`<button class="btn primary" data-anginotice="${l.id}" ${l.email?'':'disabled'}>${l.email?'Send Automotive Notice':'No Email on File'}</button>`:''}`:''}
+      ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete</button>`:''}
     </div>
-  </article>`
+  </article>
 }
 async function copyText(value){
   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);return}
@@ -1743,14 +1851,14 @@ async function copyPhone(phone){
   if(!number)return toast('No phone number is saved for this lead.');
   try{await copyText(number);toast('Phone number copied.')}catch(error){toast('Could not copy automatically. Press and hold the number to copy it.')}
 }
-function bindLeadActions(container=document){container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
+function bindLeadActions(container=document){container.querySelectorAll('[data-angicredit]').forEach(b=>b.onclick=()=>toggleAngiCredit(b.dataset.angicredit));container.querySelectorAll('[data-anginotice]').forEach(b=>b.onclick=()=>sendAngiAutomotiveNotice(b.dataset.anginotice,b));container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
 function leadDate(l){return new Date(l.received_at||l.created_at||l.updated_at||0)}
 function leadIsTerminal(l){return ['approved','deposit_paid','scheduled','completed','lost','bad_lead','do_not_contact','no_response'].includes(l.status)}
 function leadNeedsAttention(l){let due=l.next_follow_up_at&&new Date(l.next_follow_up_at)<=new Date();return l.status==='new'||(!leadIsTerminal(l)&&due)}
 function leadAgeText(l){let ms=Date.now()-leadDate(l).getTime();if(!Number.isFinite(ms)||ms<0)return '—';let h=Math.floor(ms/36e5);if(h<1)return 'Just now';if(h<24)return `${h}h`;let d=Math.floor(h/24);return `${d}d`}
 function updateLeadCommandCounts(){if(!$('leadAttentionCount'))return;let set=(id,n)=>{if($(id))$(id).textContent=n};set('leadAttentionCount',leads.filter(leadNeedsAttention).length);set('leadNewCount',leads.filter(x=>x.status==='new').length);set('leadFollowCount',leads.filter(x=>x.status==='follow_up').length);set('leadWonCount',leads.filter(x=>['approved','deposit_paid','scheduled','completed'].includes(x.status)).length)}
 function renderLeadResults(){let q=($('leadSearch')?.value||'').toLowerCase(),status=$('leadStatusFilter')?.value||'active',archived=['completed','lost','bad_lead','do_not_contact','no_response'],items=leads.filter(l=>{let statusMatch=status==='active'?!archived.includes(l.status):status==='archived'?archived.includes(l.status):status==='attention'?leadNeedsAttention(l):!status||l.status===status;return statusMatch&&JSON.stringify(l).toLowerCase().includes(q)}).sort((a,b)=>{let aa=leadNeedsAttention(a),bb=leadNeedsAttention(b);if(aa!==bb)return aa?-1:1;return leadDate(b)-leadDate(a)});updateLeadCommandCounts();$('leadList').innerHTML=items.length?items.map(x=>card(x,!!(x.next_follow_up_at&&new Date(x.next_follow_up_at)<=new Date()))).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'));$('leadList').querySelectorAll('.lead-app-card').forEach((el,i)=>{let id=items[i]?.id;if(id){el.classList.toggle('needs-attention',leadNeedsAttention(items[i]));el.insertAdjacentHTML('afterbegin',`<div class="lead-ops-strip"><span>${leadNeedsAttention(items[i])?'NEEDS ATTENTION':'IN PIPELINE'}</span><b>${esc(leadAgeText(items[i]))} old</b></div>`);let actions=el.querySelector('.lead-actions');if(actions)actions.insertAdjacentHTML('afterbegin',`<button class="btn primary" data-managelead="${id}">Manage Lead</button>`)}});$('leadList').querySelectorAll('[data-managelead]').forEach(b=>b.onclick=()=>openLeadWorkspace(b.dataset.managelead))}
-async function loadLeads(){let{data,error}=await sb.from('leads').select('*').order('received_at',{ascending:false});if(error)return toast(error.message);leads=data||[];renderLeadResults()}
+async function loadLeads(){let{data,error}=await sb.from('leads').select('*').order('received_at',{ascending:false});if(error)return toast(error.message);leads=data||[];renderLeadResults();updateAngiCreditCenter()}
 async function openLeadWorkspace(id){let l=leads.find(x=>x.id===id);if(!l)return toast('Lead not found.');$('leadWorkspaceName').textContent=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead';let {data:activities}=await sb.from('lead_activities').select('*').eq('lead_id',id).order('created_at',{ascending:false});let location=l.service_address||l.city||'',source=leadSourceLabel(l);$('leadWorkspaceBody').innerHTML=`<div class="lead-workspace-hero"><div><span class="lead-source-badge ${String(source).toLowerCase().includes('google local services')?'is-lsa':String(source).toLowerCase().includes('angi')?'is-angi':''}">${esc(source)}</span><strong>${esc(l.service_requested||'Window Film Lead')}</strong><small>${esc(location||'No location saved')}</small></div><div><span>Lead Age</span><b>${esc(leadAgeText(l))}</b></div><div><span>Attempts</span><b>${l.attempt_count||0}</b></div></div><div class="actions lead-workspace-actions">${l.phone?`<a class="btn primary" href="tel:${esc(l.phone)}">Call</a><a class="btn" href="sms:${esc(l.phone)}">Text</a>`:''}<button class="btn" data-wsquote="${id}">Create Quote</button>${location?`<a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(location)}">Directions</a>`:''}</div><div class="lead-workspace-grid"><div class="card"><h3>Pipeline</h3><div class="field"><label>Status</label><select id="leadWorkspaceStatus"><option value="new">New</option><option value="contacted">Contacted</option><option value="follow_up">Follow Up</option><option value="approved">Approved / Won</option><option value="deposit_paid">Deposit Paid</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="bad_lead">Bad Lead</option><option value="lost">Lost</option><option value="no_response">No Response</option><option value="do_not_contact">Do Not Contact</option></select></div><div class="field"><label>Next Follow Up</label><input id="leadWorkspaceFollowup" type="datetime-local"></div><button class="btn primary wide" data-wssave="${id}">Save Lead</button></div><div class="card"><h3>Lead Details</h3><div class="lead-workspace-details"><span>Phone</span><b>${esc(l.phone||'—')}</b><span>Email</span><b>${esc(l.email||'—')}</b><span>Received</span><b>${esc(when(l.received_at||l.created_at))}</b>${l.external_lead_id?`<span>Google Lead ID</span><b>${esc(l.external_lead_id)}</b>`:''}</div></div></div><div class="card"><div class="head" style="margin-top:0"><h3>Activity History</h3><button class="btn" data-wslog="${id}">+ Log Activity</button></div><div class="lead-activity-timeline">${(activities||[]).length?(activities||[]).map(a=>`<div><span></span><section><b>${esc(String(a.activity_type||'activity').replaceAll('_',' '))}</b><small>${esc(when(a.created_at))}</small>${a.notes?`<p>${esc(a.notes)}</p>`:''}</section></div>`).join(''):'<div class="muted">No activity logged yet.</div>'}</div></div>`;$('leadWorkspaceStatus').value=l.status||'new';if(l.next_follow_up_at){let d=new Date(l.next_follow_up_at);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());$('leadWorkspaceFollowup').value=d.toISOString().slice(0,16)}$('leadWorkspaceModal').classList.add('show');$('leadWorkspaceBody').querySelector('[data-wsquote]')?.addEventListener('click',()=>{ $('leadWorkspaceModal').classList.remove('show');createQuoteFromLead(id)});$('leadWorkspaceBody').querySelector('[data-wslog]')?.addEventListener('click',()=>{$('activityId').value=id;$('activityModal').classList.add('show')});$('leadWorkspaceBody').querySelector('[data-wssave]')?.addEventListener('click',()=>saveLeadWorkspace(id))}
 async function saveLeadWorkspace(id){let status=$('leadWorkspaceStatus').value,raw=$('leadWorkspaceFollowup').value,next=raw?new Date(raw).toISOString():null,{error}=await sb.from('leads').update({status,next_follow_up_at:next,updated_at:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);$('leadWorkspaceModal').classList.remove('show');toast('Lead updated.');await loadLeads()}
 async function loadFollowups(){let now=new Date(),future=new Date(now);future.setDate(future.getDate()+7);let{data,error}=await sb.from('leads').select('*').not('status','in','("approved","lost","do_not_contact","no_response")').not('next_follow_up_at','is',null).lte('next_follow_up_at',future.toISOString()).order('next_follow_up_at');if(error)return toast(error.message);let due=(data||[]).filter(x=>new Date(x.next_follow_up_at)<=now),upcoming=(data||[]).filter(x=>new Date(x.next_follow_up_at)>now);$('overdueFollowups').textContent=due.length;$('upcomingFollowups').textContent=upcoming.length;$('followList').innerHTML=due.length?due.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups due right now.</div>';$('upcomingFollowList').innerHTML=upcoming.length?upcoming.map(x=>card(x,true)).join(''):'<div class="card muted">No follow-ups scheduled in the next seven days.</div>';bindLeadActions($('followList'));bindLeadActions($('upcomingFollowList'))}
@@ -4129,7 +4237,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('addQuoteAddon','onclick',addQuoteAddon);bind('quoteBackToTop','onclick',scrollToCurrentQuoteTop);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('openAngiCreditReport','onclick',openAngiCreditReport);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';
