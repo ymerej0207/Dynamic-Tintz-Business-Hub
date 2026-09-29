@@ -1836,11 +1836,45 @@ function openAngiCreditReport(){
   $('printAngiCreditReport').onclick=()=>printAngiCreditReport(c,flagged);
   $('markAngiCreditRequested').onclick=()=>markAngiAdjustmentRequested(c,flagged);
 }
+function angiReportFileName(c){return `Dynamic-Tintz-Angi-Credit-Report-${angiDateKey(c.start)}-to-${angiDateKey(c.end)}.pdf`}
+async function angiLogoDataUrl(){
+  try{let r=await fetch('dynamic-tintz-mark.png',{cache:'force-cache'});if(!r.ok)throw new Error('logo');let b=await r.blob();return await new Promise((ok,no)=>{let fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=no;fr.readAsDataURL(b)})}catch{return null}
+}
+function angiBrandedReportHtml(c,flagged){
+  let rows=angiReportRows(flagged,false),logo=`<img src="dynamic-tintz-mark.png" alt="Dynamic Tintz logo">`;
+  return `<section class="angi-share-report"><header><div class="angi-share-brand">${logo}<div><h1>Dynamic Tintz</h1><strong>Jeremy McPherson, Owner</strong><span>469-840-4008 • dynamictintzllc@gmail.com</span><span>dynamictintz.com</span></div></div><div class="angi-share-title"><span>ANGI CREDIT ADJUSTMENT</span><h2>Automotive Lead Report</h2></div></header><div class="angi-share-summary"><div><span>Billing Cycle</span><b>${esc(angiCycleLabel(c))}</b></div><div><span>Reason</span><b>Automotive Tinting, Service Not Offered</b></div><div><span>Flagged Customers</span><b>${flagged.length}</b></div><div><span>Report Date</span><b>${esc(new Date().toLocaleDateString())}</b></div></div><div class="angi-share-table-wrap"><table class="angi-share-table"><thead><tr><th>Received</th><th>Customer / Lead ID</th><th>Contact</th><th>Location</th><th>Angi Request</th><th>Notified</th></tr></thead><tbody>${rows||'<tr><td colspan="6">No flagged leads.</td></tr>'}</tbody></table></div><footer>Prepared by Dynamic Tintz • Jeremy McPherson, Owner • 469-840-4008 • dynamictintzllc@gmail.com</footer></section>`
+}
 function printAngiCreditReport(c,flagged){
-  let w=window.open('','_blank','width=1000,height=760');if(!w)return toast('Allow pop-ups to print the Angi report.');
-  let rows=angiReportRows(flagged,false);
-  w.document.write(`<!doctype html><html><head><title>Angi Credit Report</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#111}h1{margin-bottom:4px}.muted{color:#555;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #ccc;padding:8px}th{background:#f3f3f3}small{white-space:pre-wrap}</style></head><body><h1>Angi Credit Adjustment Report</h1><div class="muted">Billing cycle: ${esc(angiCycleLabel(c))}<br>Reason: Automotive / Service Not Offered<br>Flagged customers: ${flagged.length}</div><table><thead><tr><th>Received</th><th>Customer / Lead ID</th><th>Contact</th><th>Location</th><th>Angi Request</th><th>Customer Notified</th></tr></thead><tbody>${rows||'<tr><td colspan="6">No flagged leads.</td></tr>'}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);
-  w.document.close();
+  let body=$('angiPdfPreviewBody');if(!body)return toast('Report preview is unavailable.');
+  body.innerHTML=angiBrandedReportHtml(c,flagged);$('angiPdfPreviewModal').classList.add('show');
+  $('angiPdfClose').onclick=()=>$('angiPdfPreviewModal').classList.remove('show');
+  $('angiPdfSave').onclick=()=>saveAngiPdf(c,flagged,false);
+  $('angiPdfShare').onclick=()=>saveAngiPdf(c,flagged,true);
+  $('angiPdfPrint').onclick=()=>printAngiPreview(c,flagged);
+}
+async function buildAngiPdf(c,flagged){
+  if(!window.jspdf?.jsPDF)throw new Error('PDF library did not load. Refresh DT OS and try again.');
+  let {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'landscape',unit:'pt',format:'letter'}),logo=await angiLogoDataUrl();
+  if(logo)try{doc.addImage(logo,'PNG',38,28,54,54)}catch{}
+  doc.setFont('helvetica','bold');doc.setFontSize(18);doc.text('DYNAMIC TINTZ',104,45);doc.setFontSize(10);doc.text('Jeremy McPherson, Owner',104,61);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text('469-840-4008  |  dynamictintzllc@gmail.com  |  dynamictintz.com',104,76);
+  doc.setDrawColor(40,160,190);doc.setLineWidth(2);doc.line(38,94,754,94);
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('Angi Credit Adjustment Report',38,121);doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text(`Billing cycle: ${angiCycleLabel(c)}    |    Reason: Automotive Tinting, Service Not Offered    |    Flagged customers: ${flagged.length}`,38,139);
+  let body=flagged.map(l=>{let name=((l.first_name||'')+' '+(l.last_name||'')).trim()||'Unnamed Lead',loc=l.service_address||l.city||'',msg=angiCleanMessage(l.original_message||''),req=[l.service_requested||'—',msg].filter(Boolean).join(' | ');return [new Date(l.received_at||l.created_at).toLocaleDateString(),`${name}\n${l.external_lead_id||'No lead ID'}`,`${l.phone||'—'}\n${l.email||''}`,loc||'—',req,angiNoticeSent(l)?'Yes':'No']});
+  if(typeof doc.autoTable!=='function')throw new Error('PDF table library did not load. Refresh DT OS and try again.');
+  doc.autoTable({startY:155,head:[['Received','Customer / Lead ID','Contact','Location','Angi Request','Notified']],body:body.length?body:[['','','','','No flagged leads.','']],styles:{fontSize:7.5,cellPadding:5,valign:'top'},headStyles:{fillColor:[31,42,55],textColor:255},columnStyles:{0:{cellWidth:58},1:{cellWidth:112},2:{cellWidth:120},3:{cellWidth:95},4:{cellWidth:255},5:{cellWidth:55}},margin:{left:38,right:38,bottom:34},didDrawPage:()=>{doc.setFontSize(7.5);doc.setTextColor(90);doc.text('Dynamic Tintz • Jeremy McPherson, Owner • 469-840-4008 • dynamictintzllc@gmail.com',38,585)}});
+  return doc.output('blob');
+}
+async function saveAngiPdf(c,flagged,share){
+  try{let blob=await buildAngiPdf(c,flagged),name=angiReportFileName(c),file=new File([blob],name,{type:'application/pdf'});
+    if(share&&navigator.share&&navigator.canShare?.({files:[file]})){await navigator.share({title:'Dynamic Tintz Angi Credit Report',text:`Angi credit adjustment report for ${angiCycleLabel(c)}`,files:[file]});return}
+    let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);if(share)toast('PDF downloaded. Attach it to your email or message.');
+  }catch(e){if(e?.name!=='AbortError')toast(e?.message||'Could not create PDF.')}
+}
+function printAngiPreview(c,flagged){
+  let w=window.open('','_blank','width=1100,height=800');if(!w)return toast('Allow pop-ups to print the Angi report.');
+  w.document.write(`<!doctype html><html><head><title>${esc(angiReportFileName(c))}</title><style>body{font-family:Arial,sans-serif;margin:0;padding:28px;color:#17202a}.angi-share-report{max-width:1100px;margin:auto}header{display:flex;justify-content:space-between;gap:24px;border-bottom:3px solid #2aa5bd;padding-bottom:16px}.angi-share-brand{display:flex;gap:14px;align-items:center}.angi-share-brand img{width:64px;height:64px;object-fit:contain}.angi-share-brand h1{margin:0;font-size:22px}.angi-share-brand strong,.angi-share-brand span{display:block;font-size:11px;margin-top:3px}.angi-share-title{text-align:right}.angi-share-title span{font-size:9px;font-weight:bold;letter-spacing:.12em}.angi-share-title h2{margin:5px 0 0}.angi-share-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0}.angi-share-summary div{border:1px solid #ccd3d8;padding:10px}.angi-share-summary span{display:block;font-size:9px;text-transform:uppercase;color:#667}.angi-share-summary b{display:block;margin-top:4px;font-size:11px}table{width:100%;border-collapse:collapse;font-size:9px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #ccd3d8;padding:7px}th{background:#1f2a37;color:#fff}small{white-space:pre-wrap}footer{margin-top:18px;padding-top:10px;border-top:1px solid #ccd3d8;font-size:9px;color:#667}@media print{body{padding:0}}</style></head><body>${angiBrandedReportHtml(c,flagged)}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();
 }
 async function markAngiAdjustmentRequested(c,flagged){
   if(!flagged.length)return toast('There are no flagged Angi leads in this cycle.');
