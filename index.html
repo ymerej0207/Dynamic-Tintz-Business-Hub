@@ -21,26 +21,30 @@
 @media(max-width:620px){.schedule-datetime-row{grid-template-columns:minmax(145px,1.2fr) minmax(180px,1fr);gap:6px}.schedule-time-inline{gap:4px}.schedule-time-inline select{padding-left:7px;padding-right:20px}}
 </style>
 <style>
-.angi-credit-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0;padding:14px 16px;border:1px solid var(--line,#d8dee8);border-radius:16px;background:var(--card,#fff)}
-.angi-credit-toolbar h3{margin:2px 0 0}
-.angi-credit-banner{margin:12px 0;padding:14px 16px;border-radius:16px;border:1px solid #d9a300;background:#fff8d9}
-.angi-credit-banner.hidden{display:none}
-.angi-credit-banner strong{display:block;margin-bottom:4px}
-.angi-credit-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;background:#fff0c2;border:1px solid #e4b84a;font-size:.76rem;font-weight:800;letter-spacing:.03em}
-.angi-credit-panel{max-width:1050px}
+/* v7.16.3 Angi credit visual polish only */
+.angi-credit-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:14px 0;padding:13px 15px;border:1px solid #18383b;border-left:3px solid #18d6d1;border-radius:15px;background:#071416;color:#efffff;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.angi-credit-toolbar h3{margin:2px 0 2px;color:#f5ffff;font-size:1.02rem;line-height:1.15}
+.angi-credit-toolbar .eyebrow{color:#22d4cf}.angi-credit-toolbar .muted{color:#8da5a7!important}
+.angi-credit-toolbar .btn{width:auto;min-height:36px;padding:8px 13px;background:#0b2225;border-color:#24494d;color:#f3ffff;box-shadow:none}
+.angi-credit-toolbar .btn:hover{background:#103034;border-color:#22d4cf}
+.angi-credit-banner{margin:12px 0;padding:13px 15px;border-radius:15px;border:1px solid #705b1d;border-left:3px solid #e3b83f;background:#19170d;color:#f6e9b6;box-shadow:none}
+.angi-credit-banner.hidden{display:none}.angi-credit-banner strong{display:block;margin-bottom:4px;color:#ffe28a}
+.angi-credit-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;background:#2a220b!important;color:#ffd867!important;border:1px solid #7d6520!important;font-size:.72rem;font-weight:850;line-height:1;letter-spacing:.035em;box-shadow:none!important}
+.angi-credit-panel{max-width:1050px;background:#071315!important;color:#edfefe!important;border-color:#1b393c!important}
+.angi-credit-panel .head{border-bottom-color:#183538}.angi-credit-panel .muted,.angi-credit-panel small{color:#91a7a9}
 .angi-credit-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
-.angi-credit-metric{padding:12px;border:1px solid var(--line,#d8dee8);border-radius:14px}
-.angi-credit-metric span{display:block;font-size:.78rem;opacity:.7}.angi-credit-metric b{font-size:1.25rem}
-.angi-credit-table-wrap{overflow:auto;margin-top:12px}
-.angi-credit-table{width:100%;border-collapse:collapse;font-size:.9rem}.angi-credit-table th,.angi-credit-table td{text-align:left;padding:9px;border-bottom:1px solid var(--line,#e5e7eb);vertical-align:top}.angi-credit-table th{white-space:nowrap}
-.angi-credit-internal{background:#f7f8fa;border-radius:14px;padding:12px;margin:12px 0}
+.angi-credit-metric{padding:12px;border:1px solid #1b393c;border-radius:14px;background:#091a1d;color:#efffff}
+.angi-credit-metric span{display:block;font-size:.78rem;color:#8ea5a7}.angi-credit-metric b{font-size:1.25rem;color:#f5ffff}
+.angi-credit-table-wrap{overflow:auto;margin-top:12px;border:1px solid #183538;border-radius:13px;background:#081719}
+.angi-credit-table{width:100%;border-collapse:collapse;font-size:.9rem;color:#eafafa}.angi-credit-table th,.angi-credit-table td{text-align:left;padding:9px;border-bottom:1px solid #173336;vertical-align:top}.angi-credit-table th{white-space:nowrap;color:#8fe9e5;background:#0a1c1f}.angi-credit-table tr:last-child td{border-bottom:0}
+.angi-credit-internal{background:#091a1d;border:1px solid #18383b;border-radius:14px;padding:12px;margin:12px 0;color:#eafafa}
 @media(max-width:700px){.angi-credit-toolbar{align-items:flex-start;flex-direction:column}.angi-credit-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <style>
 .lead-actions.quote-style-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:12px}
 .lead-actions.quote-style-actions .btn{width:auto;min-width:0;min-height:34px;padding:7px 11px;font-size:.84rem;line-height:1.15;white-space:nowrap}
 .lead-actions.quote-style-actions .lead-credit-separator{width:1px;height:25px;background:var(--line,#d8dee8);margin:0 2px}
-.notice-sent-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#eaf7ee;border:1px solid #a7d9b4;font-size:.72rem;font-weight:800;letter-spacing:.03em}
+.notice-sent-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#0d281b!important;color:#83e6aa!important;border:1px solid #285f3d!important;font-size:.72rem;font-weight:850;line-height:1;letter-spacing:.035em;box-shadow:none!important}
 @media(max-width:650px){.lead-actions.quote-style-actions{gap:6px}.lead-actions.quote-style-actions .btn{font-size:.8rem;padding:7px 9px}.lead-actions.quote-style-actions .lead-credit-separator{display:none}}
 </style>
 </head><body>
