@@ -155,6 +155,7 @@ self.addEventListener('push', event => {
     job_soon:{title:'JOB STARTING SOON • DYNAMIC TINTZ',tag:'dt-job-soon'},
     schedule_change:{title:'SCHEDULE UPDATE • DYNAMIC TINTZ',tag:'dt-schedule'},
     low_inventory:{title:'FILM REORDER ALERT • DYNAMIC TINTZ',tag:'dt-inventory'},
+    angi_credit:{title:'ANGI CREDIT REPORT READY • DYNAMIC TINTZ',tag:'dt-angi-credit'},
     test:{title:'DYNAMIC TINTZ • TEST',tag:'dt-test'}
   }[type]||{};
   const options={
