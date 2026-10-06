@@ -1803,13 +1803,25 @@ async function toggleAngiCredit(id){
   toast(flag?'Flagged for Angi credit.':'Angi credit flag removed.');
   await loadLeads();
 }
+function angiSubtractBusinessDays(value,count){
+  let d=new Date(value);d.setHours(0,0,0,0);
+  while(count>0){d.setDate(d.getDate()-1);let day=d.getDay();if(day!==0&&day!==6)count--}
+  return d;
+}
+function angiReportReadyDate(c){
+  // Report window opens 2 business days before the next billing cycle begins on the 7th.
+  let nextStart=new Date(c.end.getFullYear(),c.end.getMonth(),7,0,0,0,0);
+  return angiSubtractBusinessDays(nextStart,2);
+}
+function angiCycleAdjustmentRequested(flagged){return flagged.length>0&&flagged.every(l=>String(l.credit_status||'').toLowerCase()==='requested')}
 function updateAngiCreditCenter(){
-  let c=angiCycleForDate(),all=angiCurrentCycleLeads(),flagged=all.filter(angiFlagged),spend=all.reduce((s,l)=>s+angiFee(l),0),bad=flagged.reduce((s,l)=>s+angiFee(l),0);
+  let c=angiCycleForDate(),all=angiCurrentCycleLeads(),flagged=all.filter(angiFlagged);
   if($('angiCreditCycleLabel'))$('angiCreditCycleLabel').textContent=`${angiCycleLabel(c)} • ${flagged.length} flagged`;
   let banner=$('angiCreditBanner');if(!banner)return;
-  if(new Date().getDate()===6){
+  let now=new Date(),ready=angiReportReadyDate(c),requested=angiCycleAdjustmentRequested(flagged);
+  if(now>=ready&&!requested){
     banner.classList.remove('hidden');
-    banner.innerHTML=`<strong>Angi credit adjustment is due today.</strong><span>${esc(angiCycleLabel(c))} • ${flagged.length} automotive lead${flagged.length===1?'':'s'} flagged. Your report is ready.</span> <button class="btn" id="angiBannerReport" style="margin-left:8px">View Report</button>`;
+    banner.innerHTML=`<strong>ANGI CREDIT REPORT READY</strong><span>${esc(angiCycleLabel(c))} • ${flagged.length} automotive lead${flagged.length===1?'':'s'} flagged. Review the report and call Angi before the next billing cycle begins.</span><div class="actions" style="margin-top:10px"><a class="btn primary" href="tel:8779473639">Call Angi: 877-947-3639</a><button class="btn" id="angiBannerReport">View Report</button></div>`;
     $('angiBannerReport').onclick=openAngiCreditReport;
   }else banner.classList.add('hidden');
 }
