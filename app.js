@@ -393,7 +393,7 @@ async function reconcileCurrentScheduledReservations(){
     try{
       let products=await inventoryProducts();
       let{data:jobs,error:jobError}=await sb.from('jobs')
-        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,square_catalog_item_name,inventory_product_id,project_name,notes)')
+        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,measurements,square_catalog_item_name,inventory_product_id,project_name,notes)')
         .in('status',['Scheduled','Confirmed','En Route','In Progress']);
       if(jobError)throw jobError;
       jobs=jobs||[];
@@ -424,6 +424,10 @@ async function reconcileCurrentScheduledReservations(){
       for(let j of jobs){
         if(existing.has(j.id)){skipped++;continue}
         let q=j.quote||{};
+        if(quoteIsMultiFilm(q.measurements)){
+          try{await syncMultiFilmPlanForJob(j.id,q);created++;continue}
+          catch(e){unmatched++;unmatchedJobs.push({job_id:j.id,quote_id:j.quote_id||null,title:j.title||'Scheduled Job',status:j.status,total_sqft:Number(q.total_sqft)||0,film:'Multiple films',reason:e.message||'Film assignment incomplete'});continue}
+        }
         if(!j.quote_id||!(Number(q.total_sqft)>0)){
           unmatched++;
           unmatchedJobs.push({job_id:j.id,quote_id:j.quote_id||null,title:j.title||'Scheduled Job',status:j.status,total_sqft:Number(q.total_sqft)||0,film:q.square_catalog_item_name||'',reason:'Missing quote or square footage'});
@@ -583,7 +587,7 @@ function bindUnmatchedScheduledReservationControls(host){
 async function applyActiveReservationOverlay(rows=[]){
   try{
     let{data:plans,error}=await sb.from('job_material_plans')
-      .select('product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,job:jobs!job_material_plans_job_id_fkey(id,status)');
+      .select('product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,film_allocations,job:jobs!job_material_plans_job_id_fkey(id,status)');
     if(error)throw error;
 
     let activeStatuses=new Set(['Scheduled','Confirmed','En Route','In Progress']),
@@ -593,10 +597,9 @@ async function applyActiveReservationOverlay(rows=[]){
     for(let p of (plans||[])){
       let status=p.job?.status;
       if(!activeStatuses.has(status))continue;
-      let sqft=invSqft(p.roll_width_inches,p.planned_linear_inches);
-      if(!(sqft>0))continue;
-      reservedByProduct[p.product_id]=(reservedByProduct[p.product_id]||0)+sqft;
-      countByProduct[p.product_id]=(countByProduct[p.product_id]||0)+1;
+      let allocations=multiFilmAllocationList(p);
+      let filmLines=allocations.length?allocations:[p];
+      for(let a of filmLines){let sqft=invSqft(a.roll_width_inches,a.planned_linear_inches);if(!(sqft>0))continue;reservedByProduct[a.product_id]=(reservedByProduct[a.product_id]||0)+sqft;countByProduct[a.product_id]=(countByProduct[a.product_id]||0)+1;}
     }
 
     return (rows||[]).map(r=>{
@@ -676,7 +679,7 @@ async function loadInventoryBackfill(){
     let usedSqft=plan?invSqft(plan.roll_width_inches,plan.actual_linear_inches??plan.planned_linear_inches):(opt?optimizerMaterialSqft(opt):null);
     let wasteSqft=plan?Math.max(0,usedSqft-Number(q.total_sqft||0)):(opt?optimizerWasteSqft(opt,q.total_sqft):null);
     let source=plan?(plan.source||'manual'):(opt?'optimizer':'manual');
-    return {job:j,plan,opt,product,usedSqft,wasteSqft,source,processed:consumed.has(j.id)};
+    return {job:j,plan,opt,product,usedSqft,wasteSqft,source,processed:consumed.has(j.id)||!!plan?.multi_film_finalized_at};
   });
   renderInventoryBackfill();
 }
@@ -1189,19 +1192,18 @@ async function openInventoryMetricEditor(productId,focus='projected'){
     </div>`).join(''):'<div class="app-empty">No active rolls. Add a roll to establish physical inventory.</div>';
 
   let{data:plans,error:planError}=await sb.from('job_material_plans')
-    .select('id,job_id,product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,source,job:jobs!job_material_plans_job_id_fkey(id,title,status,scheduled_start,quote:quotes!jobs_quote_id_fkey(project_name,customer:customers(first_name,last_name)))')
-    .eq('product_id',productId);
+    .select('id,job_id,product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,film_allocations,source,job:jobs!job_material_plans_job_id_fkey(id,title,status,scheduled_start,quote:quotes!jobs_quote_id_fkey(project_name,customer:customers(first_name,last_name)))');
   if(planError){
     console.warn('Reservation editor query:',planError);
     plans=[];
   }
-  inventoryMetricReservations=(plans||[]).filter(p=>['Scheduled','Confirmed','Rescheduled','En Route','In Progress'].includes(p.job?.status));
+  inventoryMetricReservations=(plans||[]).filter(p=>['Scheduled','Confirmed','Rescheduled','En Route','In Progress'].includes(p.job?.status)&&(p.product_id===productId||multiFilmAllocationList(p).some(a=>a.product_id===productId)));
   $('inventoryMetricReservations').innerHTML=inventoryMetricReservations.length?inventoryMetricReservations.map(p=>{
     let c=p.job?.quote?.customer||{},name=[c.first_name,c.last_name].filter(Boolean).join(' ')||p.job?.quote?.project_name||p.job?.title||'Scheduled Job';
-    let sqft=invSqft(p.roll_width_inches,p.actual_linear_inches==null?p.planned_linear_inches:p.actual_linear_inches);
+    let allocation=multiFilmAllocationList(p).find(a=>a.product_id===productId),sqft=allocation?invSqft(allocation.roll_width_inches,allocation.planned_linear_inches):invSqft(p.roll_width_inches,p.actual_linear_inches==null?p.planned_linear_inches:p.actual_linear_inches);
     return `<div class="metric-reservation-editor">
       <div><b>${esc(name)}</b><small>${p.job?.scheduled_start?new Date(p.job.scheduled_start).toLocaleDateString():''} • ${esc(p.job?.status||'')}</small></div>
-      <label><span>reserved sq ft</span><input type="number" min="0" step="0.01" value="${invFmt(sqft,2)}" data-metricplan="${p.id}" data-width="${p.roll_width_inches}"></label>
+      <label><span>reserved sq ft</span><input type="number" min="0" step="0.01" value="${invFmt(sqft,2)}" data-metricplan="${p.id}" data-width="${allocation?.roll_width_inches||p.roll_width_inches}" ${allocation?'disabled title="Managed by window measurements"':''}></label>
     </div>`
   }).join(''):'<div class="app-empty">No active scheduled reservations for this film.</div>';
 
@@ -1603,10 +1605,62 @@ async function inventoryProductForQuote(q){
 async function latestOptimizerPlanForQuote(quoteId){
   if(!quoteId)return null;let{data,error}=await sb.from('roll_optimization_plans').select('id,quote_id,roll_width,linear_inches_required,created_at').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle();return error?null:data
 }
+function buildMultiFilmAllocations(quote,products=inventoryProductCache,optimizer=null){
+  let rows=quote?.measurements||[],breakdown=quoteFilmBreakdown(rows),glassTotal=breakdown.reduce((sum,b)=>sum+b.glass_sqft,0);
+  let optimizerSqft=optimizer?optimizerMaterialSqft(optimizer):0;
+  // Use the same optimizer overage ratio that the original single-film job used.
+  // Without an optimizer the existing rule is measured glass area, with no invented waste percentage.
+  let factor=optimizerSqft>0&&glassTotal>0?optimizerSqft/glassTotal:1;
+  return breakdown.map(b=>{
+    let p=products.find(x=>x.id===b.product_id);
+    if(!p)throw new Error(`Inventory film not found for ${b.film_name||'one window'}.`);
+    let width=Number(p.default_roll_width_inches)||72;
+    let plannedSqft=b.glass_sqft*factor;
+    return {product_id:p.id,film_name:p.name,roll_width_inches:width,glass_sqft:b.glass_sqft,planned_sqft:plannedSqft,planned_linear_inches:invLinearInchesFromSqft(plannedSqft,width),areas:b.areas};
+  });
+}
+function multiFilmAllocationList(plan){return Array.isArray(plan?.film_allocations)?plan.film_allocations:[]}
+function multiFilmSummaryMarkup(allocations){
+  return '<b>Film by window (automatic inventory tracking)</b>'+allocations.map(a=>`<div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px"><span>${esc(a.film_name||'Film')}</span><strong>${invFmt(a.planned_sqft??invSqft(a.roll_width_inches,a.planned_linear_inches),2)} sq ft</strong></div>`).join('')+'<small>Each film is deducted from its own rolls when the job is completed. No extra entry required.</small>';
+}
+function scheduleMultiFilmDisplay(active,allocations=[]){
+  let card=$('scheduleJobModal')?.querySelector('.job-material-card'),summary=$('scheduleMultiFilmSummary');
+  if(!card||!summary)return;
+  let single=$('scheduleFilmProduct')?.closest('.field'),amounts=$('scheduleMaterialLinearFt')?.closest('.grid2');
+  if(single)single.hidden=!!active;if(amounts)amounts.hidden=!!active;
+  summary.hidden=!active;let projection=$('scheduleMaterialProjection');if(projection)projection.hidden=!!active;
+  summary.innerHTML=active?multiFilmSummaryMarkup(allocations):'';
+}
+async function syncMultiFilmPlanForJob(jobId,quote=null){
+  if(!jobId)return null;
+  if(!quote){let {data:job,error:jobError}=await sb.from('jobs').select('quote:quotes!jobs_quote_id_fkey(id,measurements,total_sqft)').eq('id',jobId).single();if(jobError)throw jobError;quote=job?.quote}
+  if(!quoteIsMultiFilm(quote?.measurements)){
+    let previous=await sb.from('job_material_plans').select('film_allocations').eq('job_id',jobId).maybeSingle();
+    if(previous.error)throw previous.error;
+    if(multiFilmAllocationList(previous.data).length)throw new Error('This quote was changed back to one film. Open the scheduled job and save its material plan before completing it.');
+    return null;
+  }
+  let products=await inventoryProducts(),validation=quoteMultiFilmValidation(quote.measurements);
+  if(validation)throw new Error(validation);
+  let existingRes=await sb.from('job_material_plans').select('*').eq('job_id',jobId).maybeSingle();
+  if(existingRes.error)throw existingRes.error;
+  let existing=existingRes.data;
+  if(existing?.multi_film_finalized_at)return existing;
+  if(existing){let consumed=await sb.from('film_inventory_consumptions').select('id').eq('plan_id',existing.id).is('reversed_at',null).limit(1);if(consumed.error)throw consumed.error;if(consumed.data?.length)throw new Error('Inventory was already deducted for this job. Film assignments cannot be changed without an inventory correction.')}
+  let optimizer=await latestOptimizerPlanForQuote(quote.id),allocations=buildMultiFilmAllocations(quote,products,optimizer);
+  if(!allocations.length)throw new Error('No film measurements found for this job.');
+  let first=allocations[0];
+  let payload={job_id:jobId,product_id:first.product_id,source:'manual',optimizer_plan_id:null,planned_linear_inches:first.planned_linear_inches,actual_linear_inches:null,roll_width_inches:first.roll_width_inches,film_allocations:allocations,multi_film_finalized_at:null,notes:'Window-by-window film allocation. Each inventory film is deducted separately at completion.',updated_at:new Date().toISOString()};
+  let saved=await sb.from('job_material_plans').upsert(payload,{onConflict:'job_id'}).select('*').single();
+  if(saved.error)throw saved.error;
+  return saved.data;
+}
 async function loadScheduleMaterialPlan(quote,jobId){
   let select=$('scheduleFilmProduct'),planned=$('scheduleMaterialLinearFt'),actual=$('scheduleMaterialActualFt'),hint=$('scheduleMaterialHint');if(!select||!planned||!actual)return;
   try{
     let products=await inventoryProducts();populateInventoryProductSelects(products);let existing=null;
+    if(quoteIsMultiFilm(quote?.measurements)){let allocations=buildMultiFilmAllocations(quote,products,await latestOptimizerPlanForQuote(quote?.id));scheduleMultiFilmDisplay(true,allocations);hint.textContent='Film usage is calculated from the windows on this quote.';updateScheduleMaterialProjection();return}
+    scheduleMultiFilmDisplay(false);
     if(jobId){let r=await sb.from('job_material_plans').select('*').eq('job_id',jobId).maybeSingle();existing=r.data||null}
     let product=existing?products.find(p=>p.id===existing.product_id):await inventoryProductForQuote(quote),optimizer=await latestOptimizerPlanForQuote(quote?.id);
     select.value=product?.id||existing?.product_id||'';
@@ -1632,25 +1686,33 @@ async function loadScheduleMaterialPlan(quote,jobId){
         :'<b>No calculated material found.</b> Enter the total square feet of film you expect this job to use.';
     }
     updateScheduleMaterialProjection()
-  }catch{hint.textContent='Inventory module not installed yet.'}
+  }catch(e){hint.textContent='Could not load film plan: '+(e.message||'Inventory unavailable');console.warn('Schedule material plan:',e)}
 }
 function updateScheduleMaterialProjection(){
   let select=$('scheduleFilmProduct'),planned=$('scheduleMaterialLinearFt'),host=$('scheduleMaterialProjection');if(!select||!planned||!host)return;
   let p=inventoryProductCache.find(x=>x.id===select.value),sqft=Number(planned.value)||0;host.textContent=sqft>0?`${invFmt(sqft,2)} sq ft of roll material will be reserved while this job is active.`:'No inventory reservation yet.'
 }
 // DB source constraint: quote-calculated reservations use source='manual'; optimizer reservations use source='optimizer'.
-async function saveScheduleMaterialPlan(jobId){
+async function saveScheduleMaterialPlan(jobId,quote=null){
+  if(quoteIsMultiFilm(quote?.measurements)){await syncMultiFilmPlanForJob(jobId,quote);return}
   let productId=$('scheduleFilmProduct')?.value,plannedSqft=Number($('scheduleMaterialLinearFt')?.value)||0,actualRaw=$('scheduleMaterialActualFt')?.value??'',actualSqft=actualRaw===''?null:Number(actualRaw),plannedEl=$('scheduleMaterialLinearFt');if(!jobId)return;
-  if(!productId||plannedSqft<=0){await sb.from('job_material_plans').delete().eq('job_id',jobId);return}
+  if(!productId||plannedSqft<=0){let prior=await sb.from('job_material_plans').select('multi_film_finalized_at').eq('job_id',jobId).maybeSingle();if(prior.error)throw prior.error;if(prior.data?.multi_film_finalized_at)throw new Error('This job already deducted inventory.');await sb.from('job_material_plans').delete().eq('job_id',jobId);return}
+  let prior=await sb.from('job_material_plans').select('id,multi_film_finalized_at').eq('job_id',jobId).maybeSingle();if(prior.error)throw prior.error;if(prior.data?.multi_film_finalized_at)throw new Error('This job already deducted inventory. Reopening it will not deduct again.');
   let p=inventoryProductCache.find(x=>x.id===productId),width=Number(plannedEl.dataset.rollWidth)||Number(p?.default_roll_width_inches)||72,
       plannedLinear=invLinearInchesFromSqft(plannedSqft,width),actualLinear=Number.isFinite(actualSqft)?invLinearInchesFromSqft(actualSqft,width):null;
-  let{error}=await sb.from('job_material_plans').upsert({job_id:jobId,product_id:productId,source:plannedEl.dataset.source||'manual',optimizer_plan_id:plannedEl.dataset.optimizerPlanId||null,planned_linear_inches:plannedLinear,actual_linear_inches:actualLinear,roll_width_inches:width,updated_at:new Date().toISOString()},{onConflict:'job_id'});if(error)throw error
+  let{error}=await sb.from('job_material_plans').upsert({job_id:jobId,product_id:productId,source:plannedEl.dataset.source||'manual',optimizer_plan_id:plannedEl.dataset.optimizerPlanId||null,planned_linear_inches:plannedLinear,actual_linear_inches:actualLinear,roll_width_inches:width,film_allocations:null,multi_film_finalized_at:null,updated_at:new Date().toISOString()},{onConflict:'job_id'});if(error)throw error
 }
 async function finalizeScheduledJobInventory(jobId,actualOverride=null){
   if(!jobId)return {ok:true,skipped:true};
+  let refreshed=await syncMultiFilmPlanForJob(jobId);
   let{data:plan,error}=await sb.from('job_material_plans').select('*').eq('job_id',jobId).maybeSingle();
   if(error)throw error;
   if(!plan)return {ok:true,skipped:true};
+  if(multiFilmAllocationList(plan).length){
+    if(plan.multi_film_finalized_at)return {ok:true,alreadyFinalized:true};
+    let r=await sb.rpc('inventory_finalize_job',{p_job_id:jobId});if(r.error)throw r.error;
+    return {ok:true,multiFilm:true,films:multiFilmAllocationList(plan).length};
+  }
 
   let plannedSqft=invSqft(plan.roll_width_inches,plan.planned_linear_inches),
       actualSqft=actualOverride==null?null:Number(actualOverride);
@@ -1946,7 +2008,7 @@ async function startBreak(id){let{error}=await sb.from('time_breaks').insert({ti
 async function endBreak(id){let{error}=await sb.from('time_breaks').update({break_end:new Date().toISOString()}).eq('id',id);if(error)return toast(error.message);toast('Break ended.');loadTime();loadEmployee()}
 function week(){let d=new Date(),day=d.getDay();d.setDate(d.getDate()-day);d.setHours(0,0,0,0);return d.toISOString()}
 async function loadTime(){renderClock($('timeCard'),await openShift());let{data}=await sb.from('time_entry_totals').select('*').eq('employee_id',session.user.id).gte('clock_in',week()).order('clock_in',{ascending:false}),tot=(data||[]).reduce((s,x)=>s+Number(x.net_hours||0),0);$('timeList').innerHTML=`<div class="card metric"><b>${tot.toFixed(2)}</b><span>Net hours this week</span></div>`+(data||[]).map(x=>`<div class="item muted">${when(x.clock_in)} → ${when(x.clock_out)}<br>${Number(x.net_hours||0).toFixed(2)} hours</div>`).join('')}
-async function loadEmployee(){renderClock($('employeeClock'),await openShift());let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,project_type,total_sqft,measurements,notes,status)').neq('status','Completed').order('scheduled_start');data=(data||[]).filter(j=>j.assigned_to===session.user.id||(j.assigned_installers||[]).includes(session.user.id));if(error){$('jobs').innerHTML=`<div class="item muted">${esc(error.message)}</div>`;return}window._assignedJobs=data||[];$('jobs').innerHTML=data?.length?data.map((j,i)=>{let q=j.quote,roomCount=Array.isArray(q?.measurements)?q.measurements.length:0,status=j.status||'Scheduled';return `<div class="item"><div class="head"><div><b>${esc(j.title||q?.project_name||'Installation')}</b><div class="muted">${when(j.scheduled_start)}<br>${esc(j.service_address)}</div></div><span class="pill">${esc(status)}</span></div>${q?`<div class="muted">${Number(q.total_sqft||0).toFixed(2)} total sq ft • ${roomCount} measurement row${roomCount===1?'':'s'}</div><div class="actions"><button class="btn primary" data-jobdetails="${i}">Open Job</button><a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>${status==='Scheduled'?`<button class="btn warn" data-jobstatus="${i}" data-status="En Route">Mark En Route</button>`:''}${status==='En Route'?`<button class="btn warn" data-jobstatus="${i}" data-status="In Progress">Start Job</button>`:''}${status==='In Progress'?`<button class="btn primary" data-jobstatus="${i}" data-status="Completed">Mark Complete</button>`:''}</div>`:`<div class="muted">No quote is linked to this job yet.</div>`}</div>`}).join(''):'No assigned jobs yet.';$('jobs').querySelectorAll('[data-jobdetails]').forEach(b=>b.onclick=()=>openJobDetails(Number(b.dataset.jobdetails)));$('jobs').querySelectorAll('[data-jobstatus]').forEach(b=>b.onclick=()=>updateJobStatus(Number(b.dataset.jobstatus),b.dataset.status))}function openJobDetails(i){let j=window._assignedJobs?.[i],q=j?.quote;if(!q)return toast('No quote is linked to this job.');let measurements=Array.isArray(q.measurements)?q.measurements:[];$('jobDetailModal').dataset.jobIndex=i;$('jobDetailTitle').textContent=j.title||q.project_name||'Job Details';$('jobDetailMeta').innerHTML=`${esc(j.service_address||'')}<br>${Number(q.total_sqft||0).toFixed(2)} total sq ft<br><b>Status:</b> ${esc(j.status||'Scheduled')}${q.notes?`<br><b>Project notes:</b> ${esc(q.notes)}`:''}`;$('jobInstallerNotes').value=j.notes||'';$('jobStatusSelect').value=j.status||'Scheduled';$('jobDimensionList').innerHTML=measurements.length?measurements.map((m,n)=>{let area=Number(m.w||0)*Number(m.h||0)*Number(m.qty||1)/144;return `<div class="dimension-card"><div><b>${n+1}. ${esc(m.area||'Window')}</b><div class="muted">${Number(m.w||0)}″ W × ${Number(m.h||0)}″ H • Qty ${Number(m.qty||1)}</div></div><strong>${area.toFixed(2)} sq ft</strong></div>`}).join(''):'<div class="muted">No measurements are stored on this quote.</div>';$('jobDetailModal').classList.add('show')}async function updateJobStatus(i,status){let j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this installation complete?\n\nConfirm actual film used next so inventory can be finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await lifecycleAfterSchedule(j.quote_id,status);toast(`Job marked ${status}.`);await loadEmployee();await dashboard()}async function saveInstallerJobUpdate(){let i=Number($('jobDetailModal').dataset.jobIndex),j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');let status=$('jobStatusSelect').value,notes=$('jobInstallerNotes').value.trim();if(status==='Completed'&&j.status!=='Completed'){try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let{error}=await sb.from('jobs').update({status,notes,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await lifecycleAfterSchedule(j.quote_id,status);$('jobDetailModal').classList.remove('show');toast('Job update saved.');await loadEmployee();await dashboard()}
+async function loadEmployee(){renderClock($('employeeClock'),await openShift());let{data,error}=await sb.from('jobs').select('*,quote:quotes!jobs_quote_id_fkey(id,project_name,project_type,total_sqft,measurements,notes,status)').neq('status','Completed').order('scheduled_start');data=(data||[]).filter(j=>j.assigned_to===session.user.id||(j.assigned_installers||[]).includes(session.user.id));if(error){$('jobs').innerHTML=`<div class="item muted">${esc(error.message)}</div>`;return}window._assignedJobs=data||[];$('jobs').innerHTML=data?.length?data.map((j,i)=>{let q=j.quote,roomCount=Array.isArray(q?.measurements)?q.measurements.length:0,status=j.status||'Scheduled';return `<div class="item"><div class="head"><div><b>${esc(j.title||q?.project_name||'Installation')}</b><div class="muted">${when(j.scheduled_start)}<br>${esc(j.service_address)}</div></div><span class="pill">${esc(status)}</span></div>${q?`<div class="muted">${Number(q.total_sqft||0).toFixed(2)} total sq ft • ${roomCount} measurement row${roomCount===1?'':'s'}</div><div class="actions"><button class="btn primary" data-jobdetails="${i}">Open Job</button><a class="btn" target="_blank" href="https://maps.apple.com/?q=${encodeURIComponent(j.service_address||'')}">Directions</a>${status==='Scheduled'?`<button class="btn warn" data-jobstatus="${i}" data-status="En Route">Mark En Route</button>`:''}${status==='En Route'?`<button class="btn warn" data-jobstatus="${i}" data-status="In Progress">Start Job</button>`:''}${status==='In Progress'?`<button class="btn primary" data-jobstatus="${i}" data-status="Completed">Mark Complete</button>`:''}</div>`:`<div class="muted">No quote is linked to this job yet.</div>`}</div>`}).join(''):'No assigned jobs yet.';$('jobs').querySelectorAll('[data-jobdetails]').forEach(b=>b.onclick=()=>openJobDetails(Number(b.dataset.jobdetails)));$('jobs').querySelectorAll('[data-jobstatus]').forEach(b=>b.onclick=()=>updateJobStatus(Number(b.dataset.jobstatus),b.dataset.status))}function openJobDetails(i){let j=window._assignedJobs?.[i],q=j?.quote;if(!q)return toast('No quote is linked to this job.');let measurements=Array.isArray(q.measurements)?q.measurements:[];$('jobDetailModal').dataset.jobIndex=i;$('jobDetailTitle').textContent=j.title||q.project_name||'Job Details';$('jobDetailMeta').innerHTML=`${esc(j.service_address||'')}<br>${Number(q.total_sqft||0).toFixed(2)} total sq ft<br><b>Status:</b> ${esc(j.status||'Scheduled')}${q.notes?`<br><b>Project notes:</b> ${esc(q.notes)}`:''}`;$('jobInstallerNotes').value=j.notes||'';$('jobStatusSelect').value=j.status||'Scheduled';$('jobDimensionList').innerHTML=measurements.length?measurements.map((m,n)=>{let area=Number(m.w||0)*Number(m.h||0)*Number(m.qty||1)/144;return `<div class="dimension-card"><div><b>${n+1}. ${esc(m.area||'Window')}</b><div class="muted">${Number(m.w||0)}″ W × ${Number(m.h||0)}″ H • Qty ${Number(m.qty||1)}${m.film_name?` • ${esc(m.film_name.replace(/\s*Tint Install\s*/i,''))}`:''}</div></div><strong>${area.toFixed(2)} sq ft</strong></div>`}).join(''):'<div class="muted">No measurements are stored on this quote.</div>';$('jobDetailModal').classList.add('show')}async function updateJobStatus(i,status){let j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this installation complete?\n\nConfirm actual film used next so inventory can be finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await lifecycleAfterSchedule(j.quote_id,status);toast(`Job marked ${status}.`);await loadEmployee();await dashboard()}async function saveInstallerJobUpdate(){let i=Number($('jobDetailModal').dataset.jobIndex),j=window._assignedJobs?.[i];if(!j)return toast('Job not found.');let status=$('jobStatusSelect').value,notes=$('jobInstallerNotes').value.trim();if(status==='Completed'&&j.status!=='Completed'){try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let{error}=await sb.from('jobs').update({status,notes,archived_at:status==='Completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await lifecycleAfterSchedule(j.quote_id,status);$('jobDetailModal').classList.remove('show');toast('Job update saved.');await loadEmployee();await dashboard()}
 async function loadTeam(){let{data,error}=await sb.from('time_entry_totals').select('*,employee:profiles!time_entries_employee_id_fkey(full_name,email)').gte('clock_in',week()).order('clock_in',{ascending:false});if(error)return toast(error.message);teamTimeCache=data||[];let groups={};teamTimeCache.forEach(x=>{let id=x.employee_id;groups[id]??={name:x.employee?.full_name||x.employee?.email||'Employee',total:0,entries:[]};groups[id].total+=Number(x.net_hours||0);groups[id].entries.push(x)});$('teamList').innerHTML=Object.values(groups).length?Object.values(groups).map(g=>`<div class="card"><div class="head"><h2>${esc(g.name)}</h2><span class="pill">${g.total.toFixed(2)} hrs</span></div>${g.entries.map(x=>`<div class="time-row"><span>${when(x.clock_in)} → ${when(x.clock_out)}</span><b>${Number(x.net_hours||0).toFixed(2)} hrs</b></div>`).join('')}</div>`).join(''):'<div class="card muted">No time entries this week.</div>'}
 function exportTimeCsv(){if(!teamTimeCache.length)return toast('No weekly time records to export.');let rows=[['Employee','Clock In','Clock Out','Net Hours','Status'],...teamTimeCache.map(x=>[x.employee?.full_name||x.employee?.email||'Employee',when(x.clock_in),when(x.clock_out),Number(x.net_hours||0).toFixed(2),x.status||''])],csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n'),blob=new Blob([csv],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`dynamic-tintz-time-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href);toast('Weekly time CSV exported.')}
 
@@ -2164,8 +2226,50 @@ function renderQuoteAddons(){let h=$('quoteAddonRows');if(!h)return;if(!quoteAdd
 function addQuoteAddon(){let c=QUOTE_ADDON_CATALOG[0];quoteAddons.push({id:String(Date.now()),...c,qty:1});renderQuoteAddons();scheduleQuoteAutosave()}
 
 const ceramicMatrix=[[0,49,12],[50,99,11],[100,199,10],[200,299,9],[300,399,8],[400,499,7],[500,999999,6.5]],solarMatrix=[[0,99,7.5],[100,199,6.5],[200,299,6],[300,399,5.5],[400,999999,5]];
+let multiFilmEnabled=false;
 let measures=[{id:1,area:'',w:0,h:0,qty:1}],nextMeasure=2,editingQuoteId=null,editingCustomerId=null,editingLeadId=null,quoteMilesManual=false;
 let quoteAutosaveTimer=null,quoteCloudAutosaveTimer=null,quoteDraftRestoring=false,quoteAutosaveMuted=false;
+function quoteIsMultiFilm(rows){
+  return Array.isArray(rows)&&rows.some(r=>r?.film_mode==='multi');
+}
+function quoteFilmRows(rows){
+  return (Array.isArray(rows)?rows:[]).filter(r=>Number(r.w)>0&&Number(r.h)>0&&Number(r.qty||1)>0);
+}
+function quoteFilmBreakdown(rows){
+  let totals=new Map();
+  for(let r of quoteFilmRows(rows)){
+    let productId=String(r.film_product_id||'');
+    if(!productId)continue;
+    let item=totals.get(productId)||{product_id:productId,film_name:r.film_name||'',glass_sqft:0,areas:[]};
+    item.glass_sqft+=Number(r.w)*Number(r.h)*Number(r.qty||1)/144;
+    if(r.area&&!item.areas.includes(r.area))item.areas.push(r.area);
+    totals.set(productId,item);
+  }
+  return [...totals.values()];
+}
+function quoteMultiFilmValidation(rows){
+  if(!quoteIsMultiFilm(rows))return '';
+  let usable=quoteFilmRows(rows);
+  if(!usable.length)return 'Add window measurements before saving a multiple-film quote.';
+  let missing=usable.find(r=>!r.film_product_id||!inventoryProductCache.some(p=>p.id===r.film_product_id));
+  return missing?'Select an inventory film for every measured window before saving or scheduling.':'';
+}
+function multiFilmChoices(){
+  return '<option value="">Select inventory film…</option>'+inventoryProductCache.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+}
+async function setQuoteMultiFilm(enabled,restore=false){
+  multiFilmEnabled=!!enabled;
+  if($('qMultiFilm'))$('qMultiFilm').value=multiFilmEnabled?'yes':'no';
+  if(multiFilmEnabled){
+    try{await inventoryProducts()}catch(e){toast('Could not load inventory films: '+e.message)}
+    let primary=resolveInventoryProduct(inventoryProductCache,{square_catalog_item_name:$('qSquareItem')?.value},{});
+    measures.forEach(r=>{r.film_mode='multi';if(!r.film_product_id&&primary){r.film_product_id=primary.id;r.film_name=primary.name}});
+  }else{
+    measures.forEach(r=>{delete r.film_mode;delete r.film_product_id;delete r.film_name});
+  }
+  if($('qMultiFilmHint'))$('qMultiFilmHint').textContent=multiFilmEnabled?'Select the inventory film beneath each room. Measurements and pricing stay the same.':'No changes to your normal single-film quote.';
+  renderMeasures();if(!restore)scheduleQuoteAutosave();
+}
 function quoteDraftKey(){return `dt.quoteDraft.${session?.user?.id||'guest'}`}
 function quoteDraftPayload(){
   return {
@@ -2181,6 +2285,7 @@ function quoteDraftPayload(){
       qStatus:$('qStatus')?.value||'New Lead',qMiles:$('qMiles')?.value||'0',
       qLead:$('qLead')?.value||'Angi',qNotes:$('qNotes')?.value||''
     },
+    multiFilmEnabled,
     addons:JSON.parse(JSON.stringify(quoteAddons||[])),
     measures:JSON.parse(JSON.stringify(measures||[]))
   }
@@ -2263,6 +2368,8 @@ function restoreQuoteDraftIfNeeded(){
       measures=draft.measures;
       nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;
     }
+    multiFilmEnabled=!!draft.multiFilmEnabled||quoteIsMultiFilm(measures);if($('qMultiFilm'))$('qMultiFilm').value=multiFilmEnabled?'yes':'no';
+    if(multiFilmEnabled)inventoryProducts().then(renderMeasures).catch(()=>{});
     quoteAddons=normalizeAddons(draft.addons||[]);renderQuoteAddons();
     editingQuoteId=draft.editingQuoteId||null;
     editingCustomerId=draft.editingCustomerId||null;editingLeadId=draft.editingLeadId||null;
@@ -2506,6 +2613,7 @@ function renderMeasures(){
           <option value="">Choose room…</option>
           ${roomAreaOptions()}
         </select>
+        ${multiFilmEnabled?`<label class="window-film-label">Film for this window<select class="window-film-select" data-windowfilm="${r.id}">${multiFilmChoices()}</select></label>`:''}
       </div>
       <input data-mid="${r.id}" data-k="w" inputmode="decimal" placeholder="Width" value="${r.w||''}">
       <input data-mid="${r.id}" data-k="h" inputmode="decimal" placeholder="Height" value="${r.h||''}">
@@ -2513,7 +2621,12 @@ function renderMeasures(){
       <div class="measure-total">${area} sq ft</div>
       <button class="btn mini" data-duplicate="${r.id}" title="Duplicate window">⧉</button>
       <button class="btn danger mini" data-remove="${r.id}" title="Delete window">×</button>`;
-    el.appendChild(d)
+    el.appendChild(d);
+    if(multiFilmEnabled){let filmSelect=d.querySelector('[data-windowfilm]');if(filmSelect)filmSelect.value=r.film_product_id||''}
+  });
+  el.querySelectorAll('[data-windowfilm]').forEach(sel=>sel.onchange=()=>{
+    let row=measures.find(r=>r.id===Number(sel.dataset.windowfilm)),product=inventoryProductCache.find(p=>p.id===sel.value);
+    if(!row)return;row.film_product_id=product?.id||'';row.film_name=product?.name||'';row.film_mode='multi';scheduleQuoteAutosave();
   });
   el.querySelectorAll('input[data-mid]').forEach(i=>{
     i.oninput=()=>{
@@ -2556,10 +2669,10 @@ function renderMeasures(){
   });
   calculateQuote()
 }
-function addMeasure(focus=true,preset=null){let id=nextMeasure++,row=preset||{id,area:'',w:0,h:0,qty:1};row={...row,id};measures.push(row);renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${preset&&row.area?'w':'area'}"]`)?.focus(),40);scheduleQuoteAutosave()}
+function addMeasure(focus=true,preset=null){let id=nextMeasure++,row=preset||{id,area:'',w:0,h:0,qty:1};row={...row,id};if(multiFilmEnabled){row.film_mode='multi';if(!row.film_product_id){let primary=resolveInventoryProduct(inventoryProductCache,{square_catalog_item_name:$('qSquareItem')?.value},{});row.film_product_id=primary?.id||'';row.film_name=primary?.name||''}}measures.push(row);renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${preset&&row.area?'w':'area'}"]`)?.focus(),40);scheduleQuoteAutosave()}
 function duplicateMeasure(id){let source=measures.find(x=>x.id===id);if(!source)return;addMeasure(false,{...source});toast('Window duplicated')}
 function duplicateLastMeasure(){let last=measures[measures.length-1];if(!last)return;duplicateMeasure(last.id)}
-function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';$('qStatus').value='New Lead';$('qLead').value='Angi';quoteAddons=[];renderQuoteAddons();measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;setMileageAutoStatus('');renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
+function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';multiFilmEnabled=false;if($('qMultiFilm'))$('qMultiFilm').value='no';if($('qMultiFilmHint'))$('qMultiFilmHint').textContent='No changes to your normal single-film quote.';$('qStatus').value='New Lead';$('qLead').value='Angi';quoteAddons=[];renderQuoteAddons();measures=[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;setMileageAutoStatus('');renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
 function currentQuoteText(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;return `Dynamic Tintz Window Film Proposal\n\nCustomer: ${$('qFirst').value} ${$('qLast').value}\nProject: ${$('qProject').value||'Window Film Project'}\nAddress: ${$('qAddress').value}\nTotal glass: ${s.toFixed(2)} sq ft\n\nPremium Ceramic normal price: ${money(list)}\nVolume-tier price: ${money(c.price)}\nCustomer savings: ${money(save)} (${pct}%)\nSolar Control: ${money(o.price)}\n\n50% deposit due at invoicing; balance due upon completion.\nResidential Lifetime Warranty • 12 Year Commercial Warranty\nProudly Veteran Owned and Operated\nDynamic Tintz • 469-840-4008`}
 async function ensureLeadForQuoteCustomer(customerId){
   let source=$('qLead')?.value||'Organic',
@@ -2614,6 +2727,7 @@ async function saveCloudQuote(){
   let saveButtons=[$('saveQuote'),$('mobileSaveQuote'),$('quoteSaveDockButton')].filter(Boolean),saveLabels=saveButtons.map(b=>b.textContent);
   saveButtons.forEach(b=>{b.disabled=true;b.textContent='Saving…'});
   try{
+  if(multiFilmEnabled){if(!inventoryProductCache.length)await inventoryProducts();let validation=quoteMultiFilmValidation(measures);if(validation)return toast(validation)}
   let selectedFilmName=$('qSquareItem')?.value||'25% Ceramic Tint Install',selectedInventoryProduct=null;
   try{
     let products=await inventoryProducts();
@@ -3023,7 +3137,7 @@ async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loadin
   let payload={quote_id:quoteId,title,service_address:quote?.service_address||'',scheduled_start:new Date(start).toISOString(),scheduled_end:$('scheduleEnd').value?new Date($('scheduleEnd').value).toISOString():null,status:interimStatus,archived_at:null,notes:$('scheduleNotes').value.trim(),assigned_to:assigned[0],assigned_installers:assigned,updated_at:now},res;
   if(existingJobId)res=await sb.from('jobs').update(payload).eq('id',existingJobId).select('id').single();else res=await sb.from('jobs').insert(payload).select('id').single();
   if(res.error){$('scheduleMessage').textContent=res.error.message;return}
-  let jobId=res.data?.id||existingJobId;try{if(!/Cleaning$/.test(quote?.project_type||''))await saveScheduleMaterialPlan(jobId)}catch(e){$('scheduleMessage').textContent='Job saved, but material plan failed: '+e.message;return}
+  let jobId=res.data?.id||existingJobId;try{if(!/Cleaning$/.test(quote?.project_type||''))await saveScheduleMaterialPlan(jobId,quote)}catch(e){$('scheduleMessage').textContent='Job saved, but material plan failed: '+e.message;return}
   if(selectedStatus==='Completed'){
     try{
       let actualRaw=$('scheduleMaterialActualFt')?.value??'',
@@ -3408,11 +3522,21 @@ function renderOperations(){
 let contentStudioJob=null,contentStudioPairs=[],contentPostVariant=0;
 function contentStudioCity(address=''){
   let parts=String(address).split(',').map(x=>x.trim()).filter(Boolean);
-  if(parts.length>=3)return parts[parts.length-3];
+  if(parts.length===1)return /\d/.test(parts[0])?'':parts[0];
+  if(parts.length>=4)return parts[parts.length-3];
   if(parts.length>=2)return parts[parts.length-2];
   return '';
 }
-function contentStudioFilm(j){let raw=j?._contentStandalone?(j?._contentFilm||''):(j?.material_plan?.product?.name||j?.quote?.square_catalog_item_name||'Window Film');return String(raw||'').replace(/\s*Tint Install\s*/i,'').trim()}
+function contentStudioFilms(j){
+  if(j?._contentStandalone)return j?._contentFilm?[String(j._contentFilm)]:[];
+  let rows=j?.quote?.measurements||[];
+  if(quoteIsMultiFilm(rows)){
+    let names=[...new Set(rows.filter(r=>Number(r.w)>0&&Number(r.h)>0).map(r=>String(r.film_name||inventoryProductCache.find(p=>p.id===r.film_product_id)?.name||'').trim()).filter(Boolean))];
+    if(names.length)return names;
+  }
+  return [j?.material_plan?.product?.name||j?.quote?.square_catalog_item_name||'Window Film'];
+}
+function contentStudioFilm(j){return contentStudioFilms(j).map(n=>String(n).replace(/\s*Tint Install\s*/ig,'').trim()).join(', ')}
 function contentStudioProjectType(j){if(j?._contentStandalone)return j?._contentProjectType||'';return j?.quote?.project_type||(/commercial|office|storefront|business/i.test(j?.title||j?.quote?.project_name||'')?'Commercial':'Residential')}
 function contentStudioCustomerName(j){return j?.quote?.customer?`${j.quote.customer.first_name||''} ${j.quote.customer.last_name||''}`.trim():''}
 function contentStudioAutoFocus(film=''){
@@ -3424,13 +3548,14 @@ function contentStudioAutoFocus(film=''){
   if(/custom/.test(film))return 'custom';
   return 'solar';
 }
-function contentStudioFocus(){let selected=$('contentFocus')?.value||'auto';return selected==='auto'?contentStudioAutoFocus(contentStudioFilm(contentStudioJob)):selected}
+function contentStudioFocus(){let selected=$('contentFocus')?.value||'auto';return selected==='auto'&&contentStudioFilms(contentStudioJob).length>1?'mixed':selected==='auto'?contentStudioAutoFocus(contentStudioFilm(contentStudioJob)):selected}
 function contentStudioGoal(){return String($('contentGoal')?.value||'').trim()}
-function contentStudioFocusHint(){let film=contentStudioFilm(contentStudioJob),focus=contentStudioFocus(),hints={solar:'Post will focus on heat reduction, glare control, UV protection and comfort.',privacy:'Post will focus on privacy while preserving soft, beautiful natural light.',decorative:'Post will focus on the visual transformation, design and privacy. Add a quick goal above for the best result.',complete:'Post will focus on blocking visibility and creating complete privacy.',custom:'Tell Content Studio what this film accomplished and the post will build around that goal.'};if($('contentFocusHint'))$('contentFocusHint').textContent=`${film}: ${hints[focus]||''}`}
+function contentStudioFocusHint(){let film=contentStudioFilm(contentStudioJob),focus=contentStudioFocus(),hints={mixed:'This job used more than one film. The post will describe each film accurately, without treating privacy film like solar tint.',solar:'Post will focus on heat reduction, glare control, UV protection and comfort.',privacy:'Post will focus on privacy while preserving soft, beautiful natural light.',decorative:'Post will focus on the visual transformation, design and privacy. Add a quick goal above for the best result.',complete:'Post will focus on blocking visibility and creating complete privacy.',custom:'Tell Content Studio what this film accomplished and the post will build around that goal.'};if($('contentFocusHint'))$('contentFocusHint').textContent=`${film}: ${hints[focus]||''}`}
 function contentStudioHashtags(j){
   let city=contentStudioCity(j?.service_address||j?.quote?.service_address||''),film=contentStudioFilm(j),type=contentStudioProjectType(j),focus=contentStudioFocus();
   let tags=[];
-  if(focus==='privacy')tags=['#PrivacyWindowFilm','#FrostedWindowFilm'];
+  if(focus==='mixed')tags=['#WindowFilm',/ceramic|solar/i.test(film)?'#CeramicWindowFilm':'#PrivacyWindowFilm'];
+  else if(focus==='privacy')tags=['#PrivacyWindowFilm','#FrostedWindowFilm'];
   else if(focus==='decorative')tags=['#DecorativeWindowFilm','#PrivacyWindowFilm'];
   else if(focus==='complete')tags=['#PrivacyWindowFilm','#WindowFilm'];
   else if(/ceramic/i.test(film))tags=['#WindowTinting','#CeramicWindowFilm'];
@@ -3440,27 +3565,43 @@ function contentStudioHashtags(j){
 }
 function contentStudioPostText(j,variant=0){
   let city=contentStudioCity(j?.service_address||j?.quote?.service_address||''),film=contentStudioFilm(j),type=contentStudioProjectType(j),home=type==='Commercial'?'business':'home',focus=contentStudioFocus(),goal=contentStudioGoal(),i=variant%3;
-  let intros=[`Another one wrapped up in ${city}!`,`Fresh before and after from a ${city} project!`,`This ${city} ${home} got a clean upgrade today.`];
-  let bodies,closes;
-  if(focus==='privacy'){
-    bodies=[`We installed ${film} to enhance privacy in one of the most private areas of this ${home}, making it much harder to see through the glass while still allowing a beautiful, soft natural tone of light into the space.`,`This ${film} installation gave this ${home} the privacy it needed without closing the space off from natural light. You get a clean finished look, comfortable daylight, and no clear view through the glass.`,`Privacy was the goal on this one. ${film} lets natural light continue to brighten the space while obscuring the view through the glass where privacy matters most.`];
-    closes=[`Frosted privacy film is a great option for bathrooms, entry doors, sidelights and other glass where you want the light, just not the view.`,`Want more privacy without covering the glass with blinds or curtains? Send us a few pictures and dimensions and we can help.`,`Need privacy while keeping natural light? Dynamic Tintz installs privacy and decorative window film throughout DFW.`];
+  let place=city?` in ${city}`:'',filmLabel=film||'window film';
+  let intro='',detail='',close='';
+  if(focus==='mixed'){
+    let groups=quoteFilmBreakdown(j?.quote?.measurements||[]);
+    let pieces=groups.map(b=>{let name=String(b.film_name||'window film').replace(/\s*Tint Install\s*/ig,'').trim();let area=b.areas.filter(Boolean).slice(0,2).join(' and ');return `${name}${area?' on the '+area:''}`});
+    let installed=pieces.length>1?pieces.slice(0,-1).join(', ')+(pieces.length>2?', and ':' and ')+pieces.at(-1):(pieces[0]||filmLabel);
+    intro=[`This is why I don't recommend the same film for every window in a ${home}.`,`We just finished a ${home}${place} that needed a few different film types.`,`Not every window has the same job to do. This project${place} is a good example.`][i];
+    detail=`We installed ${installed}.`;
+    let ceramic=groups.some(g=>/ceramic|solar/i.test(g.film_name)),privacy=groups.some(g=>/frost|privacy/i.test(g.film_name)),opaque=groups.some(g=>/blackout|whiteout/i.test(g.film_name));
+    detail+=' '+(ceramic&&privacy?'Ceramic helps manage the heat and glare. Frost gives you privacy in the spots that need it without taking away the natural light.':ceramic&&opaque?'Ceramic helps with heat and glare where you still want the view. The opaque film handles the areas where blocking visibility is the priority.':privacy?'The privacy film obscures the view through the glass while still letting soft daylight into those spaces.':ceramic?'We chose the shades for each set of windows instead of forcing one look across the whole property.':'Different glass, different goals. The film should match what you actually need from each window.');
+    close=[`If you're dealing with a couple different window issues in the same place, send me some photos. I'll help you figure out what makes sense.`,`It's not about selling the same film for every piece of glass. It's about choosing the right one for the job.`,`If you've got a project like this, reach out. We can go through the windows and figure out the best fit.`][i];
+  }else if(focus==='privacy'){
+    intro=[`A little privacy can make a huge difference without changing the whole room.`,`Finished up a privacy film project${place}.`,`Here's a good example of getting more privacy without covering up the windows.`][i];
+    detail=[`We installed ${filmLabel} to obscure the view through the glass while still letting soft natural light into the space.`,`This is ${filmLabel}. It's a clean way to make glass more private without replacing it or keeping the blinds closed all day.`,`We used ${filmLabel} where the priority was privacy, but we still wanted the daylight coming through.`][i];
+    close=[`Bathrooms, sidelights, doors, interior glass. If you've got a spot like that, send me a picture and I'll tell you what I'd recommend.`,`Sometimes you don't need new glass. You just need the right film.`,`If you're trying to solve a privacy issue, send me a couple photos and we'll go over your options.`][i];
   }else if(focus==='decorative'){
-    let g=goal?` The goal was ${goal.replace(/[.!]+$/,'')}.`:'';
-    bodies=[`We installed ${film} to completely change the look of this glass.${g} Decorative film is an easy way to add character and privacy without replacing the glass itself.`,`This one was all about the details. ${film} gave the glass a finished custom look${goal?` while helping us accomplish exactly what the customer wanted: ${goal.replace(/[.!]+$/,'')}`:''}.`,`A simple piece of glass can change the feel of an entire space. We used ${film}${goal?` to ${goal.replace(/[.!]+$/,'')}`:''}, adding a custom decorative finish without the cost of replacing the glass.`];
-    closes=[`We carry several decorative film options, so the finished look can be matched to the space instead of using a one size fits all solution.`,`If you have glass that needs more character, privacy, or both, send us a picture and we can go over the options.`,`Decorative film can make a huge difference on doors, sidelights, bathrooms and interior glass. Dynamic Tintz serves homes and businesses throughout DFW.`];
+    intro=[`This one was all about the finished look.`,`Sometimes the glass itself is the detail that pulls a space together.`,`Another custom glass project${place} finished up.`][i];
+    detail=[`We installed ${filmLabel} to give the glass a more intentional, finished appearance.`,`We used ${filmLabel} to change the look of the glass without having to replace it.`,`A decorative film like ${filmLabel} can completely change the character of a door, window, or interior glass panel.`][i];
+    close=[`If you have a specific look in mind, send me a reference photo. We can see what film gets us closest.`,`The details matter on projects like this. That's what we focus on.`,`If you've got a glass design idea, I'd be glad to take a look.`][i];
   }else if(focus==='complete'){
-    bodies=[`We installed ${film} where the priority was simple: stop visibility through the glass and create complete privacy.`,`This ${film} installation was about privacy first, giving this glass a clean finished appearance while blocking the view through it.`,`For this project, the customer needed the view through the glass gone. ${film} gave them the privacy they were looking for without replacing the existing glass.`];
-    closes=[`When privacy matters more than maintaining a view through the glass, we have film options built specifically for that job.`,`Need to block visibility through a window or glass door? Send us a few pictures and dimensions and we can recommend the right film.`,`Dynamic Tintz installs specialty privacy film for homes and businesses throughout DFW.`];
+    intro=[`Some windows need privacy, period.`,`Not every window needs to keep a view through it.`,`Finished a specialty privacy film installation${place}.`][i];
+    detail=[`We installed ${filmLabel} where blocking visibility through the glass was the goal.`,`This is ${filmLabel}, used when you want the view through the glass blocked and a clean finished appearance.`,`We used ${filmLabel} to give this glass a consistent, opaque finish instead of leaving it see-through.`][i];
+    close=[`If you've got a window or door where privacy comes first, send me a photo and we'll talk through it.`,`There are different ways to handle privacy. The right one depends on what you need the glass to do.`,`Need a more complete privacy solution? Send me a few details and I'll point you in the right direction.`][i];
   }else if(focus==='custom'&&goal){
-    bodies=[`For this one we used ${film}. The goal was ${goal.replace(/[.!]+$/,'')}, and the finished glass came out exactly where we wanted it.`,`This ${film} project was built around one goal: ${goal.replace(/[.!]+$/,'')}. The before and after shows how much the right film can change a piece of glass.`,`We used ${film} on this ${home} to ${goal.replace(/[.!]+$/,'')}. A straightforward upgrade with a big difference in the finished result.`];
-    closes=[`Every piece of glass is a little different. Send us a few pictures and dimensions and we can help figure out the right film for the job.`,`Have a specific goal for your windows or glass? Dynamic Tintz handles specialty window film throughout DFW.`,`If you have a glass problem you are trying to solve, send it our way. We can walk you through the film options.`];
+    intro=[`Every job's a little different. This one had a specific goal.`,`A custom film project${place} we just wrapped up.`,`This is why I like figuring out what a customer actually needs before picking a film.`][i];
+    detail=`We installed ${filmLabel} with one thing in mind: ${goal.replace(/[.!]+$/,'')}.`;
+    close=[`If you've got something similar in mind, send me a few pictures and we'll see what makes sense.`,`The right result starts with choosing the right film for the glass.`,`If you're not sure which film would accomplish what you want, that's exactly what I can help with.`][i];
   }else{
-    bodies=[`We installed ${film} to help cut down heat and glare, reduce UV exposure, and make this ${home} more comfortable without taking away the natural light.`,`This ${film} installation helps the glass work harder by reducing solar heat and glare while keeping the space bright and comfortable.`,`For this one we used ${film} to improve comfort where the windows were letting in too much Texas heat and glare, without making the ${home} feel closed in.`];
-    closes=[`If certain rooms in your ${home} are getting cooked by the sun, shoot us a message. We handle residential and commercial window film throughout DFW.`,`Too much heat or glare coming through the glass? Send us a few pictures and dimensions and we can get you pointed in the right direction.`,`Want the natural light without as much heat and glare? Dynamic Tintz installs solar control and ceramic window film throughout DFW.`];
+    intro=[`Just finished a ${home}${place} with ${filmLabel}.`,`Here's a look at a recent ${filmLabel} installation${place}.`,`A good window film installation isn't just about how dark the glass looks.`][i];
+    detail=[`Ceramic and solar control film can help with the Texas heat and glare without making every room feel closed off. The right shade depends on the windows and how much light you want to keep.`,`We used ${filmLabel} to help manage the sun coming through the glass. The goal is a more comfortable space while keeping the finished look clean.`,`With ${filmLabel}, we're looking at how the glass performs, not just how it looks. Heat, glare, natural light, and the finished appearance all matter.`][i];
+    close=[`If you've got a room that's getting hammered by the sun, send me a few pictures and dimensions. I'll help you figure out what film makes sense.`,`No need to guess at film shades. Tell me what you're trying to fix and we can go through the options.`,`If you're considering tint for your home or business, reach out. I'll walk you through the films and what each one actually does.`][i];
   }
-  return `${intros[i]}\n\n${bodies[i]}\n\n${closes[i]}\n\nDynamicTintz.com\n\n${contentStudioHashtags(j)}`;
+  if(goal&&focus!=='custom'&&focus!=='mixed')detail+=` The specific goal here was ${goal.replace(/[.!]+$/,'')}.`;
+  if(goal&&focus==='mixed')detail+=` The goal was ${goal.replace(/[.!]+$/,'')}.`;
+  return `${intro}\n\n${detail}\n\n${close}\n\nDynamicTintz.com\n\n${contentStudioHashtags(j)}`;
 }
+
 function contentPairMarkup(pair,index){return `<div class="content-pair" data-content-pair="${pair.id}"><div class="content-pair-top"><b>Pair ${index+1}</b>${contentStudioPairs.length>1?`<button class="btn mini danger" data-content-remove="${pair.id}">Remove</button>`:''}</div><div class="content-upload-grid"><label class="content-upload ${pair.beforeUrl?'has-image':''}" data-upload-wrap="before"><input type="file" accept="image/*" data-content-file="before" data-pair-id="${pair.id}"><img src="${pair.beforeUrl||''}" alt="Before preview"><span class="content-upload-label"><b>BEFORE</b><span>Tap to choose photo</span></span></label><label class="content-upload ${pair.afterUrl?'has-image':''}" data-upload-wrap="after"><input type="file" accept="image/*" data-content-file="after" data-pair-id="${pair.id}"><img src="${pair.afterUrl||''}" alt="After preview"><span class="content-upload-label"><b>AFTER</b><span>Tap to choose photo</span></span></label></div><div class="content-output">${pair.outputUrl?`<img src="${pair.outputUrl}" alt="Finished before and after"><div class="content-studio-actions" style="margin-top:8px"><button class="btn primary mini" data-content-download="${pair.id}">Save Image</button><button class="btn mini" data-content-share-image="${pair.id}">Share Image</button></div>`:`<div class="content-preview-empty">Add both photos and DT OS will build the finished before and after.</div>`}</div></div>`}
 function renderContentPairs(){let box=$('contentPairs');if(!box)return;box.innerHTML=contentStudioPairs.map(contentPairMarkup).join('');box.querySelectorAll('[data-content-file]').forEach(inp=>inp.onchange=e=>contentStudioFileSelected(e.target));box.querySelectorAll('[data-content-remove]').forEach(b=>b.onclick=()=>removeContentPair(b.dataset.contentRemove));box.querySelectorAll('[data-content-download]').forEach(b=>b.onclick=()=>downloadContentImage(b.dataset.contentDownload));box.querySelectorAll('[data-content-share-image]').forEach(b=>b.onclick=()=>shareContentImage(b.dataset.contentShareImage));}
 function addContentPair(){contentStudioPairs.push({id:String(Date.now())+Math.random().toString(16).slice(2),beforeFile:null,afterFile:null,beforeUrl:'',afterUrl:'',blob:null,outputUrl:''});renderContentPairs()}
@@ -3468,7 +3609,7 @@ function removeContentPair(id){let p=contentStudioPairs.find(x=>x.id===id);[p?.b
 async function contentStudioFileSelected(input){let p=contentStudioPairs.find(x=>x.id===input.dataset.pairId),side=input.dataset.contentFile,file=input.files?.[0];if(!p||!file)return;let key=side+'Url';if(p[key])URL.revokeObjectURL(p[key]);p[side+'File']=file;p[key]=URL.createObjectURL(file);renderContentPairs();if(p.beforeFile&&p.afterFile)await generateContentPair(p.id)}
 function loadContentImage(file){return new Promise((resolve,reject)=>{let img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(file)})}
 function drawContentCover(ctx,img,x,y,w,h){let scale=Math.max(w/img.naturalWidth,h/img.naturalHeight),sw=w/scale,sh=h/scale,sx=(img.naturalWidth-sw)/2,sy=(img.naturalHeight-sh)/2;ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h)}
-async function generateContentPair(id){let p=contentStudioPairs.find(x=>x.id===id);if(!p?.beforeFile||!p?.afterFile)return;try{let [before,after]=await Promise.all([loadContentImage(p.beforeFile),loadContentImage(p.afterFile)]),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),W=1600,H=1000,photoH=870;canvas.width=W;canvas.height=H;ctx.fillStyle='#071315';ctx.fillRect(0,0,W,H);drawContentCover(ctx,before,0,0,W/2,photoH);drawContentCover(ctx,after,W/2,0,W/2,photoH);ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,0,220,70);ctx.fillRect(W/2,0,220,70);ctx.fillStyle='#fff';ctx.font='bold 32px Arial';ctx.fillText('BEFORE',28,47);ctx.fillText('AFTER',W/2+28,47);ctx.fillStyle='#18d6d1';ctx.fillRect(W/2-3,0,6,photoH);let logo=new Image();logo.src='dynamic-tintz-mark.png';await new Promise(r=>{logo.onload=r;logo.onerror=r});if(logo.naturalWidth)ctx.drawImage(logo,35,892,76,76);ctx.fillStyle='#fff';ctx.font='bold 31px Arial';ctx.fillText('DYNAMIC TINTZ',130,925);let meta=[contentStudioCity(contentStudioJob?.service_address||''),contentStudioFilm(contentStudioJob)].filter(Boolean).join('  •  ');if(meta){ctx.fillStyle='#9eb4ba';ctx.font='22px Arial';ctx.fillText(meta,130,958)}ctx.textAlign='right';ctx.fillStyle='#18d6d1';ctx.font='bold 23px Arial';ctx.fillText('DynamicTintz.com',W-38,940);ctx.textAlign='left';let blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.92));if(p.outputUrl)URL.revokeObjectURL(p.outputUrl);p.blob=blob;p.outputUrl=URL.createObjectURL(blob);renderContentPairs()}catch(e){toast('Could not create image: '+e.message)}}
+async function generateContentPair(id){let p=contentStudioPairs.find(x=>x.id===id);if(!p?.beforeFile||!p?.afterFile)return;try{let [before,after]=await Promise.all([loadContentImage(p.beforeFile),loadContentImage(p.afterFile)]),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),W=1600,H=1000,photoH=870;canvas.width=W;canvas.height=H;ctx.fillStyle='#071315';ctx.fillRect(0,0,W,H);drawContentCover(ctx,before,0,0,W/2,photoH);drawContentCover(ctx,after,W/2,0,W/2,photoH);ctx.fillStyle='rgba(0,0,0,.62)';ctx.fillRect(0,0,220,70);ctx.fillRect(W/2,0,220,70);ctx.fillStyle='#fff';ctx.font='bold 32px Arial';ctx.fillText('BEFORE',28,47);ctx.fillText('AFTER',W/2+28,47);ctx.fillStyle='#18d6d1';ctx.fillRect(W/2-3,0,6,photoH);let logo=new Image();logo.src='dynamic-tintz-mark.png';await new Promise(r=>{logo.onload=r;logo.onerror=r});if(logo.naturalWidth)ctx.drawImage(logo,35,892,76,76);ctx.fillStyle='#fff';ctx.font='bold 31px Arial';ctx.fillText('DYNAMIC TINTZ',130,925);let meta=[contentStudioCity(contentStudioJob?.service_address||''),contentStudioFilm(contentStudioJob)].filter(Boolean).join('  •  ');if(meta){ctx.fillStyle='#9eb4ba';ctx.font='22px Arial';ctx.fillText(meta,130,958,1080)}ctx.textAlign='right';ctx.fillStyle='#18d6d1';ctx.font='bold 23px Arial';ctx.fillText('DynamicTintz.com',W-38,940);ctx.textAlign='left';let blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.92));if(p.outputUrl)URL.revokeObjectURL(p.outputUrl);p.blob=blob;p.outputUrl=URL.createObjectURL(blob);renderContentPairs()}catch(e){toast('Could not create image: '+e.message)}}
 function contentImageFilename(id){let i=contentStudioPairs.findIndex(x=>x.id===id)+1,city=contentStudioCity(contentStudioJob?.service_address||'');return `Dynamic-Tintz-${city?city.replace(/[^a-z0-9]/gi,'-')+'-':''}Before-After-${i}.jpg`}
 async function downloadContentImage(id){let p=contentStudioPairs.find(x=>x.id===id);if(!p?.outputUrl)return;let mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||navigator.maxTouchPoints>1,file=p.blob?new File([p.blob],contentImageFilename(id),{type:'image/jpeg'}):null;try{if(mobile&&file&&navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:'Dynamic Tintz Before & After'});return}}catch(e){if(e.name==='AbortError')return}let a=document.createElement('a');a.href=p.outputUrl;a.download=contentImageFilename(id);document.body.appendChild(a);a.click();a.remove()}
 async function shareContentImage(id){let p=contentStudioPairs.find(x=>x.id===id);if(!p?.blob)return;let file=new File([p.blob],contentImageFilename(id),{type:'image/jpeg'});try{if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:'Dynamic Tintz Before & After'});else downloadContentImage(id)}catch(e){if(e.name!=='AbortError')downloadContentImage(id)}}
@@ -3508,7 +3649,7 @@ async function openCloudQuote(id,options={}){$('quoteBuilderPanel')?.setAttribut
     if(product)canonical=product.name;
   }catch{}
   $('qSquareItem').value=[...$('qSquareItem').options].some(o=>o.value===canonical)?canonical:'25% Ceramic Tint Install';
-}quoteAddons=normalizeAddons(q.additional_services||[]);renderQuoteAddons();$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
+}quoteAddons=normalizeAddons(q.additional_services||[]);renderQuoteAddons();$('qStatus').value=q.status||'New Lead';$('qMiles').value=q.miles||0;quoteMilesManual=true;setMileageAutoStatus('Stored mileage from this quote');$('qLead').value=q.customer?.lead_source||'Other';$('qNotes').value=q.notes||'';measures=Array.isArray(q.measurements)?q.measurements:[{id:1,area:'',w:0,h:0,qty:1}];multiFilmEnabled=quoteIsMultiFilm(measures);if($('qMultiFilm'))$('qMultiFilm').value=multiFilmEnabled?'yes':'no';if($('qMultiFilmHint'))$('qMultiFilmHint').textContent=multiFilmEnabled?'Select the inventory film beneath each room. Measurements and pricing stay the same.':'No changes to your normal single-film quote.';if(multiFilmEnabled&&!inventoryProductCache.length)inventoryProducts().then(renderMeasures).catch(()=>{});nextMeasure=Math.max(0,...measures.map(x=>Number(x.id)||0))+1;renderMeasures();calculateQuote();saveQuoteDraftLocal();
   if(options.jumpToMeasurements!==false){
     setTimeout(()=>{
       let target=$('quoteMeasurementsCard')||$('qSqft');
@@ -4374,7 +4515,7 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>clearQuoteForm(false));bind('newQuoteTop','onclick',()=>{$('quoteBuilderPanel')?.setAttribute('open','');clearQuoteForm();setTimeout(()=>$('qFirst')?.focus(),50)});bind('qMultiFilm','onchange',()=>setQuoteMultiFilm($('qMultiFilm').value==='yes'));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
   let el=$(id);if(!el)return;
   el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleQuoteAutosave);
 });
