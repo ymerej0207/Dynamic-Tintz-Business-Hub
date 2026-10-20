@@ -627,7 +627,7 @@ async function loadInventoryHomeAlerts(){
   let rows=await applyActiveReservationOverlay(data||[]);
   activeReservationOverlayWarning=Number(reconcileResult?.unmatched)||0;
   unmatchedScheduledReservationJobs=Array.isArray(reconcileResult?.unmatchedJobs)?reconcileResult.unmatchedJobs:[];
-  let priorityNames=['25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install'];
+  let priorityNames=['15% Ceramic Tint Install','25% Ceramic Tint Install','35% Ceramic Tint Install','45% Ceramic Tint Install'];
   let priority=priorityNames.map(n=>rows.find(x=>x.product_name===n)).filter(Boolean);
   let frostPriority=rows.find(x=>String(x.product_name||'').trim().toLowerCase()==='frosted tint install')||rows.find(x=>/frost/i.test(String(x.product_name||'')));
   if(frostPriority&&!priority.some(x=>x.product_id===frostPriority.product_id))priority.push(frostPriority);
