@@ -2906,7 +2906,7 @@ function renderQuoteResults(){
 
       <div class="quote-index-expanded">
         <div class="quote-index-top-actions">
-          ${phone?`<a class="btn primary quote-call-btn" href="tel:${esc(phone)}">Call Customer</a><a class="btn" href="sms:${esc(phone)}">Text Customer</a>`:''}
+          ${phone?`<a class="btn primary quote-call-btn" href="tel:${esc(phone)}">Call Customer</a><button class="btn" data-copyquotephone="${esc(phone)}">Copy Phone</button>`:''}
           <button class="btn primary" data-openquote="${q.id}">Open / Edit</button>
           ${isCare?'':`<button class="btn" data-windowmeasurements="${q.id}">Window Measurements</button>`}<button class="btn" data-quickshotdirect="${q.id}">QuickShot</button>
         </div>
@@ -2933,6 +2933,7 @@ function renderQuoteResults(){
     </details>`;
   }).join(''):'<div class="card muted">No matching cloud quotes.</div>';
 
+  $('savedQuotes').querySelectorAll('[data-copyquotephone]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();copyPhone(b.dataset.copyquotephone)});
   $('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=e=>{e.preventDefault();openCloudQuote(b.dataset.openquote)});
   $('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();createSquareDraft(b.dataset.squaredraft,b)});
   $('savedQuotes').querySelectorAll('[data-releasesquaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();releaseSquareDraft(b.dataset.releasesquaredraft)});
