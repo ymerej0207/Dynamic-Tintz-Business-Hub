@@ -3468,9 +3468,14 @@ function renderOperations(){
   let agenda=[
     ...jobs.map(j=>({kind:'job',value:j,date:operationDisplayDate(j)}))
   ];
+  // Completed jobs should follow their completion timestamp, not the original appointment.
+  // archived_at is set when a job is completed; updated_at is the fallback for older jobs.
+  let completedOnly=view==='archive'||$('operationStatus')?.value==='Completed';
   agenda.sort((a,b)=>{
-    let ad=new Date(a.date||0),bd=new Date(b.date||0);
-    return view==='archive'?bd-ad:ad-bd;
+    const completedDate=x=>x.value?.archived_at||x.value?.updated_at||x.value?.scheduled_start||x.value?.created_at||0;
+    let ad=new Date(completedOnly?completedDate(a):a.date||0),
+        bd=new Date(completedOnly?completedDate(b):b.date||0);
+    return completedOnly?bd-ad:ad-bd;
   });
 
   let title=$('operationsAgendaTitle'),meta=$('operationsAgendaMeta'),clear=$('operationsClearDate');
@@ -3617,14 +3622,58 @@ async function shareContentImage(id){let p=contentStudioPairs.find(x=>x.id===id)
 function generateContentPost(regen=false){if(!contentStudioJob)return;if(regen)contentPostVariant++;contentStudioFocusHint();$('contentSocialPost').value=contentStudioPostText(contentStudioJob,contentPostVariant)}
 async function copyContentPost(){let t=$('contentSocialPost')?.value||'';if(!t)return toast('Generate the post first.');await navigator.clipboard.writeText(t);toast('Social post copied.')}
 async function shareContentPost(){let t=$('contentSocialPost')?.value||'';if(!t)return toast('Generate the post first.');try{if(navigator.share)await navigator.share({title:'Dynamic Tintz Post',text:t});else await copyContentPost()}catch(e){if(e.name!=='AbortError')await copyContentPost()}}
+let contentStudioLinkedJobs=[];
 async function loadContentStudioPage(){
   if(!owner())return;
-  if(!operationsCache.length)await loadOperations();
-  let sel=$('contentJobLink');if(!sel)return;
-  let current=sel.value;
-  let jobs=[...operationsCache].sort((a,b)=>new Date(b.scheduled_start||b.created_at||0)-new Date(a.scheduled_start||a.created_at||0));
-  sel.innerHTML='<option value="">Select a job...</option>'+jobs.map(j=>{let customer=contentStudioCustomerName(j)||j.title||j.quote?.project_name||'Job',city=contentStudioCity(j.service_address||j.quote?.service_address||''),date=j.scheduled_start?new Date(j.scheduled_start).toLocaleDateString():'';return `<option value="${esc(j.id)}">${esc([customer,city,date].filter(Boolean).join(' • '))}</option>`}).join('');
-  if([...sel.options].some(o=>o.value===current))sel.value=current;
+  const sel=$('contentJobLink');
+  if(!sel)return;
+  const previous=sel.value;
+  sel.innerHTML='<option value="">Loading jobs...</option>';
+  // Content Studio must load its own jobs. The Operations cache may be empty
+  // when this page is opened directly after login.
+  const {data:jobRows,error:jobError}=await sb.from('jobs').select('*');
+  if(jobError){
+    console.warn('Content Studio job loading failed:',jobError);
+    sel.innerHTML='<option value="">Could not load jobs</option>';
+    toast('Could not load jobs: '+jobError.message);
+    return;
+  }
+  const jobs=jobRows||[];
+  const quoteIds=[...new Set(jobs.map(j=>j.quote_id).filter(Boolean))];
+  let quotes=[];
+  if(quoteIds.length){
+    const result=await sb.from('quotes').select('id,project_name,project_type,measurements,square_catalog_item_name,service_address,customer_id').in('id',quoteIds);
+    if(result.error)console.warn('Content Studio quote details unavailable:',result.error);
+    else quotes=result.data||[];
+  }
+  const customerIds=[...new Set(quotes.map(q=>q.customer_id).filter(Boolean))];
+  let customers=[];
+  if(customerIds.length){
+    const result=await sb.from('customers').select('id,first_name,last_name').in('id',customerIds);
+    if(result.error)console.warn('Content Studio customer names unavailable:',result.error);
+    else customers=result.data||[];
+  }
+  let plans=[];
+  if(jobs.length){
+    const result=await sb.from('job_material_plans').select('job_id,product:film_inventory_products(name)').in('job_id',jobs.map(j=>j.id));
+    if(result.error)console.warn('Content Studio film plan details unavailable:',result.error);
+    else plans=result.data||[];
+  }
+  const quoteMap=new Map(quotes.map(q=>[q.id,q]));
+  const customerMap=new Map(customers.map(c=>[c.id,c]));
+  const planMap=new Map(plans.map(p=>[p.job_id,p]));
+  contentStudioLinkedJobs=jobs.map(j=>{
+    const cached=operationsCache.find(o=>String(o.id)===String(j.id));
+    const quote=quoteMap.get(j.quote_id)||cached?.quote||null;
+    return {...(cached||{}),...j,quote:quote?{...quote,customer:customerMap.get(quote.customer_id)||quote.customer||null}:null,material_plan:planMap.get(j.id)||cached?.material_plan||null};
+  }).sort((a,b)=>new Date(b.scheduled_start||b.created_at||0)-new Date(a.scheduled_start||a.created_at||0));
+  sel.innerHTML='<option value="">'+(contentStudioLinkedJobs.length?'Select a job...':'No jobs found')+'</option>'+contentStudioLinkedJobs.map(j=>{
+    const customer=contentStudioCustomerName(j)||j.title||j.quote?.project_name||'Job';
+    const city=contentStudioCity(j.service_address||j.quote?.service_address||'');
+    const date=j.scheduled_start?new Date(j.scheduled_start).toLocaleDateString():'';
+    return `<option value="${esc(j.id)}">${esc([customer,city,date].filter(Boolean).join(' • '))}</option>`;
+  }).join('');
+  if([...sel.options].some(o=>o.value===previous))sel.value=previous;
 }
 function openStandaloneContentStudio(){
   let city=String($('contentManualCity')?.value||'').trim(),film=String($('contentManualFilm')?.value||'').trim(),type=String($('contentManualProject')?.value||'').trim();
@@ -3638,7 +3687,7 @@ function openStandaloneContentStudio(){
 }
 function linkContentStudioJob(){let id=$('contentJobLink')?.value;if(!id)return toast('Choose a job to link first.');openContentStudio(id)}
 function closeContentStudio(){contentStudioPairs.forEach(p=>[p.beforeUrl,p.afterUrl,p.outputUrl].forEach(u=>{if(u)URL.revokeObjectURL(u)}));contentStudioPairs=[];contentStudioJob=null;$('contentStudioModal')?.classList.remove('show')}
-function openContentStudio(jobId){let j=operationsCache.find(x=>String(x.id)===String(jobId));if(!j)return toast('Completed job not found.');contentStudioJob=j;contentStudioPairs=[];contentPostVariant=0;let customer=contentStudioCustomerName(j),city=contentStudioCity(j.service_address||j.quote?.service_address||''),film=contentStudioFilm(j),type=contentStudioProjectType(j);$('contentStudioCustomer').textContent=customer||j.title||j.quote?.project_name||'Completed Job';$('contentStudioMeta').innerHTML=`<div><span>City</span><b>${esc(city||'Not found')}</b></div><div><span>Film</span><b>${esc(film)}</b></div><div><span>Project</span><b>${esc(type)}</b></div>`;if($('contentFocus'))$('contentFocus').value='auto';if($('contentGoal'))$('contentGoal').value='';contentStudioFocusHint();$('contentSocialPost').value=contentStudioPostText(j,0);$('contentStudioModal').classList.add('show');addContentPair()}
+function openContentStudio(jobId){let j=contentStudioLinkedJobs.find(x=>String(x.id)===String(jobId))||operationsCache.find(x=>String(x.id)===String(jobId));if(!j)return toast('Completed job not found.');contentStudioJob=j;contentStudioPairs=[];contentPostVariant=0;let customer=contentStudioCustomerName(j),city=contentStudioCity(j.service_address||j.quote?.service_address||''),film=contentStudioFilm(j),type=contentStudioProjectType(j);$('contentStudioCustomer').textContent=customer||j.title||j.quote?.project_name||'Completed Job';$('contentStudioMeta').innerHTML=`<div><span>City</span><b>${esc(city||'Not found')}</b></div><div><span>Film</span><b>${esc(film)}</b></div><div><span>Project</span><b>${esc(type)}</b></div>`;if($('contentFocus'))$('contentFocus').value='auto';if($('contentGoal'))$('contentGoal').value='';contentStudioFocusHint();$('contentSocialPost').value=contentStudioPostText(j,0);$('contentStudioModal').classList.add('show');addContentPair()}
 
 async function ownerUpdateJobStatus(jobId,status){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Job not found.');if(status==='Completed'){if(!confirm('Mark this job completed and move it to the archive?\n\nYou will confirm the actual film used before inventory is finalized.'))return;try{let f=await finalizeScheduledJobInventory(j.id);if(f?.canceled)return toast('Completion canceled. Inventory was not changed.')}catch(e){return toast('Inventory finalization failed: '+e.message)}}let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status,archived_at:status==='Completed'?now:null,updated_at:now}).eq('id',j.id);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:status==='Completed'?'Completed':'Scheduled',updated_at:now}).eq('id',j.quote_id);let calendarAction=calendarActionForJobStatus(status);if(calendarAction){try{await applyCalendarStatus(j.id,status)}catch(e){console.warn('Calendar sync warning:',e)}}toast(status==='Completed'?'Job completed and archived.':status==='Canceled'?'Job canceled and removed from calendar.':`Job marked ${status}.`);await loadOperations();dashboard()}
 async function restoreArchivedJob(jobId){let j=operationsCache.find(x=>x.id===jobId);if(!j)return toast('Archived job not found.');if(!confirm('Restore this job to the active Operations board?'))return;let now=new Date().toISOString(),{error}=await sb.from('jobs').update({status:'Scheduled',archived_at:null,updated_at:now}).eq('id',jobId);if(error)return toast(error.message);if(j.quote_id)await sb.from('quotes').update({status:'Scheduled',updated_at:now}).eq('id',j.quote_id);toast('Job restored to Active Jobs.');await loadOperations();dashboard()}
