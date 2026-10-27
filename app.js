@@ -170,7 +170,7 @@ function renderNav(){
   $("nav").innerHTML=t.map(x=>`<button data-v="${x[0]}"><b class="nav-icon">${navIcon(x[1])}</b><span>${x[2]}</span></button>`).join('');
   /* Navigation clicks are handled by delegated app-level routing. */
 }
-async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner')dashboard();if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='contentstudio')loadContentStudioPage();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
+async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner'){dashboard();loadCleaningApprovals()}if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='contentstudio')loadContentStudioPage();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
 function mondayWeekBounds(reference=new Date()){
   let d=new Date(reference);d.setHours(0,0,0,0);
   let day=d.getDay(),diff=day===0?-6:1-day;
@@ -2785,7 +2785,7 @@ async function saveCloudQuote(){
   let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:measures,updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload).select('id').single();if(res.error)return toast(res.error.message);let savedQuoteId=editingQuoteId||res?.data?.id||null;toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();await loadQuotes();if(savedQuoteId){try{await openCloudQuote(savedQuoteId,{jumpToMeasurements:false})}catch(e){console.warn('Reopen saved quote:',e)}scrollToCurrentQuoteTop()}else{clearQuoteForm(false);scrollToCurrentQuoteTop()}
   }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
 }
-async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults()}
+async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults();await loadCleaningApprovals()}
 
 async function syncCustomerLifecycle(customerId,status){
   if(!customerId)return {ok:true,count:0};
@@ -2907,12 +2907,85 @@ function quoteProjectIcon(type){
     : `<span class="quote-type-icon residential" aria-label="Residential"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10.5V21h13V10.5M9 21v-6h6v6"/></svg></span>`;
 }
 
+
+// v7.19.0: customer-selectable cleaning packages, owner approval before Square delivery.
+let cleaningOptionByQuote=new Map(),cleaningApprovalsLoading=false;
+const cleaningOptionalNames={screens:'Window Screen Cleaning',tracks:'Window Track Detailing',combo:'Screen and Track Detail',hardwater:'Hard-Water Spot Treatment',repellent:'Exterior Glass Water-Repellent Finish'};
+function cleaningInt(id){return Math.max(0,Math.floor(Number($(id)?.value)||0))}
+function cleaningBaseLines(q){return (Array.isArray(q.additional_services)?q.additional_services:[]).filter(l=>l.kind==='package'||l.name==='Extended Service Area'||/^Additional Standard Window/.test(l.name))}
+async function cleaningOptionCall(action,payload={}){
+  const{data:{session:s},error:e}=await sb.auth.getSession();if(e||!s?.access_token)throw new Error('Sign in again to manage cleaning quotes.');
+  const r=await sb.functions.invoke('cleaning-quote-options',{body:{action,...payload},headers:{Authorization:'Bearer '+s.access_token}});
+  if(r.error){let message=r.error.message||'Request failed';try{const details=await r.error.context?.json();message=details?.error||details?.message||message}catch{}throw new Error(message)}
+  if(r.data?.error)throw new Error(r.data.error);return r.data;
+}
+function openCleaningOffer(id){
+  const q=(window._cloudQuotes||[]).find(x=>x.id===id);if(!q)return toast('Quote not found');
+  const existing=cleaningOptionByQuote.get(id);
+  if(existing?.status==='approved')return toast('This customer selection was already marked sent.');
+  if(existing&&['processing','draft_ready','draft_error'].includes(existing.status)){
+    $('quoteStatusFilter').value='awaiting_cleaning';renderQuoteResults();$('cleaningApprovalPanel')?.scrollIntoView({behavior:'smooth',block:'start'});return;
+  }
+  if(q.square_invoice_id||q.square_order_id)return toast('This quote already has a Square draft. Review or release it first.');
+  const base=cleaningBaseLines(q);if(!base.length)return toast('Save a window cleaning package on this quote first.');
+  $('cleaningOfferQuoteId').value=id;$('cleaningOfferEmail').value=q.customer?.email||'';
+  $('cleaningOfferBase').innerHTML=base.map(l=>`<div class="summary-line"><span>${esc(l.name)} ${esc(l.variation||'')}</span><strong>${money(careLineTotal(l))}</strong></div>`).join('');
+  for(const [key,name] of Object.entries(cleaningOptionalNames)){
+    const line=(q.additional_services||[]).find(l=>l.name===name);
+    const el=$('cleaningOffer'+key[0].toUpperCase()+key.slice(1));if(el)el.value=line?.qty||0;
+  }
+  $('cleaningOfferMessage').textContent='';$('cleaningOfferModal').classList.add('show');
+}
+async function sendCleaningOffer(){
+ const btn=$('sendCleaningOffer'),id=$('cleaningOfferQuoteId').value,email=$('cleaningOfferEmail').value.trim();
+ const options={};for(const key of Object.keys(cleaningOptionalNames))options[key]=cleaningInt('cleaningOffer'+key[0].toUpperCase()+key.slice(1));
+ if(!email.includes('@'))return toast('Enter the customer email address.');
+ if(options.combo&&(options.screens||options.tracks))return toast('Use combined screen/track sets OR individual screens/tracks.');
+ if(!Object.values(options).some(Boolean))return toast('Offer at least one extra service.');
+ btn.disabled=true;btn.textContent='Sending...';
+ try{await cleaningOptionCall('send',{quote_id:id,email,options});$('cleaningOfferModal').classList.remove('show');toast('Cleaning options emailed. Customer can select their package.');await loadCleaningApprovals()}
+ catch(e){$('cleaningOfferMessage').textContent=e.message||String(e);toast('Email not sent: '+(e.message||'Unknown error'))}
+ finally{btn.disabled=false;btn.textContent='Email Both Options to Customer'}
+}
+function cleaningStatusLabel(row){return row.status==='draft_ready'?'Square draft ready for approval':row.status==='draft_error'?'Square draft needs attention':row.status==='processing'?'Processing customer selection':row.status}
+async function loadCleaningApprovals(){
+ if(profile?.role!=='owner'||cleaningApprovalsLoading)return;cleaningApprovalsLoading=true;
+ try{
+  const{data,error}=await sb.from('cleaning_quote_options').select('quote_id,status,selected_keys,selected_lines,selected_total_cents,selected_at,square_invoice_id,square_error,notification_error,recipient_email,quote_snapshot').order('selected_at',{ascending:false,nullsFirst:false});
+  if(error)throw error;
+  cleaningOptionByQuote=new Map((data||[]).map(x=>[x.quote_id,x]));
+  const pending=(data||[]).filter(x=>['processing','draft_ready','draft_error'].includes(x.status));
+  const panel=$('cleaningApprovalPanel');if(panel){panel.style.display=pending.length?'':'none';$('cleaningApprovalCount').textContent='('+pending.length+')';
+   $('cleaningApprovalRows').innerHTML=pending.map(row=>{
+    const q=(window._cloudQuotes||[]).find(x=>x.id===row.quote_id);
+    const name=[q?.customer?.first_name,q?.customer?.last_name].filter(Boolean).join(' ')||row.quote_snapshot?.customer_name||'Customer';
+    const lines=Array.isArray(row.selected_lines)?row.selected_lines:[];
+    const total=Number(row.selected_total_cents||0)/100;
+    return `<div class="card" style="margin:10px 0;padding:14px"><div class="head"><strong>${esc(name)}</strong><span class="pill">${esc(cleaningStatusLabel(row))}</span></div><div class="muted">${esc(lines.map(l=>l.name+(l.qty>1?' ×'+l.qty:'')).join(' • '))}</div><strong>${money(total)}</strong>${row.square_error?`<div style="color:#d76c55">${esc(row.square_error)}</div>`:''}${row.notification_error?`<div class="muted">Notification warning: ${esc(row.notification_error)}</div>`:''}<div class="actions" style="margin-top:10px">${row.status==='draft_ready'?`<button class="btn primary" data-cleanmark="${row.quote_id}">Mark Sent After Square Review</button>`:''}${row.status==='draft_error'?`<button class="btn warn" data-cleanretry="${row.quote_id}">Retry Square Draft</button>`:''}<button class="btn" data-cleanopen="${row.quote_id}">Open Quote</button></div></div>`;
+   }).join('');
+   panel.querySelectorAll('[data-cleanmark]').forEach(b=>b.onclick=()=>markCleaningSent(b.dataset.cleanmark,b));
+   panel.querySelectorAll('[data-cleanretry]').forEach(b=>b.onclick=()=>retryCleaningSquare(b.dataset.cleanretry,b));
+   panel.querySelectorAll('[data-cleanopen]').forEach(b=>b.onclick=()=>openCloudQuote(b.dataset.cleanopen));
+  }
+  const alert=$('cleaningGlobalAlert');if(alert){alert.style.display=pending.length?'':'none';alert.textContent=pending.length?`${pending.length} cleaning quote selection${pending.length===1?'':'s'} need your review. Tap to open Quotes.`:'';}
+  if($('savedQuotes')&&$('quotes')?.classList.contains('active'))renderQuoteResults();
+ }catch(e){console.warn('Cleaning quote approval notifications unavailable:',e);const alert=$('cleaningGlobalAlert');if(alert){alert.style.display='';alert.textContent='Cleaning quote alerts could not be checked. Tap to retry.';}}
+ finally{cleaningApprovalsLoading=false}
+}
+async function retryCleaningSquare(id,btn){if(!confirm('Retry automatic Square draft creation? Check Square first to avoid duplicate invoices.'))return;btn.disabled=true;try{await cleaningOptionCall('retry',{quote_id:id});toast('Square draft created. Review before sending.')}catch(e){alert(e.message)}finally{btn.disabled=false;await loadQuotes()}}
+async function markCleaningSent(id,btn){if(!confirm('Have you reviewed AND sent the invoice in Square? This only clears the in-app reminder.'))return;btn.disabled=true;try{await cleaningOptionCall('mark_sent',{quote_id:id});toast('Marked as sent.');await loadQuotes()}catch(e){alert(e.message)}finally{btn.disabled=false}}
+if($('sendCleaningOffer'))$('sendCleaningOffer').onclick=sendCleaningOffer;
+if($('closeCleaningOffer'))$('closeCleaningOffer').onclick=()=>$('cleaningOfferModal').classList.remove('show');
+if($('refreshCleaningApprovals'))$('refreshCleaningApprovals').onclick=loadCleaningApprovals;
+if($('cleaningGlobalAlert'))$('cleaningGlobalAlert').onclick=async()=>{await show('quotes');$('quoteStatusFilter').value='awaiting_cleaning';renderQuoteResults();$('cleaningApprovalPanel')?.scrollIntoView({behavior:'smooth',block:'start')};
+setInterval(()=>{if(profile?.role==='owner'&&session)loadCleaningApprovals()},45000);
+
 function renderQuoteResults(){
   let data=window._cloudQuotes||[],
       q=($('quoteSearch')?.value||'').toLowerCase(),
       status=$('quoteStatusFilter')?.value||'active',
       filtered=data
-        .filter(x=>{let archived=['Completed','Lost'],statusMatch=status==='active'?!archived.includes(x.status):status==='archived'?archived.includes(x.status):!status||x.status===status;return statusMatch&&JSON.stringify(x).toLowerCase().includes(q)})
+        .filter(x=>{let archived=['Completed','Lost'],statusMatch=status==='active'?!archived.includes(x.status):status==='archived'?archived.includes(x.status):status==='awaiting_cleaning'?['processing','draft_ready','draft_error'].includes(cleaningOptionByQuote.get(x.id)?.status):!status||x.status===status;return statusMatch&&JSON.stringify(x).toLowerCase().includes(q)})
         .sort((a,b)=>new Date(b.created_at||b.updated_at||0)-new Date(a.created_at||a.updated_at||0)),
       open=data.filter(x=>!['Completed','Lost'].includes(x.status)),
       value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),
@@ -2932,9 +3005,12 @@ function renderQuoteResults(){
         squareItem=q.square_catalog_item_name||'25% Ceramic Tint Install',
         billed=Math.ceil(actual),
         isCare=/Cleaning$/.test(q.project_type||''),
+        cleaningOption=cleaningOptionByQuote.get(q.id),
         squareButton=q.square_invoice_id
           ?`<button class="btn" disabled>Square Draft ${esc(q.square_invoice_number||q.square_status||'Created')}</button><button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
-          :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
+          :isCare&&cleaningOption&&['sent','processing','draft_error'].includes(cleaningOption.status)
+            ?`<button class="btn" disabled>${cleaningOption.status==='sent'?'Awaiting Customer Selection':'Use Cleaning Approval Panel'}</button>`
+            :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
 
     return `<details class="quote-index-card" data-quoteindex="${q.id}">
       <summary class="quote-index-summary">
@@ -2970,7 +3046,7 @@ function renderQuoteResults(){
 
         <div class="actions quote-index-more-actions">
           ${squareButton}
-          ${isCare?'':`<button class="btn" data-optimizequote="${q.id}">Optimize Roll</button>`}
+          ${isCare?`<button class="btn" data-offercleaning="${q.id}">${cleaningOptionByQuote.get(q.id)?.status==='sent'?'Resend Cleaning Options':cleaningOptionByQuote.get(q.id)&&['processing','draft_ready','draft_error','approved'].includes(cleaningOptionByQuote.get(q.id).status)?'View Customer Selection':'Offer Two Cleaning Options'}</button>`:`<button class="btn" data-optimizequote="${q.id}">Optimize Roll</button>`}
           <button class="btn" data-duplicatequote="${q.id}">Duplicate</button>
           <button class="btn" data-schedulequote="${q.id}">${job?'Edit Assignment':'Schedule & Assign'}</button>
           ${job?`<button class="btn warn" data-removeassignment="${q.id}" data-jobid="${job.id}">Remove Assignment</button>`:''}
@@ -2985,6 +3061,7 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=e=>{e.preventDefault();openCloudQuote(b.dataset.openquote)});
   $('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();createSquareDraft(b.dataset.squaredraft,b)});
   $('savedQuotes').querySelectorAll('[data-releasesquaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();releaseSquareDraft(b.dataset.releasesquaredraft)});
+  $('savedQuotes').querySelectorAll('[data-offercleaning]').forEach(b=>b.onclick=e=>{e.preventDefault();openCleaningOffer(b.dataset.offercleaning)});
   $('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=e=>{e.preventDefault();openQuoteInOptimizer(b.dataset.optimizequote)});
   $('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=e=>{e.preventDefault();duplicateCloudQuote(b.dataset.duplicatequote)});
   $('savedQuotes').querySelectorAll('[data-schedulequote]').forEach(b=>b.onclick=e=>{e.preventDefault();openScheduleJob(b.dataset.schedulequote)});
