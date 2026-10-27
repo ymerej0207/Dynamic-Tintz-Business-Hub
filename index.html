@@ -240,12 +240,32 @@
     <div class="actions quote-top-actions" style="margin-top:0">
       <button id="newCareQuote" class="btn" type="button">Window Care Quote</button>
       <button id="quickShotQuote" class="btn">QuickShot Quote</button>
-      <button id="newQuoteTop" class="app-round-action" aria-label="New quote">+</button>
+      <button id="newQuoteTop" class="btn primary" type="button" aria-controls="quoteBuilderPanel" aria-expanded="false">+ Fast Quote Builder</button>
     </div>
   </div>
 
+  <section class="app-quote-list-panel">
+    <div class="head"><div><h2>Saved Quotes</h2><div class="muted">Your latest five quotes are shown first. Search or filter to find any quote instantly.</div></div><span id="quoteVisibleCount" class="pill">Latest 5</span></div>
+<details id="quoteFiltersPanel" class="quote-filters-sheet"><summary>Search &amp; Filter Quotes <span class="muted">Tap to expand</span></summary>
+<div class="card">
+<div class="grid2">
+<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
+<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="active" selected>Active Pipeline</option><option value="archived">Archive</option><option value="awaiting_cleaning">Awaiting Approval</option><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
+</div>
+<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
+</div>
+</details>
+<section id="cleaningApprovalPanel" class="card" style="display:none;border-color:#2b9692;margin:12px 0" aria-live="polite">
+  <div class="head"><div><h3 style="margin:0">Cleaning Quotes Awaiting Approval <span id="cleaningApprovalCount"></span></h3><div class="muted">Customer choices are saved. Square drafts stay unsent until you review them.</div></div><button id="refreshCleaningApprovals" class="btn">Refresh</button></div>
+  <div id="cleaningApprovalRows"></div>
+</section>
+<div id="savedQuotes"></div>
+<div class="quote-load-more-wrap"><button id="loadMoreQuotes" class="btn" type="button" style="display:none">Load More Quotes</button><span id="quoteListProgress" class="muted"></span></div>
+
+  </section>
+
   <details id="quoteBuilderPanel" class="app-builder-sheet">
-    <summary><span>Window Tint Quote</span><small>Tap to open / close</small></summary>
+    <summary><span>Fast Quote Builder</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner">
       <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="newQuote" class="btn primary">New Quote</button></div></div>
       <div id="quoteEditorTop" class="quote-editor-top-anchor"></div>
@@ -441,25 +461,6 @@
     </div>
   </details>
 
-  <section class="app-quote-list-panel">
-    <div class="head"><div><h2>Saved Quotes</h2><div class="muted">Your latest five quotes are shown first. Search or filter to find any quote instantly.</div></div><span id="quoteVisibleCount" class="pill">Latest 5</span></div>
-<details id="quoteFiltersPanel" class="quote-filters-sheet"><summary>Search &amp; Filter Quotes <span class="muted">Tap to expand</span></summary>
-<div class="card">
-<div class="grid2">
-<div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
-<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="active" selected>Active Pipeline</option><option value="archived">Archive</option><option value="awaiting_cleaning">Awaiting Approval</option><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
-</div>
-<div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
-</div>
-</details>
-<section id="cleaningApprovalPanel" class="card" style="display:none;border-color:#2b9692;margin:12px 0" aria-live="polite">
-  <div class="head"><div><h3 style="margin:0">Cleaning Quotes Awaiting Approval <span id="cleaningApprovalCount"></span></h3><div class="muted">Customer choices are saved. Square drafts stay unsent until you review them.</div></div><button id="refreshCleaningApprovals" class="btn">Refresh</button></div>
-  <div id="cleaningApprovalRows"></div>
-</section>
-<div id="savedQuotes"></div>
-<div class="quote-load-more-wrap"><button id="loadMoreQuotes" class="btn" type="button" style="display:none">Load More Quotes</button><span id="quoteListProgress" class="muted"></span></div>
-
-  </section>
 
 </main>
 
