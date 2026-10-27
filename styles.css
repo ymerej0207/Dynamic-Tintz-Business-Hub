@@ -1869,3 +1869,14 @@ button.app-kpi-card{cursor:pointer}
 
 /* v7.18.0: window-level film selector only when multiple films are enabled. */
 .multi-film-switch{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:2px 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:12px}.multi-film-switch label{font-weight:700;font-size:13px}.multi-film-switch select{width:auto;min-width:170px;padding:8px}.multi-film-switch small{flex-basis:100%}.window-film-label{display:block;margin-top:6px;font-size:11px;font-weight:700;color:var(--teal2)}.window-film-select{width:100%;margin-top:4px;padding:8px;font-size:12px}.job-material-card [hidden]{display:none!important}#scheduleMultiFilmSummary:not([hidden]){border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0}#scheduleMultiFilmSummary small{display:block;margin-top:9px}
+
+/* Compact quotes workspace: filters are tucked away until needed. */
+.quote-filters-sheet{margin:10px 0 14px;border:1px solid var(--border,#30363d);border-radius:12px;overflow:hidden}
+.quote-filters-sheet>summary{cursor:pointer;list-style:none;padding:14px 16px;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.quote-filters-sheet>summary::-webkit-details-marker{display:none}
+.quote-filters-sheet>summary:after{content:'⌄';font-size:18px;opacity:.65}
+.quote-filters-sheet[open]>summary:after{content:'⌃'}
+.quote-filters-sheet>.card{margin:0;border-radius:0;border-left:0;border-right:0;border-bottom:0}
+.quote-load-more-wrap{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:18px 0 30px}
+.quote-load-more-wrap .btn{min-width:190px}
+@media(max-width:650px){.quote-load-more-wrap{flex-direction:column}.quote-load-more-wrap .btn{width:100%}}

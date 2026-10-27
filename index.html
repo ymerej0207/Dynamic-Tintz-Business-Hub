@@ -442,7 +442,8 @@
   </details>
 
   <section class="app-quote-list-panel">
-    <div class="head"><h2>Saved Quotes</h2></div>
+    <div class="head"><div><h2>Saved Quotes</h2><div class="muted">Your latest five quotes are shown first. Search or filter to find any quote instantly.</div></div><span id="quoteVisibleCount" class="pill">Latest 5</span></div>
+<details id="quoteFiltersPanel" class="quote-filters-sheet"><summary>Search &amp; Filter Quotes <span class="muted">Tap to expand</span></summary>
 <div class="card">
 <div class="grid2">
 <div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
@@ -450,11 +451,13 @@
 </div>
 <div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
 </div>
+</details>
 <section id="cleaningApprovalPanel" class="card" style="display:none;border-color:#2b9692;margin:12px 0" aria-live="polite">
   <div class="head"><div><h3 style="margin:0">Cleaning Quotes Awaiting Approval <span id="cleaningApprovalCount"></span></h3><div class="muted">Customer choices are saved. Square drafts stay unsent until you review them.</div></div><button id="refreshCleaningApprovals" class="btn">Refresh</button></div>
   <div id="cleaningApprovalRows"></div>
 </section>
 <div id="savedQuotes"></div>
+<div class="quote-load-more-wrap"><button id="loadMoreQuotes" class="btn" type="button" style="display:none">Load More Quotes</button><span id="quoteListProgress" class="muted"></span></div>
 
   </section>
 

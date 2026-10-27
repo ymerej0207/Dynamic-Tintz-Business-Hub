@@ -2980,6 +2980,8 @@ if($('refreshCleaningApprovals'))$('refreshCleaningApprovals').onclick=loadClean
 if($('cleaningGlobalAlert'))$('cleaningGlobalAlert').onclick=async()=>{await show('quotes');$('quoteStatusFilter').value='awaiting_cleaning';renderQuoteResults();$('cleaningApprovalPanel')?.scrollIntoView({behavior:'smooth',block:'start'});};
 setInterval(()=>{if(profile?.role==='owner'&&session)loadCleaningApprovals()},45000);
 
+let quoteVisibleLimit=5;
+function resetQuoteVisibleLimit(){quoteVisibleLimit=5;renderQuoteResults()}
 function renderQuoteResults(){
   let data=window._cloudQuotes||[],
       q=($('quoteSearch')?.value||'').toLowerCase(),
@@ -2995,7 +2997,11 @@ function renderQuoteResults(){
   $('quoteAverage').textContent=money(avg);
   $('quoteCount').textContent=data.length;
 
-  $('savedQuotes').innerHTML=filtered.length?filtered.map(q=>{
+  const shown=filtered.slice(0,quoteVisibleLimit);
+  if($('quoteVisibleCount'))$('quoteVisibleCount').textContent=`${Math.min(shown.length,filtered.length)} of ${filtered.length}`;
+  if($('quoteListProgress'))$('quoteListProgress').textContent=filtered.length>5?`Showing ${shown.length} of ${filtered.length} matching quotes`:'';
+  if($('loadMoreQuotes')){const more=filtered.length-shown.length;$('loadMoreQuotes').style.display=more>0?'':'none';$('loadMoreQuotes').textContent=more>0?`Load More Quotes (${Math.min(5,more)} next)`:'';}
+  $('savedQuotes').innerHTML=filtered.length?shown.map(q=>{
     let job=Array.isArray(q.jobs)?q.jobs[0]:q.jobs,
         globalIndex=data.indexOf(q),
         actual=Number(q.total_sqft)||0,
@@ -4714,7 +4720,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('addQuoteAddon','onclick',addQuoteAddon);bind('quoteBackToTop','onclick',scrollToCurrentQuoteTop);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('openAngiCreditReport','onclick',openAngiCreditReport);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',renderQuoteResults);bind('quoteStatusFilter','onchange',renderQuoteResults);bind('operationView','onchange',async()=>{
+document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('openAngiCreditReport','onclick',openAngiCreditReport);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',resetQuoteVisibleLimit);bind('quoteStatusFilter','onchange',resetQuoteVisibleLimit);bind('loadMoreQuotes','onclick',()=>{quoteVisibleLimit+=5;renderQuoteResults()});bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';
