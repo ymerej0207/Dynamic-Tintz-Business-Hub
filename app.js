@@ -1793,7 +1793,7 @@ function card(l,due=false){
       <button class="btn" data-log="${l.id}">Log Attempt</button>
       <button class="btn" data-leadquote="${l.id}">Create Quote</button>
       <button class="btn" data-leadcare="${l.id}">Window Care Quote</button>
-      ${angiLead(l)?`<span class="lead-credit-separator" aria-hidden="true"></span>${l.phone?`<button class="btn" data-angi-copy-followup="${l.id}">Copy Follow-Up</button>`:''}<button class="btn ${angiFlagged(l)?'warn':''}" data-angicredit="${l.id}">${angiFlagged(l)?'Credit Flagged':'Flag for Angi Credit'}</button>`:''}
+      ${angiLead(l)?`<span class="lead-credit-separator" aria-hidden="true"></span>${l.phone?`<button class="btn" data-angi-copy-followup="${l.id}">Copy Follow-Up</button>`:''}<button class="btn ${angiFlagged(l)?'warn':''}" data-angicredit="${l.id}">${angiFlagged(l)?'Credit Flagged':'Flag for Angi Credit'}</button>${l.email&&angiFlagged(l)&&!angiNoticeSent(l)?`<button class="btn" data-angi-automotive-notice="${l.id}">Send Automotive Notice</button>`:''}`:''}
       ${owner()?`<button class="btn danger" data-deletelead="${l.id}">Delete</button>`:''}
     </div>
   </article>`
@@ -1807,7 +1807,7 @@ async function copyPhone(phone){
   if(!number)return toast('No phone number is saved for this lead.');
   try{await copyText(number);toast('Phone number copied.')}catch(error){toast('Could not copy automatically. Press and hold the number to copy it.')}
 }
-function bindLeadActions(container=document){container.querySelectorAll('[data-angicredit]').forEach(b=>b.onclick=()=>toggleAngiCredit(b.dataset.angicredit));container.querySelectorAll('[data-angi-copy-followup]').forEach(b=>b.onclick=()=>copyAngiLeadFollowup(b.dataset.angiCopyFollowup));container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
+function bindLeadActions(container=document){container.querySelectorAll('[data-angi-automotive-notice]').forEach(b=>b.onclick=()=>sendAngiAutomotiveNotice(b.dataset.angiAutomotiveNotice,b));container.querySelectorAll('[data-angicredit]').forEach(b=>b.onclick=()=>toggleAngiCredit(b.dataset.angicredit));container.querySelectorAll('[data-angi-copy-followup]').forEach(b=>b.onclick=()=>copyAngiLeadFollowup(b.dataset.angiCopyFollowup));container.querySelectorAll('[data-copyphone]').forEach(b=>b.onclick=()=>copyPhone(b.dataset.copyphone));container.querySelectorAll('[data-log]').forEach(b=>b.onclick=()=>{$('activityId').value=b.dataset.log;$('activityModal').classList.add('show')});container.querySelectorAll('[data-leadquote]').forEach(b=>b.onclick=()=>createQuoteFromLead(b.dataset.leadquote));container.querySelectorAll('[data-leadcare]').forEach(b=>b.onclick=()=>createCareQuoteFromLead(b.dataset.leadcare));container.querySelectorAll('[data-deletelead]').forEach(b=>b.onclick=()=>deleteLead(b.dataset.deletelead))}
 function leadDate(l){return new Date(l.received_at||l.created_at||l.updated_at||0)}
 function angiLead(l){return String(leadSourceLabel(l)).toLowerCase().includes('angi')}
 function angiFee(l){
