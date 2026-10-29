@@ -2151,18 +2151,20 @@ function careSelectOptions(){
 function careSelection(){
  let [id,index]=($('carePackage').value||'').split(':'),pkg=[...CARE_PACKAGES.residential,...CARE_PACKAGES.commercial].find(p=>p.id===id);if(!pkg)return null;
  let visit=careVisit(),variant=pkg[visit][Number(index)||0];
- if($('careMarket').value==='residential'&&$('careScope')?.value==='partial'){
-  let count=Math.max(1,Math.min(15,careInt('careWindowCount')||1)),range=count<=5?'01-05':count<=10?'06-10':'11-15',label=count<=5?'1 to 5 Windows':count<=10?'6 to 10 Windows':'11 to 15 Windows';
-  let both=pkg.id==='res-both',prices=both?(visit==='initial'?{'01-05':149,'06-10':219,'11-15':269}:{'01-05':119,'06-10':175,'11-15':215}):(visit==='initial'?{'01-05':99,'06-10':149,'11-15':189}:{'01-05':79,'06-10':119,'11-15':149});
-  variant={name:label+', '+(visit==='initial'?'First Visit':'Return Visit'),price:prices[range],sku:'DTC-WC-RES-'+(both?'BOTH':'EXT')+'-'+range+'-'+(visit==='initial'?'FIRST':'RETURN')};
+ if($('careMarket').value==='residential'){
+  let count=Math.max(1,careInt('careWindowCount')||1),both=pkg.id==='res-both';
+  let range=count<=5?'01-05':count<=10?'06-10':count<=15?'11-15':'WHOLE';
+  let label=count<=5?'1 to 5 Windows':count<=10?'6 to 10 Windows':count<=15?'11 to 15 Windows':'Whole Home (first 15 windows)';
+  let prices=both?(visit==='initial'?{'01-05':149,'06-10':219,'11-15':269,'WHOLE':309}:{'01-05':119,'06-10':175,'11-15':215,'WHOLE':269}):(visit==='initial'?{'01-05':99,'06-10':149,'11-15':189,'WHOLE':219}:{'01-05':79,'06-10':119,'11-15':149,'WHOLE':189});
+  variant={name:label+', '+(visit==='initial'?'First Visit':'Return Visit'),price:prices[range],sku:range==='WHOLE'?(pkg[visit][0].sku):'DTC-WC-RES-'+(both?'BOTH':'EXT')+'-'+range+'-'+(visit==='initial'?'FIRST':'RETURN')};
  }
  return{pkg,index:Number(index)||0,variant};
 }
 function careLines(){
  let s=careSelection();if(!s)return[];
  let visit=careVisit(),lines=[{name:s.pkg.name,variation:s.variant.name,qty:1,price:s.variant.price,kind:'package',sku:s.variant.sku||('DTC-WC-'+s.pkg.id.toUpperCase()+'-'+s.index+'-'+visit.toUpperCase())}];
- let n=careInt('careExtraWindows');
- if($('careMarket').value==='residential'&&n){let both=$('careExtraSides').value==='both';lines.push({name:'Additional Standard Window, '+(both?'Both Sides':'Exterior')+(visit==='return'?' Return':''),qty:n,price:both?(visit==='return'?15:18):12,kind:'addition'})}
+ let n=$('careMarket').value==='residential'?Math.max(0,careInt('careWindowCount')-15):0;
+ if($('careMarket').value==='residential'&&n){let both=s.pkg.sides==='both';lines.push({name:'Additional Standard Window, '+(both?'Both Sides':'Exterior')+(visit==='return'?' Return':''),qty:n,price:both?(visit==='return'?15:18):12,kind:'addition'})}
  for(const [check,qty,name,price] of [['careScreens','careScreenQty','Window Screen Cleaning',6],['careTracks','careTrackQty','Window Track Detailing',7],['careCombo','careComboQty','Screen and Track Detail',11],['careHardWater','careHardWaterQty','Hard-Water Spot Treatment',20]]){
   if($(check).checked&&careInt(qty))lines.push({name,qty:careInt(qty),price,kind:'addition'});
  }
@@ -2174,7 +2176,8 @@ function careLineTotal(line){return Math.max(Number(line.minimum)||0,line.price*
 function careRender(){
  let lines=careLines(),base=lines.filter(l=>l.kind==='package').reduce((t,l)=>t+careLineTotal(l),0),extras=lines.filter(l=>l.kind!=='package').reduce((t,l)=>t+careLineTotal(l),0),subtotal=base+extras,taxRate=6.25,tax=Math.round(subtotal*taxRate)/100,total=subtotal+tax;
  $('careResidentialScope')?.classList.toggle('hidden',$('careMarket')?.value!=='residential');
- $('careResidentialExtras')?.classList.toggle('hidden',$('careMarket')?.value!=='residential'||$('careScope')?.value==='partial');
+ $('careResidentialExtras')?.classList.add('hidden');
+ if($('careAutoTier'))$('careAutoTier').textContent=$('careMarket')?.value==='residential'?(careInt('careWindowCount')?careSelection().variant.name+' · '+Math.max(0,careInt('careWindowCount')-15)+' additional windows':'Enter a window count to calculate pricing'):'Commercial pricing uses the selected service variation.';
  if($('careBasePrice'))$('careBasePrice').textContent=money(base);
  if($('careExtrasPrice'))$('careExtrasPrice').textContent=money(extras);
  if($('careSubtotalPrice'))$('careSubtotalPrice').textContent=money(subtotal);
@@ -2187,7 +2190,7 @@ function careReset(){
  for(const id of ['careFirst','careLast','careEmail','carePhone','careAddress','careProject','careNotes'])$(id).value='';
  $('careCustomerSearch').value='';$('careCustomerResults').replaceChildren();careCustomerChosen();
  $('careLeadSource').value='Organic';$('careStatus').value='Estimate Requested';$('careMarket').value='residential';careSelectOptions();
- if($('careScope'))$('careScope').value='whole';if($('careWindowCount'))$('careWindowCount').value=1;document.querySelectorAll('input[name="careScopeChoice"]').forEach(r=>r.checked=r.value==='whole');$('carePartialCount')?.classList.add('hidden');
+ if($('careScope'))$('careScope').value='whole';if($('careWindowCount'))$('careWindowCount').value=1;
  document.querySelector('input[name="careVisit"][value="initial"]').checked=true;if($('careVisitStatus'))$('careVisitStatus').textContent='First visit selected for a new customer.';
  for(const id of ['careScreens','careTracks','careCombo','careHardWater','careRepellent','careTravel'])$(id).checked=false;
  for(const id of ['careExtraWindows','careScreenQty','careTrackQty','careComboQty','careHardWaterQty','careRepellentQty'])$(id).value=0;
@@ -2212,7 +2215,7 @@ async function careSave(){
  let name=$('careFirst').value.trim(),address=$('careAddress').value.trim(),c=careRender(),button=$('saveCareQuote');
  if(!name||!address)return toast('Enter a first name and service address.');
  if(!c.lines.length)return toast('Choose a service package.');
- if($('careMarket').value==='residential'&&$('careScope')?.value==='partial'&&(careInt('careWindowCount')<1||careInt('careWindowCount')>15))return toast('Partial-home cleaning supports 1 to 15 standard windows.');
+ if($('careMarket').value==='residential'&&careInt('careWindowCount')<1)return toast('Enter the total number of windows to clean.');
  if(careEditingId&&window._cloudQuotes?.find(q=>q.id===careEditingId)?.square_invoice_id)return toast('Release the existing Square draft before changing this cleaning quote.');
  button.disabled=true;button.textContent='Saving…';
  try{
@@ -2239,7 +2242,7 @@ async function openCareQuote(id){
  let meta=Array.isArray(q.measurements)?q.measurements.find(x=>x.service==='window_care'):null,market=meta?.market||(/Commercial/i.test(q.project_type)?'commercial':'residential');
  careSquareCustomerId=meta?.square_customer_id||null;careLeadId=meta?.lead_id||null;$('careLeadSource').value=[...$('careLeadSource').options].some(o=>o.value===meta?.lead_source)?meta.lead_source:'Organic';careCustomerChosen();
  $('careMarket').value=market;careSelectOptions();
- if(meta){let key=meta.package_id+':'+meta.variant_index;if([...$('carePackage').options].some(o=>o.value===key))$('carePackage').value=key;document.querySelector('input[name="careVisit"][value="'+(meta.visit||'initial')+'"]').checked=true;$('careExtraSides').value=meta.extra_sides||'exterior';if($('careScope'))$('careScope').value=meta.scope||'whole';if($('careWindowCount'))$('careWindowCount').value=meta.window_count||1;document.querySelectorAll('input[name="careScopeChoice"]').forEach(r=>r.checked=r.value===($('careScope')?.value||'whole'));$('carePartialCount')?.classList.toggle('hidden',($('careScope')?.value||'whole')!=='partial')}
+ if(meta){let key=meta.package_id+':'+meta.variant_index;if([...$('carePackage').options].some(o=>o.value===key))$('carePackage').value=key;document.querySelector('input[name="careVisit"][value="'+(meta.visit||'initial')+'"]').checked=true;$('careExtraSides').value=meta.extra_sides||'exterior';if($('careScope'))$('careScope').value='whole';if($('careWindowCount'))$('careWindowCount').value=(meta.scope==='partial'&&meta.window_count)?meta.window_count:Math.max(15,Number(meta.window_count||15)+Number((q.additional_services||[]).find(x=>/^Additional Standard Window/.test(x.name))?.qty||0))}
  let map={'careExtraWindows':/^Additional Standard Window/,'careScreenQty':/^Window Screen Cleaning$/,'careTrackQty':/^Window Track Detailing$/,'careComboQty':/^Screen and Track Detail$/,'careHardWaterQty':/^Hard-Water Spot Treatment$/,'careRepellentQty':/^Exterior Glass Water-Repellent Finish$/};
  for(const [id,pattern] of Object.entries(map)){let line=(q.additional_services||[]).find(x=>pattern.test(x.name));$(id).value=line?.qty||0}
  for(const [id,qty] of [['careScreens','careScreenQty'],['careTracks','careTrackQty'],['careCombo','careComboQty'],['careHardWater','careHardWaterQty'],['careRepellent','careRepellentQty']])$(id).checked=careInt(qty)>0;
@@ -2254,7 +2257,7 @@ function setupCareBuilder(){
  });
  $('careMarket').addEventListener('change',careSelectOptions);careSelectOptions();
  document.querySelectorAll('input[name="careVisit"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked){careVisitManuallySet=true;if($('careVisitStatus'))$('careVisitStatus').textContent='Visit type manually selected.';careRender()}}));
- document.querySelectorAll('input[name="careScopeChoice"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked){$('careScope').value=r.value;$('carePartialCount').classList.toggle('hidden',r.value!=='partial');careRender()}}));
+ 
  $('careBuilderPanel').addEventListener('input',careRender);$('careBuilderPanel').addEventListener('change',careRender);
  $('newCareQuote').onclick=()=>{careReset();$('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;$('careBuilderPanel').scrollIntoView({behavior:'smooth',block:'start'})};
  $('saveCareQuote').onclick=careSave;$('resetCareQuote').onclick=careReset;$('careQuickShotButton').onclick=()=>openCareQuickShot();
