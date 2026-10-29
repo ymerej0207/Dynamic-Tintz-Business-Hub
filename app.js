@@ -3018,6 +3018,22 @@ function renderQuoteResults(){
             ?`<button class="btn" disabled>${cleaningOption.status==='sent'?'Awaiting Customer Selection':'Use Cleaning Approval Panel'}</button>`
             :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
 
+    // Manual Square reference only: use the saved customer price, never recalculate it.
+    // The displayed discount is the exact dollar difference from the $12/sq ft
+    // standard rate, so it matches the saved quote even with cent adjustments.
+    const savedQuoteTotal = Number(q.ceramic_price);
+    const manualDiscountBase = Math.round(actual * 1200) / 100;
+    const manualDiscountCents = Math.round((manualDiscountBase - savedQuoteTotal) * 100);
+    const manualDiscount = !isCare && actual > 0 && Number.isFinite(savedQuoteTotal)
+      && savedQuoteTotal > 0 && manualDiscountCents >= 0 && manualDiscountBase > 0
+      ? {
+          amount: manualDiscountCents / 100,
+          percent: (manualDiscountCents / 100 / manualDiscountBase) * 100,
+          base: manualDiscountBase,
+          rate: savedQuoteTotal / actual,
+        }
+      : null;
+
     return `<details class="quote-index-card" data-quoteindex="${q.id}">
       <summary class="quote-index-summary">
         ${quoteProjectIcon(q.project_type)}
@@ -3045,6 +3061,16 @@ function renderQuoteResults(){
           <span><b>Project</b>${esc(q.project_name||'Window Film Project')}</span>
           <span><b>${isCare?'Service':'Glass'}</b>${isCare?'Window cleaning':actual.toFixed(2)+' sq ft'}</span>
           <span><b>Price</b>${money(q.ceramic_price)}</span>
+          ${manualDiscount?`<div class="manual-square-discount" style="grid-column:1/-1;border:1px solid rgba(38,218,216,.45);border-radius:14px;padding:14px;background:rgba(23,192,196,.055);display:grid;gap:10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><strong style="color:#32dfdf">Manual Square Discount</strong><small style="opacity:.75">Reference only · does not change invoice</small></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px">
+              <span><b style="display:block;opacity:.65;font-size:.75em;text-transform:uppercase">Standard total ($12/sq ft)</b>${money(manualDiscount.base)}</span>
+              <span><b style="display:block;opacity:.65;font-size:.75em;text-transform:uppercase">Agreed rate</b>${money(manualDiscount.rate)}/sq ft</span>
+              <span><b style="display:block;opacity:.65;font-size:.75em;text-transform:uppercase">Discount to enter</b><strong style="font-size:1.15em;color:#32dfdf">${money(manualDiscount.amount)}</strong></span>
+              <span><b style="display:block;opacity:.65;font-size:.75em;text-transform:uppercase">Equivalent percent</b>${manualDiscount.percent.toFixed(2)}%</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="btn primary" data-copymanualdiscount="${manualDiscount.amount.toFixed(2)}">Copy Discount Amount</button><small style="opacity:.75">Saved customer price: ${money(savedQuoteTotal)}. Use dollar discount for exact cents.</small></div>
+          </div>`:''}
           <span><b>Status</b>${esc(q.status||'')}</span>
           <span><b>${isCare?'Package':'Film'}</b>${esc(isCare?squareItem:squareItem.replace(' Tint Install',''))}</span>
           <span><b>Schedule</b>${job?`${when(job.scheduled_start)} • ${esc(job.status)}`:'Not scheduled'}</span>
@@ -3063,6 +3089,12 @@ function renderQuoteResults(){
     </details>`;
   }).join(''):'<div class="card muted">No matching cloud quotes.</div>';
 
+  $('savedQuotes').querySelectorAll('[data-copymanualdiscount]').forEach(b=>b.onclick=async e=>{
+    e.preventDefault();e.stopPropagation();
+    const amount=b.dataset.copymanualdiscount||'';
+    try{await navigator.clipboard.writeText(amount);toast('Square discount copied: $'+amount);}
+    catch{window.prompt('Copy this Square dollar discount:',amount);}
+  });
   $('savedQuotes').querySelectorAll('[data-copyquotephone]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();copyPhone(b.dataset.copyquotephone)});
   $('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=e=>{e.preventDefault();openCloudQuote(b.dataset.openquote)});
   $('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();createSquareDraft(b.dataset.squaredraft,b)});
