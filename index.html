@@ -423,7 +423,7 @@
   <details id="careBuilderPanel" class="app-builder-sheet">
     <summary><span>Window Care Quote</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner care-builder">
-      <div class="head"><div><h2>Window Care</h2><div class="muted">Choose a package, then the details this visit needs.</div></div><span class="pill">SERVICE</span></div>
+      <div class="head"><div><h2>Window Care</h2><div class="muted">Choose the cleaning service and enter the total windows. We calculate the package automatically.</div></div><span class="pill">SERVICE</span></div>
       <div class="card">
         <div class="field"><label>Find an existing customer</label><input id="careCustomerSearch" type="search" placeholder="Name, email, or phone" autocomplete="off"><small class="muted">Searches Dynamic Tintz OS; enter a full email or phone number to check Square.</small></div>
         <div id="careCustomerResults" class="care-customer-results" aria-live="polite"></div>
@@ -439,7 +439,7 @@
           <div class="field"><label>Quote status</label><select id="careStatus"><option>New Lead</option><option selected>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
         </div>
         <div class="field"><label>Location</label><select id="careMarket"><option value="residential">Residential</option><option value="commercial">Commercial</option></select></div>
-        <div class="field"><label>Service</label><select id="carePackage"></select></div>
+        <div class="field"><label for="carePackage">Which sides are we cleaning?</label><select id="carePackage"></select><small class="muted">Choose Exterior Only or Interior + Exterior. The window count selects the pricing tier automatically.</small></div>
         <div id="careResidentialScope" class="field"><label for="careWindowCount">Total windows to clean</label><input id="careWindowCount" type="number" min="1" step="1" value="1"><select id="careScope" class="hidden" aria-hidden="true"><option value="whole">Automatic package</option></select><small id="careAutoTier" class="muted" aria-live="polite">Enter the total window count. The package and any windows over 15 are calculated automatically.</small></div>
         <div class="field"><label>Visit</label><div class="care-segment"><label><input type="radio" name="careVisit" value="initial" checked> First visit</label><label><input type="radio" name="careVisit" value="return"> Return / route</label></div><small id="careVisitStatus" class="muted">First visit selected for a new customer.</small></div>
         <div class="field"><label>Internal notes</label><textarea id="careNotes" rows="2" placeholder="Access, glass condition, route notes"></textarea></div>
@@ -866,4 +866,4 @@
 <small class="muted">Choose either combined screen/track sets OR individual screens/tracks to avoid double billing.</small></div>
 <button id="sendCleaningOffer" class="btn primary wide">Email Both Options to Customer</button><div id="cleaningOfferMessage" class="muted" style="margin-top:8px"></div></div></div>
 <div id="cleaningGlobalAlert" style="display:none;position:fixed;right:12px;bottom:82px;z-index:1000;max-width:min(370px,calc(100vw - 24px));padding:12px 16px;background:#0d383a;color:#e9ffff;border:1px solid #45c8c2;border-radius:12px;box-shadow:0 10px 25px #0006;cursor:pointer" role="status"></div>
-<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.19.3-window-count"></script></body></html>
+<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.19.4-care-quickshot-fix"></script></body></html>

@@ -1511,7 +1511,7 @@ function openCareQuickShot(q){
  $('cqsAddress').value=fromQuote?(q.service_address||q.customer?.service_address||''):$('careAddress').value;
  $('cqsProject').value=fromQuote?(q.project_name||'Window Cleaning - Interior and/or Exterior'):$('careProject').value||'Window Cleaning - Interior and/or Exterior';
  $('cqsNote').value='';$('cqsSavings').value='0';quickShotReference='';quickShotRef();
- $('careQuickShotPreviewWrap').classList.add('hidden');$('careQuickShotModal').classList.add('show');$('careQuickShotModal').setAttribute('aria-hidden','false');renderCareQuickShot();
+ $('careQuickShotPreviewWrap').classList.add('hidden');$('careQuickShotModal').classList.add('show');$('careQuickShotModal').setAttribute('aria-hidden','false');renderCareQuickShot();$('careQuickShotModal').querySelector('.quickshot-panel')?.scrollTo(0,0);
 }
 function renderCareQuickShot(){
  let host=$('cqsLines');if(!host)return;
@@ -2144,7 +2144,7 @@ function careInt(id){return Math.max(0,Math.floor(Number($(id)?.value)||0))}
 function carePackage(){return [...CARE_PACKAGES.residential,...CARE_PACKAGES.commercial].find(p=>p.id===$('carePackage')?.value)}
 function careSelectOptions(){
  let market=$('careMarket').value,old=$('carePackage').value;
- $('carePackage').innerHTML=CARE_PACKAGES[market].map(p=>'<optgroup label="'+esc(p.name)+'">'+p.initial.map((variant,i)=>'<option value="'+p.id+':'+i+'">'+esc(variant.name)+'</option>').join('')+'</optgroup>').join('');
+ $('carePackage').innerHTML=CARE_PACKAGES[market].map(p=>p.initial.map((variant,i)=>'<option value="'+p.id+':'+i+'">'+esc(market==='residential'?(p.sides==='both'?'Interior + Exterior':'Exterior Only'):p.name+' | '+variant.name)+'</option>').join('')).join('');
  if([...$('carePackage').options].some(o=>o.value===old))$('carePackage').value=old;
  careRender();
 }
@@ -2260,7 +2260,7 @@ function setupCareBuilder(){
  
  $('careBuilderPanel').addEventListener('input',careRender);$('careBuilderPanel').addEventListener('change',careRender);
  $('newCareQuote').onclick=()=>{careReset();$('quoteBuilderPanel').open=false;$('careBuilderPanel').open=true;$('careBuilderPanel').scrollIntoView({behavior:'smooth',block:'start'})};
- $('saveCareQuote').onclick=careSave;$('resetCareQuote').onclick=careReset;$('careQuickShotButton').onclick=()=>openCareQuickShot();
+ $('saveCareQuote').onclick=careSave;$('resetCareQuote').onclick=careReset;$('careQuickShotButton').onclick=(event)=>{event.preventDefault();try{openCareQuickShot()}catch(error){console.error('Window Care QuickShot:',error);alert('QuickShot could not open: '+(error?.message||error))}};
  $('copyCareQuote').onclick=()=>navigator.clipboard.writeText(careSummary()).then(()=>toast('Cleaning quote copied.'));
 }
 setupCareBuilder();
