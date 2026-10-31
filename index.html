@@ -113,6 +113,37 @@
   #scheduleJobModal input:not([type=hidden]), #scheduleJobModal textarea, #scheduleJobModal select { max-width: 100%; box-sizing: border-box; }
 }
 </style>
+<style>
+/* iOS scheduling alignment v3: contain native date control within modal */
+@media (max-width: 620px) {
+  #scheduleJobModal .panel,
+  #scheduleJobModal .grid2,
+  #scheduleJobModal .grid2 > .field,
+  #scheduleJobModal .schedule-datetime-row,
+  #scheduleJobModal .schedule-datetime-row > *,
+  #scheduleJobModal .schedule-time-inline,
+  #scheduleJobModal .schedule-time-inline > * {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  #scheduleJobModal .grid2,
+  #scheduleJobModal .grid2 > .field,
+  #scheduleJobModal .schedule-datetime-row,
+  #scheduleJobModal .schedule-time-inline { width: 100% !important; }
+  #scheduleJobModal input#scheduleStartDate,
+  #scheduleJobModal input#scheduleEndDate {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  #scheduleJobModal .schedule-time-inline select { width: 100% !important; }
+}
+</style>
 </head><body>
 <div id="auth" class="auth-stage">
   <div class="auth-grid-glow" aria-hidden="true"></div>
