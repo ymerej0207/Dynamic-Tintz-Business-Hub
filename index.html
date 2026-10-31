@@ -93,6 +93,26 @@
 <style id="contentStudioPageStyles">
 .content-studio-page .content-launch-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.content-launch-card{background:#0e1b20;border:1px solid #244149;border-radius:16px;padding:16px}.content-launch-card h3{margin:0 0 6px}.content-launch-card .muted{margin-bottom:12px}.content-launch-card .field{margin-bottom:10px}.content-meta-empty{grid-column:1/-1!important}.content-meta-empty span{display:block!important;text-transform:none!important;letter-spacing:0!important;margin-top:4px}.content-studio-page-note{margin:10px 0 16px;color:#91a7a9}@media(max-width:720px){.content-studio-page .content-launch-grid{grid-template-columns:1fr}}
 </style>
+<style id="schedule-ios-alignment-v2">
+@media (max-width: 620px) {
+  #scheduleJobModal { padding: 10px !important; }
+  #scheduleJobModal .panel { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; padding: 18px !important; padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important; overflow-x: hidden !important; overflow-y: auto !important; max-height: calc(100dvh - 20px) !important; }
+  #scheduleJobModal .panel > .head, #scheduleJobModal .panel > .field, #scheduleJobModal .panel > .grid2, #scheduleJobModal .panel > .actions { width: 100%; min-width: 0; box-sizing: border-box; }
+  #scheduleJobModal .head { display: flex; gap: 12px; align-items: flex-start; }
+  #scheduleJobModal .head > div { flex: 1 1 auto; min-width: 0; }
+  #scheduleJobModal .head > button { flex: 0 0 auto; }
+  #scheduleJobModal .grid2 { display: grid !important; grid-template-columns: minmax(0,1fr) !important; gap: 12px !important; }
+  #scheduleJobModal .field { width: 100%; min-width: 0; box-sizing: border-box; }
+  #scheduleJobModal .schedule-datetime-row { display: grid !important; grid-template-columns: minmax(0,1fr) !important; gap: 9px !important; width: 100%; min-width: 0; }
+  #scheduleJobModal .schedule-time-inline { display: grid !important; grid-template-columns: repeat(3,minmax(0,1fr)) !important; gap: 9px !important; width: 100%; min-width: 0; }
+  #scheduleJobModal .schedule-datetime-row input[type=date], #scheduleJobModal .schedule-time-inline select { display: block; box-sizing: border-box !important; width: 100% !important; min-width: 0 !important; height: 52px !important; margin: 0 !important; font-size: 16px !important; border-radius: 12px !important; }
+  #scheduleJobModal .schedule-datetime-row input[type=date] { padding: 10px 12px !important; text-align: center; }
+  #scheduleJobModal .schedule-time-inline select { padding: 8px 24px 8px 12px !important; }
+  #scheduleJobModal #scheduleInstallers { width: 100%; box-sizing: border-box; max-height: none !important; overflow: visible !important; padding: 8px !important; }
+  #scheduleJobModal #scheduleInstallers .installer-option { min-height: 52px; box-sizing: border-box; }
+  #scheduleJobModal input:not([type=hidden]), #scheduleJobModal textarea, #scheduleJobModal select { max-width: 100%; box-sizing: border-box; }
+}
+</style>
 </head><body>
 <div id="auth" class="auth-stage">
   <div class="auth-grid-glow" aria-hidden="true"></div>
