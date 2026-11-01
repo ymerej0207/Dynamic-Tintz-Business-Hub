@@ -3,8 +3,8 @@
  * Release: 7.11.4-quickshot-quote
  */
 
-const CACHE_PREFIX = "dynamic-tintz-v7.12.4-";
-const CACHE_NAME = `${CACHE_PREFIX}window-care`; 
+const CACHE_PREFIX = "dynamic-tintz-v";
+const CACHE_NAME = `${CACHE_PREFIX}7.19.5-film-calculator`; 
 
 const APP_SHELL = [
   "./",

@@ -170,7 +170,7 @@ function renderNav(){
   $("nav").innerHTML=t.map(x=>`<button data-v="${x[0]}"><b class="nav-icon">${navIcon(x[1])}</b><span>${x[2]}</span></button>`).join('');
   /* Navigation clicks are handled by delegated app-level routing. */
 }
-async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner'){dashboard();loadCleaningApprovals()}if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='contentstudio')loadContentStudioPage();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
+async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner'){dashboard();loadCleaningApprovals()}if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer'){renderQuickRollArea();renderPlannerRollArea();loadRollOptimizer();}if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='contentstudio')loadContentStudioPage();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
 function mondayWeekBounds(reference=new Date()){
   let d=new Date(reference);d.setHours(0,0,0,0);
   let day=d.getDay(),diff=day===0?-6:1-day;
@@ -1737,7 +1737,7 @@ async function finalizeScheduledJobInventory(jobId,actualOverride=null){
 }
 
 async function applyInventoryToOptimizer(q){
-  try{let p=await inventoryProductForQuote(q);if(!p)return;let{data,error}=await sb.from('film_inventory_rolls').select('*').eq('product_id',p.id).gt('remaining_length_inches',0).order('remaining_length_inches',{ascending:false});if(error||!data?.length)return;let r=data[0];$('optimizerRollWidth').value=Number(r.roll_width_inches)||Number(p.default_roll_width_inches)||72;$('optimizerRollLength').value=optimizerRound(invFeet(r.remaining_length_inches),2);$('optimizerMessage').textContent=`Loaded quote and current ${p.name} inventory: ${invFmt(invFeet(r.remaining_length_inches),1)} linear ft available on ${r.label||'the largest active roll'}.`}catch{}
+  try{let p=await inventoryProductForQuote(q);if(!p)return;let{data,error}=await sb.from('film_inventory_rolls').select('*').eq('product_id',p.id).gt('remaining_length_inches',0).order('remaining_length_inches',{ascending:false});if(error||!data?.length)return;let r=data[0];$('optimizerRollWidth').value=Number(r.roll_width_inches)||Number(p.default_roll_width_inches)||72;$('optimizerRollLength').value=optimizerRound(invFeet(r.remaining_length_inches),2);renderPlannerRollArea();$('optimizerMessage').textContent=`Loaded quote and current ${p.name} inventory: ${invFmt(invFeet(r.remaining_length_inches),1)} linear ft available on ${r.label||'the largest active roll'}.`}catch{}
 }
 
 function openOrganicLeadModal(){['organicFirstName','organicLastName','organicPhone','organicEmail','organicAddress','organicNotes'].forEach(id=>{if($(id))$(id).value=''});$('organicSource').value='Google';$('organicService').value='Window Film';$('organicLeadMessage').textContent='';$('organicLeadModal').classList.add('show')}
@@ -4068,6 +4068,38 @@ function optimizerRound(value,digits=2){let p=10**digits;return Math.round((Numb
 function optimizerFeet(inches){return `${optimizerRound(inches/12,2)} ft`}
 function optimizerInches(inches){return `${optimizerRound(inches,2)}"`}
 
+// This quick calculator is deliberately separate from quoting and inventory deductions.
+// Roll square feet = width in inches * roll length in feet / 12.
+function invalidateOptimizerPlan(){
+  if(!rollOptimizerResult)return;
+  rollOptimizerResult=null;
+  $('optimizerResults')?.classList.add('hidden');
+  const msg=$('optimizerMessage');if(msg)msg.textContent='Measurements or settings changed. Run Optimize Roll again for an updated cutting plan.';
+}
+function rollAreaSqft(widthIn,lengthFt){
+  const w=Number(widthIn),l=Number(lengthFt);
+  return Number.isFinite(w)&&Number.isFinite(l)&&w>0&&l>0?w*l/12:null;
+}
+function renderQuickRollArea(){
+  const w=Number($('quickRollWidth')?.value),l=Number($('quickRollLength')?.value);
+  const sqft=rollAreaSqft(w,l),output=$('quickRollSqft'),formula=$('quickRollFormula');
+  if(output)output.textContent=sqft===null?'Enter valid dimensions':`${optimizerRound(sqft,2).toLocaleString('en-US')} sq ft`;
+  if(formula)formula.textContent=sqft===null?'Width and length must be greater than zero.':`${optimizerRound(w,3)} in × ${optimizerRound(l,3)} ft ÷ 12`;
+  const button=$('quickRollToPlanner');if(button)button.disabled=sqft===null;
+}
+function renderPlannerRollArea(){
+  const w=Number($('optimizerRollWidth')?.value),l=Number($('optimizerRollLength')?.value),sqft=rollAreaSqft(w,l),out=$('optimizerRollAreaNote');
+  if(out)out.textContent=sqft===null?'Enter a valid roll width and length.':`${optimizerRound(w,3)} in × ${optimizerRound(l,3)} ft = ${optimizerRound(sqft,2).toLocaleString('en-US')} sq ft total roll area.`;
+}
+function useQuickRollInPlanner(){
+  const w=Number($('quickRollWidth')?.value),l=Number($('quickRollLength')?.value);
+  if(rollAreaSqft(w,l)===null)return;
+  $('optimizerRollWidth').value=w;$('optimizerRollLength').value=l;
+  renderPlannerRollArea();
+  invalidateOptimizerPlan();
+  $('optimizerInput')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
 function parseOptimizerInput(text){
   const lines=String(text||'').replace(/[×X]/g,'x').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   const pieces=[];
@@ -4179,6 +4211,7 @@ function loadSelectedOptimizerQuote(){
   if(!pieces.length)return toast('This quote has no usable window dimensions.');
   rollOptimizerQuoteId=id;
   $('optimizerInput').value=optimizerPiecesToText(pieces);
+  invalidateOptimizerPlan();
   $('optimizerMessage').textContent=`Loaded ${pieces.reduce((s,p)=>s+p.qty,0)} pieces from ${q.project_name||'saved quote'}.`;
   applyInventoryToOptimizer(q);
 }
@@ -4433,10 +4466,10 @@ function consolidateOptimizerPulls(patterns){
   return out;
 }
 function renderOptimizerResult(result,title='Manual Job'){
-  let scrapMatches=result.scrapMatches||[],scrapCovered=scrapMatches.reduce((s,m)=>s+Number(m.piece_sqft||0),0),originalGlass=Number(result.originalTotalArea||result.totalArea)/144;
+  let scrapMatches=result.scrapMatches||[],scrapCovered=Number(result.scrapCoveredArea||0)/144,originalGlass=Number(result.originalTotalArea??result.totalArea)/144;
   let scrapHtml=scrapMatches.length?`<div class="card optimizer-scrap-match-card">
     <div class="head" style="margin-top:0"><div><h3>♻ SCRAP FIRST — ${scrapMatches.length} Match${scrapMatches.length===1?'':'es'} Found</h3><div class="muted">These windows do not need fresh roll film.</div></div><span class="pill">${optimizerRound(scrapCovered,2)} sq ft glass covered</span></div>
-    ${scrapMatches.map(m=>`<div class="optimizer-scrap-match"><div><b>${optimizerEsc(m.label)}</b><div class="muted">Window ${optimizerInches(m.piece_width)} × ${optimizerInches(m.piece_height)}</div></div><div><b>USE SCRAP ${optimizerInches(m.scrap_width)} × ${optimizerInches(m.scrap_height)}</b><div class="muted">${optimizerEsc(m.film_name)}${m.rotated?' • rotate scrap':''}</div></div><span class="pill">SAVE ROLL CUT</span></div>`).join('')}
+    ${scrapMatches.map(m=>`<div class="optimizer-scrap-match"><div><b>${optimizerEsc(m.label)}</b><div class="muted">Cut ${optimizerInches(m.piece_width)} × ${optimizerInches(m.piece_height)} (includes trim)</div></div><div><b>USE SCRAP ${optimizerInches(m.scrap_width)} × ${optimizerInches(m.scrap_height)}</b><div class="muted">${optimizerEsc(m.film_name)}${m.rotated?' • rotate scrap':''}</div></div><span class="pill">SAVE ROLL CUT</span></div>`).join('')}
     <div class="optimizer-command"><b>Installer command:</b> Pull these scrap pieces before cutting the roll. Saving this optimization reserves them so another job does not claim the same cutoff.</div>
   </div>`:'';
   let {settings}=result;
@@ -4480,12 +4513,13 @@ function renderOptimizerResult(result,title='Manual Job'){
       <div class="mini-stat ${remainingOk?'':'optimizer-danger'}"><b>${remainingOk?optimizerFeet(result.remaining):'SHORT'}</b><span>Remaining Roll</span></div>
       <div class="mini-stat"><b>${optimizerRound(result.efficiency,1)}%</b><span>Material Efficiency</span></div>
     </div>
-    ${remainingOk?'':`<div class="card optimizer-alert"><b>Insufficient inventory:</b> This plan requires ${optimizerFeet(result.linear-settings.rollLength)} more film than the entered roll length.</div>`}
+    ${remainingOk?'':`<div class="card optimizer-alert"><b>Insufficient inventory:</b> This plan needs at least ${optimizerFeet(result.linear)} of roll length (${optimizerFeet(result.linear-settings.rollLength)} more than available). For a practical margin, consider ${Math.ceil((result.linear/12+5)/5)*5} ft or longer, if offered by your supplier.</div>`}
     <div class="card"><div class="head" style="margin-top:0"><h3>Roll Summary</h3><span class="pill">${totalPieces} pieces</span></div>
+      <div class="optimizer-trim-note">Cut allowance: +${optimizerInches(settings.cutAllowance||0)} to each glass dimension. Total job glass uses the original entered sizes. Pull lengths and cutting instructions use oversized cuts.</div>
       <div class="optimizer-summary-grid">
         <div><span>Total job glass</span><b>${optimizerRound(originalGlass,2)} sq ft</b></div>
         <div><span>Glass covered from scraps</span><b>${optimizerRound(scrapCovered,2)} sq ft</b></div>
-        <div><span>Glass requiring fresh roll</span><b>${optimizerRound(result.totalArea/144,2)} sq ft</b></div>
+        <div><span>Glass requiring fresh roll</span><b>${optimizerRound(Math.max(0,originalGlass-scrapCovered),2)} sq ft</b></div>
         <div><span>Total roll material pulled</span><b>${optimizerRound(settings.rollWidth*result.linear/144,2)} sq ft</b></div>
         <div><span>Calculated job waste</span><b>${optimizerRound(result.wasteArea/144,2)} sq ft</b></div>
         <div><span>Linear footage pulled</span><b>${optimizerFeet(result.linear)}</b></div>
@@ -4517,21 +4551,27 @@ function renderOptimizerResult(result,title='Manual Job'){
 }
 async function runRollOptimizer(){
   let message=$('optimizerMessage');
+  invalidateOptimizerPlan();
   try{
     let groups=parseOptimizerInput($('optimizerInput').value);
     if(!groups.length)throw new Error('Enter or load at least one valid window dimension.');
     let settings={
-      rollWidth:Number($('optimizerRollWidth').value)||72,
+      rollWidth:Number($('optimizerRollWidth').value),
       rollLength:(Number($('optimizerRollLength').value)||0)*12,
       maxLanes:Math.max(1,Math.round(Number($('optimizerHeads').value)||3)),
       kerf:Math.max(0,Number($('optimizerKerf').value)||0),
       allowRotation:$('optimizerRotation').value==='yes',
       depth:$('optimizerDepth').value
     };
-    if(settings.rollWidth<=0)throw new Error('Roll width must be greater than zero.');
+    if(settings.rollWidth<=0||settings.rollLength<=0)throw new Error('Roll width and length must be greater than zero.');
+    const cutAllowance=Number($('optimizerCutAllowance')?.value??2);
+    if(!Number.isFinite(cutAllowance)||cutAllowance<0)throw new Error('Cutting allowance must be zero or greater.');
+    settings.cutAllowance=cutAllowance;
+    // Keep entered glass measurements for actual job sq ft; optimize physical cut size.
+    const cuttingGroups=groups.map(g=>({...g,w:g.w+cutAllowance,h:g.h+cutAllowance}));
     let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===rollOptimizerQuoteId);
     message.textContent='Checking scrap inventory before cutting fresh roll…';
-    let scrapPlan=await optimizerScrapFirst(groups,q,settings);
+    let scrapPlan=await optimizerScrapFirst(cuttingGroups,q,settings);
     let sd=scrapPlan.diagnostics;
     message.textContent=scrapPlan.matches.length
       ?`${scrapPlan.matches.length} scrap match${scrapPlan.matches.length===1?'':'es'} found from ${sd?.eligibleScraps??'?'} eligible cutoff${(sd?.eligibleScraps??0)===1?'':'s'}. Optimizing remaining fresh-roll cuts…`
@@ -4543,7 +4583,8 @@ async function runRollOptimizer(){
     result.scrapMatches=scrapPlan.matches;
     result.originalGroups=groups;
     result.originalTotalArea=originalTotalArea;
-    result.scrapCoveredArea=scrapPlan.matches.reduce((s,m)=>s+Number(m.piece_width)*Number(m.piece_height),0);
+    // Actual glass covered from scraps does not include cutting allowance.
+    result.scrapCoveredArea=scrapPlan.matches.reduce((s,m)=>s+(Number(groups[m.group]?.w)||0)*(Number(groups[m.group]?.h)||0),0);
     rollOptimizerResult=result;
     renderOptimizerResult(result,q?.project_name||`${q?.customer?.first_name||''} ${q?.customer?.last_name||''}`.trim()||'Manual Job');
     message.textContent=scrapPlan.matches.length?`Optimization complete. ${scrapPlan.matches.length} window${scrapPlan.matches.length===1?'':'s'} assigned to scrap before fresh-roll cutting.`:`Optimization complete. ${result.trials} layouts compared.`;
@@ -4748,7 +4789,7 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>clearQuoteForm(false));$('quoteBuilderPanel')?.addEventListener('toggle',()=>{const button=$('newQuoteTop'),opened=$('quoteBuilderPanel').open;if(button){button.setAttribute('aria-expanded',String(opened));button.textContent=opened?'Close Fast Quote Builder':'+ Fast Quote Builder'}});bind('newQuoteTop','onclick',()=>{const panel=$('quoteBuilderPanel');if(!panel)return;if(panel.open){panel.open=false;return}panel.open=true;clearQuoteForm(false);panel.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>$('qFirst')?.focus({preventScroll:true}),350)});bind('qMultiFilm','onchange',()=>setQuoteMultiFilm($('qMultiFilm').value==='yes'));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);['quickRollWidth','quickRollLength'].forEach(id=>bind(id,'oninput',renderQuickRollArea));bind('quickRollToPlanner','onclick',useQuickRollInPlanner);['optimizerRollWidth','optimizerRollLength'].forEach(id=>bind(id,'oninput',()=>{renderPlannerRollArea();invalidateOptimizerPlan()}));['optimizerInput','optimizerCutAllowance','optimizerHeads','optimizerKerf','optimizerRotation','optimizerDepth','optimizerUseScrap'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',invalidateOptimizerPlan);if(el&&['SELECT','INPUT'].includes(el.tagName))el.addEventListener('change',invalidateOptimizerPlan)});renderQuickRollArea();renderPlannerRollArea();bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>clearQuoteForm(false));$('quoteBuilderPanel')?.addEventListener('toggle',()=>{const button=$('newQuoteTop'),opened=$('quoteBuilderPanel').open;if(button){button.setAttribute('aria-expanded',String(opened));button.textContent=opened?'Close Fast Quote Builder':'+ Fast Quote Builder'}});bind('newQuoteTop','onclick',()=>{const panel=$('quoteBuilderPanel');if(!panel)return;if(panel.open){panel.open=false;return}panel.open=true;clearQuoteForm(false);panel.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>$('qFirst')?.focus({preventScroll:true}),350)});bind('qMultiFilm','onchange',()=>setQuoteMultiFilm($('qMultiFilm').value==='yes'));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
   let el=$(id);if(!el)return;
   el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleQuoteAutosave);
 });
