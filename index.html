@@ -526,7 +526,7 @@
         </div>
         <div class="field"><label>Location</label><select id="careMarket"><option value="residential">Residential</option><option value="commercial">Commercial</option></select></div>
         <div class="field"><label for="carePackage">Which sides are we cleaning?</label><select id="carePackage"></select><small class="muted">Choose Exterior Only or Interior + Exterior. The window count selects the pricing tier automatically.</small></div>
-        <div id="careResidentialScope" class="field"><label for="careWindowCount">Total windows to clean</label><input id="careWindowCount" type="number" min="1" step="1" value="1"><select id="careScope" class="hidden" aria-hidden="true"><option value="whole">Automatic package</option></select><small id="careAutoTier" class="muted" aria-live="polite">Enter the total window count. The package and any windows over 15 are calculated automatically.</small></div>
+        <div id="careResidentialScope" class="field"><label for="careWindowCount">Total windows to clean</label><input id="careWindowCount" type="number" min="1" step="1" value="1"><select id="careScope" class="hidden" aria-hidden="true"><option value="whole">Automatic package</option></select><small id="careAutoTier" class="muted" aria-live="polite">Enter the total window count. 31+ windows require a custom quote.</small></div>
         <div class="field"><label>Visit</label><div class="care-segment"><label><input type="radio" name="careVisit" value="initial" checked> First visit</label><label><input type="radio" name="careVisit" value="return"> Return / route</label></div><small id="careVisitStatus" class="muted">First visit selected for a new customer.</small></div>
         <div class="field"><label>Internal notes</label><textarea id="careNotes" rows="2" placeholder="Access, glass condition, route notes"></textarea></div>
       </div>
@@ -535,11 +535,15 @@
           <div class="care-step"><div><b>Additional standard windows</b><small>Beyond the windows included in the package</small></div><input id="careExtraWindows" type="number" min="0" step="1" value="0" aria-label="Additional standard windows"></div>
           <div class="field"><label>Additional window cleaning</label><select id="careExtraSides"><option value="exterior">Exterior only</option><option value="both">Interior and exterior</option></select></div>
         </div>
-        <div class="care-check"><label><input type="checkbox" id="careScreens"> Screen cleaning <small>$6 per screen</small></label><input id="careScreenQty" type="number" min="0" step="1" value="0" aria-label="Number of screens"></div>
-        <div class="care-check"><label><input type="checkbox" id="careTracks"> Track detailing <small>$7 per track</small></label><input id="careTrackQty" type="number" min="0" step="1" value="0" aria-label="Number of tracks"></div>
-        <div class="care-check"><label><input type="checkbox" id="careCombo"> Screen and track detail <small>$11 per set</small></label><input id="careComboQty" type="number" min="0" step="1" value="0" aria-label="Number of screen and track sets"></div>
+        <div class="care-check"><label><input type="checkbox" id="careScreens"> Screen cleaning <small>$5 per screen</small></label><input id="careScreenQty" type="number" min="0" step="1" value="0" aria-label="Number of screens"></div>
+        <div class="care-check"><label><input type="checkbox" id="careTracks"> Track detailing <small>$5 per track</small></label><input id="careTrackQty" type="number" min="0" step="1" value="0" aria-label="Number of tracks"></div>
+        <div class="care-check"><label><input type="checkbox" id="careCombo"> Screen and track detail <small>$7 per set (save $3)</small></label><input id="careComboQty" type="number" min="0" step="1" value="0" aria-label="Number of screen and track sets"></div>
         <div class="care-check"><label><input type="checkbox" id="careHardWater"> Hard-water spot treatment <small>$20 per pane, starting price</small></label><input id="careHardWaterQty" type="number" min="0" step="1" value="0" aria-label="Hard water panes"></div>
         <div class="care-check"><label><input type="checkbox" id="careRepellent"> Exterior Glass Water-Repellent Finish <small>$8 per window, $40 minimum</small></label><input id="careRepellentQty" type="number" min="0" step="1" value="0" aria-label="Water-repellent windows"></div>
+        <div class="muted" style="margin-top:12px">Additional access: charge only for windows requiring special equipment. Specialty access and heavy debris are discussed and quoted separately.</div>
+        <div class="care-check"><label><input type="checkbox" id="careAccessLight"> Light ladder access <small>$5 per affected window</small></label><input id="careAccessLightQty" type="number" min="0" step="1" value="0" aria-label="Light ladder windows"></div>
+        <div class="care-check"><label><input type="checkbox" id="careAccessSecond"> Second-story ladder access <small>$10 per affected window</small></label><input id="careAccessSecondQty" type="number" min="0" step="1" value="0" aria-label="Second-story ladder windows"></div>
+        <div class="care-check"><label><input type="checkbox" id="careAccessHigh"> Difficult high access <small>$20 per affected window</small></label><input id="careAccessHighQty" type="number" min="0" step="1" value="0" aria-label="Difficult access windows"></div>
         <div class="care-check"><label><input type="checkbox" id="careTravel"> Extended Service Area <small>$65 per visit</small></label></div>
       </div>
       <div class="card care-total-card"><div class="summary-line"><span>Package</span><strong id="careBasePrice">$0.00</strong></div><div class="summary-line"><span>Additions</span><strong id="careExtrasPrice">$0.00</strong></div><div class="summary-line"><span>Subtotal</span><strong id="careSubtotalPrice">$0.00</strong></div><div class="summary-line"><span>Sales Tax (6.25%)</span><strong id="careTaxPrice">$0.00</strong></div><div class="summary-line featured"><span>Estimated total</span><strong id="careTotalPrice">$0.00</strong></div><small class="muted">Hard-water pricing may change after inspecting the glass.</small></div>
@@ -553,23 +557,10 @@
 <main id="optimizer" class="view">
   <div class="head">
     <div>
-      <h2>Film Calculator &amp; Cutting Planner</h2>
-      <div class="muted">Check roll square footage instantly, or plan a job to confirm you have enough film.</div>
+      <h2>Roll Optimization Engine</h2>
+      <div class="muted">Commercial-style strip nesting for residential and commercial film jobs.</div>
     </div>
     <span class="pill">Production Planning</span>
-  </div>
-
-  <div class="card film-quick-card" id="filmQuickCalculator">
-    <div class="head film-quick-head" style="margin-top:0">
-      <div><h3>Quick Roll Square Footage</h3><div class="muted">Width in inches, length in feet. Results update as you type.</div></div>
-      <span class="pill">Quick Calculator</span>
-    </div>
-    <div class="film-quick-grid">
-      <div class="field"><label for="quickRollWidth">Roll Width (inches)</label><input id="quickRollWidth" type="number" inputmode="decimal" value="72" min="0" step="any" autocomplete="off"></div>
-      <div class="field"><label for="quickRollLength">Roll Length (feet)</label><input id="quickRollLength" type="number" inputmode="decimal" value="50" min="0" step="any" autocomplete="off"></div>
-      <div class="film-quick-result" aria-live="polite"><span>Total Roll Area</span><strong id="quickRollSqft">300 sq ft</strong><small id="quickRollFormula">72 in × 50 ft ÷ 12</small></div>
-    </div>
-    <div class="film-quick-actions"><button id="quickRollToPlanner" type="button" class="btn primary">Use Roll in Cutting Planner</button><small class="muted">Square footage is the total area of the roll, not a guarantee every window cut will fit.</small></div>
   </div>
 
   <div class="optimizer-layout">
@@ -601,12 +592,10 @@
           <div class="field"><label>Roll Width (in)</label><input id="optimizerRollWidth" type="number" inputmode="decimal" value="72" min="1" step="0.25"></div>
           <div class="field"><label>Roll Length Available (ft)</label><input id="optimizerRollLength" type="number" inputmode="decimal" value="50" min="0" step="0.1"></div>
           <div class="field"><label>Adjustable Cutting Heads</label><input id="optimizerHeads" type="number" inputmode="numeric" value="3" min="1" max="12"></div>
-          <div class="field"><label>Extra Film Per Cut Dimension (in)</label><input id="optimizerCutAllowance" type="number" inputmode="decimal" value="2" min="0" step="0.25"><small class="muted">Default 2 inches added to both the glass width and height for trimming.</small></div>
-          <div class="field"><label>Cutter Kerf (in per lane)</label><input id="optimizerKerf" type="number" inputmode="decimal" value="0" min="0" step="0.0625"></div>
+          <div class="field"><label>Trim / Kerf Allowance (in per lane)</label><input id="optimizerKerf" type="number" inputmode="decimal" value="0" min="0" step="0.0625"></div>
           <div class="field"><label>Scrap First</label><label class="optimizer-scrap-toggle"><input id="optimizerUseScrap" type="checkbox" checked><span>Check scrap inventory before fresh roll</span></label></div><div class="field"><label>Rotation</label><select id="optimizerRotation"><option value="yes">Allow rotation</option><option value="no">Do not rotate pieces</option></select></div>
           <div class="field"><label>Optimization Depth</label><select id="optimizerDepth"><option value="fast">Fast</option><option value="standard" selected>Standard</option><option value="deep">Deep</option></select></div>
         </div>
-        <div class="optimizer-roll-area-note" id="optimizerRollAreaNote" aria-live="polite">72 in × 50 ft = 300 sq ft total roll area.</div>
         <div class="actions">
           <button id="optimizerRun" class="btn primary">Optimize Roll</button>
           <button id="optimizerClear" class="btn">Clear</button>
@@ -841,7 +830,7 @@
     <div class="more-menu-grid">
       <button data-more-go="inventory"><span>▱</span><b>Inventory</b><small>Film, rolls & scraps</small></button>
       <button data-more-go="followups"><span>↻</span><b>Follow-Ups</b><small>Due & upcoming</small></button>
-      <button data-more-go="optimizer"><span>✂</span><b>Film Calculator</b><small>Roll area & cut plans</small></button>
+      <button data-more-go="optimizer"><span>✂</span><b>Roll Optimizer</b><small>Cut plans & scraps</small></button>
       <button data-more-go="contentstudio"><span>▣</span><b>Content Studio</b><small>Before & after posts</small></button><button data-more-go="shortcuts"><span>◌</span><b>Responses</b><small>Quick messages</small></button>
       <button data-more-go="team"><span>◴</span><b>Team</b><small>Time & installers</small></button>
       <button data-more-go="account"><span>⚙</span><b>Account</b><small>Settings & sync</small></button>
@@ -967,4 +956,4 @@
 <small class="muted">Choose either combined screen/track sets OR individual screens/tracks to avoid double billing.</small></div>
 <button id="sendCleaningOffer" class="btn primary wide">Email Both Options to Customer</button><div id="cleaningOfferMessage" class="muted" style="margin-top:8px"></div></div></div>
 <div id="cleaningGlobalAlert" style="display:none;position:fixed;right:12px;bottom:82px;z-index:1000;max-width:min(370px,calc(100vw - 24px));padding:12px 16px;background:#0d383a;color:#e9ffff;border:1px solid #45c8c2;border-radius:12px;box-shadow:0 10px 25px #0006;cursor:pointer" role="status"></div>
-<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.19.5-film-calculator"></script></body></html>
+<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.19.4-care-quickshot-fix"></script></body></html>
