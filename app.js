@@ -3333,11 +3333,30 @@ function scheduleSyncPicker(prefix){
   hidden.value=`${dateEl.value}T${String(h).padStart(2,'0')}:${minute}`;
   return hidden.value;
 }
+function scheduleDefaultEnd(){
+  const start=scheduleSyncPicker('scheduleStart');
+  if(!start)return;
+  const endDate=$('scheduleEndDate');
+  const modal=$('scheduleJobModal');
+  if(!endDate||!modal||modal.dataset.scheduleEndManual==='1')return;
+  const next=new Date(start);
+  if(Number.isNaN(next.getTime()))return;
+  next.setHours(next.getHours()+1);
+  scheduleSetPicker('scheduleEnd',next);
+}
+function scheduleShowMessage(message,isError=false){
+  const el=$('scheduleMessage');if(!el)return;
+  el.textContent=message;el.style.color=isError?'#dc5353':'';
+}
 function scheduleBindPickers(){
   ['scheduleStart','scheduleEnd'].forEach(prefix=>{
     ['Date','Hour','Minute','Period'].forEach(suffix=>{
       let el=$(prefix+suffix);if(!el||el.dataset.schedulePickerBound)return;
-      el.addEventListener('change',()=>scheduleSyncPicker(prefix));
+      el.addEventListener('change',()=>{
+        scheduleSyncPicker(prefix);
+        if(prefix==='scheduleEnd')$('scheduleJobModal').dataset.scheduleEndManual='1';
+        else scheduleDefaultEnd();
+      });
       el.dataset.schedulePickerBound='1';
     });
   });
@@ -3356,10 +3375,23 @@ function cleaningScheduleNotes(quote){
  if(quote?.notes?.trim())details.push(`Job notes: ${quote.notes.trim()}`);
  return details.join('\n');
 }
-async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loading installers…';let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name)').eq('id',quoteId).single();if(error)return toast(error.message);quote=data}let[{data:people,error:peopleError},{data:existing,error:jobError}]=await Promise.all([sb.from('profiles').select('id,full_name,email,role,active').eq('active',true).in('role',['installer','manager','owner']).order('full_name'),sb.from('jobs').select('*').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle()]);if(peopleError||jobError)return toast((peopleError||jobError).message);if(!people?.length)return toast('No active installer accounts were found.');let selected=existing?.assigned_installers?.length?existing.assigned_installers:(existing?.assigned_to?[existing.assigned_to]:[people.find(p=>String(p.role)==='installer')?.id||people[0].id]);$('scheduleInstallers').innerHTML=(people||[]).map(p=>`<label class="installer-option"><input type="checkbox" value="${p.id}" ${selected.includes(p.id)?'checked':''}><span>${esc(p.full_name||p.email)}<small>${esc(String(p.role))}</small></span></label>`).join('');$('scheduleQuoteId').value=quoteId;$('scheduleQuoteName').textContent=`${quote.customer?.first_name||''} ${quote.customer?.last_name||''} • ${quote.project_name||'Project'}`.trim();$('scheduleTitle').value=existing?.title||`${quote.customer?.last_name||quote.customer?.first_name||'Customer'} — ${quote.project_name||(/Cleaning$/.test(quote.project_type||'')?'Window Cleaning':'Window Film Installation')}`;$('scheduleNotes').value=existing?.notes||(/Cleaning$/.test(quote.project_type||'')?cleaningScheduleNotes(quote):quote.notes||'');$('scheduleStatus').value=existing?.status||'Scheduled';scheduleBindPickers();scheduleSetPicker('scheduleStart',existing?.scheduled_start||null);scheduleSetPicker('scheduleEnd',existing?.scheduled_end||null);$('scheduleJobModal').dataset.jobId=existing?.id||'';$('scheduleJobModal').dataset.originalStatus=existing?.status||'Scheduled';$('scheduleMessage').textContent=existing?'This quote already has an assigned job. Saving will update it.':'Choose the crew and appointment time.';$('scheduleJobModal').querySelector('.job-material-card')?.classList.toggle('hidden',/Cleaning$/.test(quote.project_type||''));$('scheduleJobModal').classList.add('show');if(!/Cleaning$/.test(quote.project_type||''))loadScheduleMaterialPlan(quote,existing?.id||'')}function toLocalInput(value){if(!value)return'';let d=new Date(value),off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}async function saveScheduledJob(){
-  scheduleSyncPicker('scheduleStart');scheduleSyncPicker('scheduleEnd');
+async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loading installers…';let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name)').eq('id',quoteId).single();if(error)return toast(error.message);quote=data}let[{data:people,error:peopleError},{data:existing,error:jobError}]=await Promise.all([sb.from('profiles').select('id,full_name,email,role,active').eq('active',true).in('role',['installer','manager','owner']).order('full_name'),sb.from('jobs').select('*').eq('quote_id',quoteId).order('created_at',{ascending:false}).limit(1).maybeSingle()]);if(peopleError||jobError)return toast((peopleError||jobError).message);if(!people?.length)return toast('No active installer accounts were found.');let selected=existing?.assigned_installers?.length?existing.assigned_installers:(existing?.assigned_to?[existing.assigned_to]:[people.find(p=>String(p.role)==='installer')?.id||people[0].id]);$('scheduleInstallers').innerHTML=(people||[]).map(p=>`<label class="installer-option"><input type="checkbox" value="${p.id}" ${selected.includes(p.id)?'checked':''}><span>${esc(p.full_name||p.email)}<small>${esc(String(p.role))}</small></span></label>`).join('');$('scheduleQuoteId').value=quoteId;$('scheduleQuoteName').textContent=`${quote.customer?.first_name||''} ${quote.customer?.last_name||''} • ${quote.project_name||'Project'}`.trim();$('scheduleTitle').value=existing?.title||`${quote.customer?.last_name||quote.customer?.first_name||'Customer'} — ${quote.project_name||(/Cleaning$/.test(quote.project_type||'')?'Window Cleaning':'Window Film Installation')}`;$('scheduleNotes').value=existing?.notes||(/Cleaning$/.test(quote.project_type||'')?cleaningScheduleNotes(quote):quote.notes||'');$('scheduleStatus').value=existing?.status||'Scheduled';scheduleBindPickers();scheduleSetPicker('scheduleStart',existing?.scheduled_start||null);scheduleSetPicker('scheduleEnd',existing?.scheduled_end||null);$('scheduleJobModal').dataset.scheduleEndManual=existing?.scheduled_end?'1':'0';if(!existing?.scheduled_end)scheduleDefaultEnd();$('saveScheduledJob').disabled=false;$('saveScheduledJob').textContent='Save & Assign Job';$('scheduleJobModal').dataset.jobId=existing?.id||'';$('scheduleJobModal').dataset.originalStatus=existing?.status||'Scheduled';$('scheduleMessage').textContent=existing?'This quote already has an assigned job. Saving will update it.':'Choose the crew and appointment time.';$('scheduleJobModal').querySelector('.job-material-card')?.classList.toggle('hidden',/Cleaning$/.test(quote.project_type||''));$('scheduleJobModal').classList.add('show');if(!/Cleaning$/.test(quote.project_type||''))loadScheduleMaterialPlan(quote,existing?.id||'')}function toLocalInput(value){if(!value)return'';let d=new Date(value),off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}async function saveScheduledJob(){
+  const saveButton=$('saveScheduledJob');
+  if(saveButton?.disabled)return;
+  scheduleSyncPicker('scheduleStart');scheduleDefaultEnd();scheduleSyncPicker('scheduleEnd');
   let quoteId=$('scheduleQuoteId').value,assigned=[...$('scheduleInstallers').querySelectorAll('input:checked')].map(x=>x.value),start=$('scheduleStart').value,title=$('scheduleTitle').value.trim();
-  if(!quoteId||!assigned.length||!start||!title){$('scheduleMessage').textContent='At least one installer, start time, and job title are required.';return}
+  const endValue=$('scheduleEnd').value;
+  if(!quoteId||!assigned.length||!start||!endValue||!title){
+    scheduleShowMessage('Select an installer, start date and time, end date and time, and job title.',true);
+    toast('Complete the required scheduling fields.');return;
+  }
+  if(new Date(endValue)<=new Date(start)){
+    scheduleShowMessage('End date and time must be after the start.',true);
+    toast('End time must be after the start time.');return;
+  }
+  saveButton.disabled=true;saveButton.textContent='Saving & Assigning…';
+  scheduleShowMessage('Saving job and updating schedule…');
+  try{
   let quote=window._cloudQuotes?.find(q=>q.id===quoteId);if(!quote){let{data}=await sb.from('quotes').select('*').eq('id',quoteId).single();quote=data}
   let selectedStatus=$('scheduleStatus').value,existingJobId=$('scheduleJobModal').dataset.jobId,originalStatus=$('scheduleJobModal').dataset.originalStatus||'Scheduled',interimStatus=selectedStatus==='Completed'?(originalStatus==='Completed'?'Scheduled':originalStatus):selectedStatus,now=new Date().toISOString();
   let payload={quote_id:quoteId,title,service_address:quote?.service_address||'',scheduled_start:new Date(start).toISOString(),scheduled_end:$('scheduleEnd').value?new Date($('scheduleEnd').value).toISOString():null,status:interimStatus,archived_at:null,notes:$('scheduleNotes').value.trim(),assigned_to:assigned[0],assigned_installers:assigned,updated_at:now},res;
@@ -3394,6 +3426,12 @@ async function openScheduleJob(quoteId){$('scheduleMessage').textContent='Loadin
   await loadQuotes();await dashboard();
   if($('operations')?.classList.contains('active'))await loadOperations();
   if(calendarWarning)showCalendarSyncDiagnostic(calendarWarning);
+  }catch(error){
+    scheduleShowMessage(error?.message||'Unable to save job. Please retry.',true);
+    toast('Scheduling failed. Please retry.');
+  }finally{
+    saveButton.disabled=false;saveButton.textContent='Save & Assign Job';
+  }
 }
 async function loadOperations(){
   if(!operationsDefaultsApplied){
