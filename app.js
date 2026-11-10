@@ -2909,21 +2909,78 @@ async function ensureLeadForQuoteCustomer(customerId){
   return editingLeadId;
 }
 
-async function saveCloudQuote(){
-  let saveButtons=[$('saveQuote'),$('mobileSaveQuote'),$('quoteSaveDockButton')].filter(Boolean),saveLabels=saveButtons.map(b=>b.textContent);
-  saveButtons.forEach(b=>{b.disabled=true;b.textContent='Saving…'});
-  try{
-  if(multiFilmEnabled){if(!inventoryProductCache.length)await inventoryProducts();let validation=quoteMultiFilmValidation(activeWindowRows());if(validation)return toast(validation)}
-  let selectedFilmName=$('qSquareItem')?.value||'25% Ceramic Tint Install',selectedInventoryProduct=null;
-  try{
-    let products=await inventoryProducts();
-    selectedInventoryProduct=resolveInventoryProduct(products,{square_catalog_item_name:selectedFilmName},{});
-    if(selectedInventoryProduct)selectedFilmName=selectedInventoryProduct.name;
-  }catch(e){console.warn('Quote inventory product link:',e)}
-  let customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:new Date().toISOString()};let customerId=editingCustomerId;if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)return toast(error.message)}else{let{data,error}=await sb.from('customers').insert(customer).select().single();if(error)return toast(error.message);customerId=data.id}await savePropertyWindows(customerId);await ensureLeadForQuoteCustomer(customerId);let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s,payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:$('qAddress').value.trim(),miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:$('qNotes').value.trim(),additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:activeWindowRows(),updated_at:new Date().toISOString()};let res;if(editingQuoteId)res=await sb.from('quotes').update(payload).eq('id',editingQuoteId);else res=await sb.from('quotes').insert(payload).select('id').single();if(res.error)return toast(res.error.message);let savedQuoteId=editingQuoteId||res?.data?.id||null;scopeRevisionPending=false;toast(editingQuoteId?'Quote updated in cloud.':'Quote saved to cloud.');clearQuoteDraftLocal();await loadQuotes();if(savedQuoteId){try{await openCloudQuote(savedQuoteId,{jumpToMeasurements:false})}catch(e){console.warn('Reopen saved quote:',e)}scrollToCurrentQuoteTop()}else{clearQuoteForm(false);scrollToCurrentQuoteTop()}
-  }finally{saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]})}
+let quoteSaveInProgress=false;
+function quoteSaveNotice(message,kind='info'){
+  let el=$('quoteSaveNotice');
+  if(!el){el=document.createElement('div');el.id='quoteSaveNotice';el.setAttribute('role','status');el.setAttribute('aria-live','polite');el.style.cssText='margin:12px 0;padding:12px 14px;border-radius:10px;font-weight:650;line-height:1.4;';let anchor=$('saveQuote');anchor?.parentElement?.appendChild(el)}
+  if(el){el.textContent=message;el.style.display='block';el.style.background=kind==='error'?'#3a151a':kind==='success'?'#103d38':'#163139';el.style.color=kind==='error'?'#ffb6bd':kind==='success'?'#a7fff1':'#d5faff';el.style.border='1px solid '+(kind==='error'?'#a84955':kind==='success'?'#249a8e':'#42616a')}
+  if(kind==='error')console.error('Quote save:',message);
+  toast(message);
 }
-async function loadQuotes(){let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});if(error)return toast(error.message);window._cloudQuotes=data||[];renderQuoteResults();await loadCleaningApprovals()}
+async function saveCloudQuote(){
+  if(quoteSaveInProgress)return;
+  quoteSaveInProgress=true;
+  clearTimeout(quoteCloudAutosaveTimer);
+  const saveButtons=[$('saveQuote'),$('mobileSaveQuote'),$('quoteSaveDockButton')].filter(Boolean);
+  const saveLabels=saveButtons.map(b=>b.textContent);
+  saveButtons.forEach(b=>{b.disabled=true;b.textContent='Saving…'});
+  quoteSaveNotice('Saving quote to cloud…');
+  try{
+    if(multiFilmEnabled){if(!inventoryProductCache.length)await inventoryProducts();let validation=quoteMultiFilmValidation(activeWindowRows());if(validation)throw new Error(validation)}
+    let selectedFilmName=$('qSquareItem')?.value||'25% Ceramic Tint Install',selectedInventoryProduct=null;
+    try{let products=await inventoryProducts();selectedInventoryProduct=resolveInventoryProduct(products,{square_catalog_item_name:selectedFilmName},{});if(selectedInventoryProduct)selectedFilmName=selectedInventoryProduct.name}catch(e){console.warn('Quote inventory product link:',e)}
+    const now=new Date().toISOString();
+    const customer={first_name:$('qFirst').value.trim(),last_name:$('qLast').value.trim(),email:$('qEmail').value.trim(),phone:$('qPhone').value.trim(),service_address:$('qAddress').value.trim(),lead_source:$('qLead').value.trim(),notes:$('qNotes').value.trim(),updated_at:now};
+    if(!customer.first_name&&!customer.last_name)throw new Error('Enter a customer name before saving.');
+    if(!customer.service_address)throw new Error('Enter a service address before saving.');
+    let customerId=editingCustomerId;
+    if(customerId){let{error}=await sb.from('customers').update(customer).eq('id',customerId);if(error)throw error}
+    else{let{data,error}=await sb.from('customers').insert(customer).select('id').single();if(error)throw error;customerId=data.id;editingCustomerId=customerId}
+    await savePropertyWindows(customerId);
+    // Lead creation is secondary to saving the quote; don't let it silently abort the save.
+    try{await ensureLeadForQuoteCustomer(customerId)}catch(e){console.warn('Quote lead link:',e)}
+    let s=qSqft(),c=qPrice(ceramicMatrix,s,Number($('qMiles').value)||0),o=qPrice(solarMatrix,s,Number($('qMiles').value)||0),list=12*s;
+    const payload={customer_id:customerId,project_name:$('qProject').value.trim(),project_type:$('qType').value,square_catalog_item_name:selectedFilmName,inventory_product_id:selectedInventoryProduct?.id||null,status:$('qStatus').value,service_address:customer.service_address,miles:Number($('qMiles').value)||0,total_sqft:s,ceramic_list_price:list,ceramic_price:c.price,ceramic_savings:Math.max(0,list-c.price),solar_price:o.price,tax_rate:6.25,notes:customer.notes,additional_services:quoteAddons,additional_services_total:addonTotal(),measurements:activeWindowRows(),updated_at:now};
+    const existingId=editingQuoteId;
+    const result=existingId
+      ?await sb.from('quotes').update(payload).eq('id',existingId).select('id,updated_at').single()
+      :await sb.from('quotes').insert(payload).select('id,updated_at').single();
+    if(result.error)throw result.error;
+    const savedQuoteId=result.data?.id;
+    if(!savedQuoteId)throw new Error('Cloud did not confirm a saved quote ID.');
+    editingQuoteId=savedQuoteId;
+    scopeRevisionPending=false;
+    // A confirmed write is success even if the subsequent list reload fails.
+    clearQuoteDraftLocal();
+    quoteSaveNotice('Quote saved to cloud successfully. Refreshing recent quotes…','success');
+    if($('quoteSearch'))$('quoteSearch').value='';
+    if($('quoteStatusFilter'))$('quoteStatusFilter').value='';
+    quoteVisibleLimit=5;
+    try{
+      await loadQuotes({strict:true});
+      if(!(window._cloudQuotes||[]).some(q=>q.id===savedQuoteId))throw new Error('Saved quote not returned by the Quotes list.');
+      quoteSaveNotice('Quote saved to cloud successfully and added to Recent Quotes.','success');
+    }catch(refreshError){
+      console.warn('Quote saved; list refresh issue:',refreshError);
+      quoteSaveNotice('Quote saved to cloud, but the Quotes list could not refresh: '+(refreshError.message||String(refreshError)),'error');
+    }
+    updateQuoteAutosaveIndicator('Saved to cloud','cloud');
+    scrollToCurrentQuoteTop();
+  }catch(e){
+    saveQuoteDraftLocal();
+    quoteSaveNotice('Quote could not be saved: '+(e?.message||String(e))+'. Your measurements are still retained locally.','error');
+  }finally{
+    quoteSaveInProgress=false;
+    saveButtons.forEach((b,i)=>{b.disabled=false;b.textContent=saveLabels[i]});
+  }
+}
+async function loadQuotes(options={}){
+  let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('updated_at',{ascending:false});
+  if(error){if(options.strict)throw error;toast('Unable to load quotes: '+error.message);return}
+  window._cloudQuotes=data||[];
+  renderQuoteResults();
+  try{await loadCleaningApprovals()}catch(e){console.warn('Cleaning approvals refresh:',e)}
+}
 
 async function syncCustomerLifecycle(customerId,status){
   if(!customerId)return {ok:true,count:0};
@@ -3123,10 +3180,10 @@ function resetQuoteVisibleLimit(){quoteVisibleLimit=5;renderQuoteResults()}
 function renderQuoteResults(){
   let data=window._cloudQuotes||[],
       q=($('quoteSearch')?.value||'').toLowerCase(),
-      status=$('quoteStatusFilter')?.value||'active',
+      status=$('quoteStatusFilter')?.value??'',
       filtered=data
         .filter(x=>{let archived=['Completed','Lost'],statusMatch=status==='active'?!archived.includes(x.status):status==='archived'?archived.includes(x.status):status==='awaiting_cleaning'?['processing','draft_ready','draft_error'].includes(cleaningOptionByQuote.get(x.id)?.status):!status||x.status===status;return statusMatch&&JSON.stringify(x).toLowerCase().includes(q)})
-        .sort((a,b)=>new Date(b.created_at||b.updated_at||0)-new Date(a.created_at||a.updated_at||0)),
+        .sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0)),
       open=data.filter(x=>!['Completed','Lost'].includes(x.status)),
       value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),
       avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;
