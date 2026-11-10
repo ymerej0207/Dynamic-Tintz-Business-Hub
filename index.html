@@ -296,7 +296,7 @@
       <h3>Angi Credit Center</h3>
       <small id="angiCreditCycleLabel" class="muted">Current billing cycle</small>
     </div>
-    <button id="openAngiCreditReport" class="btn">View Current Report</button>
+    <div class="actions" style="align-items:center;gap:8px;flex-wrap:wrap"><label for="angiCycleSelect" class="muted">Billing cycle</label><select id="angiCycleSelect" aria-label="Angi billing cycle" style="max-width:260px"><option>Current billing cycle</option></select><button id="openAngiCreditReport" class="btn">View Selected Report</button></div>
   </section>
 
   <div id="leadList" class="lead-card-list"><div class="app-empty">Loading leads…</div></div>
@@ -304,9 +304,11 @@
 
 <div id="angiCreditReasonModal" class="modal"><div class="panel" style="max-width:530px">
   <div class="head"><div><span class="eyebrow">ANGI CREDIT REVIEW</span><h2>Why are you flagging this lead?</h2><div id="angiCreditReasonLead" class="muted"></div></div><button id="angiCreditReasonClose" type="button" class="btn">Cancel</button></div>
-  <div class="field"><label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="automotive"> Automotive tinting, service not offered</label>
-  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="no_contact"> Unable to contact / no response</label>
-  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="wrong_number"> Wrong number / invalid contact</label></div>
+  <div class="field"><label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="automotive"> Auto Tint Request</label>
+  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="out_of_area"> Out Of Service Area</label>
+  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="no_opportunity"> Already Chosen Someone Else/No Opportunity</label>
+  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="no_contact"> No Answer/Pickup After 3 Separate Attempts</label>
+  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="wrong_number"> Wrong Number/Number Not In Service</label></div>
   <div class="muted" style="margin:10px 0 16px">This records your reason for Angi review. Credit approval is determined by Angi. No email or text is sent automatically.</div>
   <div class="actions"><button id="angiCreditReasonSave" type="button" class="btn primary">Flag for Angi Credit</button><button id="angiCreditReasonCancel" type="button" class="btn">Cancel</button></div>
 </div></div>

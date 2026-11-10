@@ -1833,6 +1833,25 @@ function angiInCycle(l,c){let d=leadDate(l);return d>=c.start&&d<=c.end}
 function angiFlagged(l){return !!l.credit_flagged}
 function angiCurrentCycleLeads(){let c=angiCycleForDate();return leads.filter(l=>angiLead(l)&&angiInCycle(l,c))}
 function angiCurrentFlagged(){return angiCurrentCycleLeads().filter(angiFlagged)}
+// Historical cycles are reconstructed from retained Angi lead records.
+function angiAvailableCycles(){
+  const cycles=new Map();
+  const add=c=>cycles.set(angiDateKey(c.start),c);
+  add(angiCycleForDate());
+  leads.filter(angiLead).forEach(l=>{const d=leadDate(l);if(!Number.isNaN(d.getTime()))add(angiCycleForDate(d))});
+  return [...cycles.values()].sort((a,b)=>b.start-a.start);
+}
+function angiSelectedCycle(){
+  const key=$('angiCycleSelect')?.value;
+  return angiAvailableCycles().find(c=>angiDateKey(c.start)===key)||angiCycleForDate();
+}
+function refreshAngiCycleSelector(){
+  const select=$('angiCycleSelect');if(!select)return;
+  const old=select.value;
+  select.innerHTML=angiAvailableCycles().map(c=>`<option value="${angiDateKey(c.start)}">${esc(angiCycleLabel(c))}</option>`).join('');
+  if([...select.options].some(o=>o.value===old))select.value=old;
+}
+
 
 function angiFollowupMessage(l){
   const first=String(l?.first_name||'').trim();
@@ -1862,9 +1881,11 @@ async function sendAngiAutomotiveNotice(id,button){
 }
 
 const ANGI_CREDIT_REASONS={
-  automotive:'Automotive / Service Not Offered',
-  no_contact:'Unable to Contact / No Response',
-  wrong_number:'Wrong Number / Invalid Contact'
+  automotive:'Auto Tint Request',
+  out_of_area:'Out Of Service Area',
+  no_opportunity:'Already Chosen Someone Else/No Opportunity',
+  no_contact:'No Answer/Pickup After 3 Separate Attempts',
+  wrong_number:'Wrong Number/Number Not In Service'
 };
 let pendingAngiCreditId=null;
 function closeAngiCreditReason(){pendingAngiCreditId=null;$('angiCreditReasonModal')?.classList.remove('show')}
@@ -1924,6 +1945,7 @@ function angiReportReadyDate(c){
 }
 function angiCycleAdjustmentRequested(flagged){return flagged.length>0&&flagged.every(l=>String(l.credit_status||'').toLowerCase()==='requested')}
 function updateAngiCreditCenter(){
+  refreshAngiCycleSelector();
   let c=angiCycleForDate(),all=angiCurrentCycleLeads(),flagged=all.filter(angiFlagged);
   if($('angiCreditCycleLabel'))$('angiCreditCycleLabel').textContent=`${angiCycleLabel(c)} • ${flagged.length} flagged`;
   let banner=$('angiCreditBanner');if(!banner)return;
@@ -1941,8 +1963,9 @@ function angiReportRows(flagged,includePrice=true){
   }).join('');
 }
 function openAngiCreditReport(){
-  let c=angiCycleForDate(),all=angiCurrentCycleLeads(),flagged=all.filter(angiFlagged),allSpend=all.reduce((s,l)=>s+angiFee(l),0),flagSpend=flagged.reduce((s,l)=>s+angiFee(l),0);
+  let c=angiSelectedCycle(),all=leads.filter(l=>angiLead(l)&&angiInCycle(l,c)),flagged=all.filter(angiFlagged),allSpend=all.reduce((s,l)=>s+angiFee(l),0),flagSpend=flagged.reduce((s,l)=>s+angiFee(l),0);
   let pct=all.length?Math.round(flagged.length/all.length*100):0;
+  const historical=angiDateKey(c.start)!==angiDateKey(angiCycleForDate().start);
   $('angiCreditReportBody').innerHTML=`
     <div class="angi-credit-metrics">
       <div class="angi-credit-metric"><span>Angi Leads</span><b>${all.length}</b></div>
@@ -1951,11 +1974,11 @@ function openAngiCreditReport(){
       <div class="angi-credit-metric"><span>Internal Flagged Spend</span><b>$${flagSpend.toFixed(2)}</b></div>
     </div>
     <div class="angi-credit-internal"><b>Internal only</b><div>Total Angi spend this cycle: $${allSpend.toFixed(2)}. Flagged lead spend: $${flagSpend.toFixed(2)}. These prices are not included on the Angi-facing print report.</div></div>
-    <div class="head"><div><h3>${esc(angiCycleLabel(c))}</h3><div class="muted">Flagged leads by reason</div></div><div class="actions"><button class="btn" id="printAngiCreditReport">Print / PDF for Angi</button><button class="btn primary" id="markAngiCreditRequested">Mark Adjustment Requested</button></div></div>
+    <div class="head"><div><h3>${esc(angiCycleLabel(c))}</h3><div class="muted">Flagged leads by reason</div></div><div class="actions"><button class="btn" id="printAngiCreditReport">Print / PDF for Angi</button>${historical?'<span class="muted">Historical report • read-only</span>':'<button class="btn primary" id="markAngiCreditRequested">Mark Adjustment Requested</button>'}</div></div>
     <div class="angi-credit-table-wrap"><table class="angi-credit-table"><thead><tr><th>Received</th><th>Customer / Lead ID</th><th>Contact</th><th>Location</th><th>Angi Request</th><th>Credit Reason</th><th>Internal Cost</th></tr></thead><tbody>${flagged.length?angiReportRows(flagged,true):'<tr><td colspan="7">No Angi leads have been flagged in this cycle yet.</td></tr>'}</tbody></table></div>`;
   $('angiCreditReportModal').classList.add('show');
   $('printAngiCreditReport').onclick=()=>printAngiCreditReport(c,flagged);
-  $('markAngiCreditRequested').onclick=()=>markAngiAdjustmentRequested(c,flagged);
+  if(!historical)$('markAngiCreditRequested').onclick=()=>markAngiAdjustmentRequested(c,flagged);
 }
 function angiReportFileName(c){return `Dynamic-Tintz-Angi-Credit-Report-${angiDateKey(c.start)}-to-${angiDateKey(c.end)}.pdf`}
 async function angiLogoDataUrl(){
@@ -4922,7 +4945,7 @@ if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date(
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
 bind('addQuoteAddon','onclick',addQuoteAddon);bind('quoteBackToTop','onclick',scrollToCurrentQuoteTop);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
-document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('openAngiCreditReport','onclick',openAngiCreditReport);document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',resetQuoteVisibleLimit);bind('quoteStatusFilter','onchange',resetQuoteVisibleLimit);bind('loadMoreQuotes','onclick',()=>{quoteVisibleLimit+=5;renderQuoteResults()});bind('operationView','onchange',async()=>{
+document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('openAngiCreditReport','onclick',openAngiCreditReport);bind('angiCycleSelect','onchange',()=>{});document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',resetQuoteVisibleLimit);bind('quoteStatusFilter','onchange',resetQuoteVisibleLimit);bind('loadMoreQuotes','onclick',()=>{quoteVisibleLimit+=5;renderQuoteResults()});bind('operationView','onchange',async()=>{
   operationsSelectedDate=null;
   if($('operationView').value==='all'){
     if($('operationStatus'))$('operationStatus').value='';
