@@ -33,6 +33,15 @@
   #scheduleJobModal textarea { min-height: 100px; }
 }
 
+
+/* Quote dimensions: compact unit selector with feet/inches entry */
+.measure-dimension-field{min-width:0;display:flex;flex-direction:column;gap:4px}
+.measure-dimension-field>input{width:100%;min-width:0}
+.measure-dimension-switch{min-height:18px;display:flex;align-items:center}
+.measure-dimension-switch button{font-size:11px;font-weight:700;color:#7bd8d3;border:0;background:transparent;cursor:pointer;padding:0 3px;text-align:left}
+.measure-feet-input{display:flex;align-items:center;gap:4px;min-width:0}
+.measure-feet-input input{width:100%;min-width:0;flex:1 1 0;padding-left:6px;padding-right:4px}
+.measure-feet-input span{font-size:11px;color:#a4b8be;flex:none}
 </style><title>Dynamic Tintz OS</title><style>
 /* v7.14.1 new opportunity service selector */
 .service-quote-modal{align-items:center;justify-content:center;padding:20px}
@@ -356,7 +365,7 @@
   <details id="quoteBuilderPanel" class="app-builder-sheet">
     <summary><span>Fast Quote Builder</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner">
-      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="newQuote" class="btn primary">New Quote</button></div></div>
+      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="recoverPreviousQuote" class="btn" type="button">Recover Previous Draft</button><button id="newQuote" class="btn primary">New Quote</button></div></div>
       <div id="quoteEditorTop" class="quote-editor-top-anchor"></div>
 <div id="quoteEditor" class="quote-layout">
 <section class="quote-main">

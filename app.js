@@ -2388,6 +2388,33 @@ async function setQuoteMultiFilm(enabled,restore=false){
   renderMeasures();if(!restore)scheduleQuoteAutosave();
 }
 function quoteDraftKey(){return `dt.quoteDraft.${session?.user?.id||'guest'}`}
+// Keep a recoverable history when a new quote is started before Save to Cloud.
+function quoteDraftArchiveKey(){return `dt.quoteDraft.archive.${session?.user?.id||'guest'}`}
+function archiveCurrentQuoteDraft(){
+  try{
+    const draft=quoteDraftPayload();
+    if(!quoteDraftHasContent(draft))return false;
+    const existing=JSON.parse(localStorage.getItem(quoteDraftArchiveKey())||'[]');
+    const archive=Array.isArray(existing)?existing:[];
+    archive.unshift({...draft,archived_at:new Date().toISOString()});
+    localStorage.setItem(quoteDraftArchiveKey(),JSON.stringify(archive.slice(0,25)));
+    return true;
+  }catch(e){console.warn('Could not archive quote draft:',e);return false}
+}
+function recoverPreviousQuoteDraft(){
+  let archive=[];
+  try{archive=JSON.parse(localStorage.getItem(quoteDraftArchiveKey())||'[]')}catch{}
+  if(!Array.isArray(archive)||!archive.length)return toast('No earlier unsaved quote drafts found on this device.');
+  const entry=archive[0];
+  const label=[entry.fields?.qFirst,entry.fields?.qLast,entry.fields?.qProject].filter(Boolean).join(' ')||'Untitled quote';
+  if(!confirm(`Restore previous unsaved quote: ${label}?\n\nYour current quote will be kept in draft history.`))return;
+  archiveCurrentQuoteDraft();
+  archive.shift();
+  try{localStorage.setItem(quoteDraftArchiveKey(),JSON.stringify(archive));localStorage.setItem(quoteDraftKey(),JSON.stringify(entry))}catch(e){return alert('Could not restore draft: '+e.message)}
+  editingQuoteId=null;
+  restoreQuoteDraftIfNeeded();
+}
+
 function quoteDraftPayload(){
   return {
     version:1,
@@ -2420,7 +2447,7 @@ function saveQuoteDraftLocal(){
     if(!quoteDraftHasContent(draft)){localStorage.removeItem(quoteDraftKey());updateQuoteAutosaveIndicator('');return}
     localStorage.setItem(quoteDraftKey(),JSON.stringify(draft));
     updateQuoteAutosaveIndicator(`Draft saved ${new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}`);
-  }catch(e){console.warn('Quote local autosave failed:',e)}
+  }catch(e){console.warn('Quote local autosave failed:',e);updateQuoteAutosaveIndicator('Autosave failed: storage unavailable','warning');}
 }
 function clearQuoteDraftLocal(){
   try{localStorage.removeItem(quoteDraftKey())}catch{}
@@ -2718,6 +2745,21 @@ function roomAreaOptions(){
   return commonRoomAreas.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('');
 }
 
+// Measurement input modes are display-only. Stored quote dimensions always remain inches.
+const quoteDimensionModes=new Map();
+function quoteDimensionParts(inches){
+  const total=Math.max(0,Number(inches)||0),feet=Math.floor(total/12);
+  return {feet,inches:Number((total-feet*12).toFixed(4))};
+}
+function quoteDimensionNumber(value){
+  const n=Number(value);return Number.isFinite(n)&&n>=0?n:0;
+}
+function quoteDimensionInput(row,axis){
+  const mode=quoteDimensionModes.get(row.id)||'in';
+  if(mode==='in')return `<input data-mid="${row.id}" data-k="${axis}" inputmode="decimal" placeholder="${axis==='w'?'Width':'Height'} (in)" aria-label="${axis==='w'?'Width':'Height'} in inches" value="${row[axis]||''}">`;
+  const parts=quoteDimensionParts(row[axis]);
+  return `<div class="measure-feet-input"><input type="number" min="0" step="1" inputmode="numeric" data-dim-id="${row.id}" data-dim-axis="${axis}" data-dim-unit="ft" aria-label="${axis==='w'?'Width':'Height'} feet" placeholder="ft" value="${parts.feet||''}"><span>ft</span><input type="number" min="0" max="11.9999" step="any" inputmode="decimal" data-dim-id="${row.id}" data-dim-axis="${axis}" data-dim-unit="in" aria-label="${axis==='w'?'Width':'Height'} inches" placeholder="in" value="${parts.inches||''}"><span>in</span></div>`;
+}
 function renderMeasures(){
   let el=$('measureRows');
   if(!el)return;
@@ -2735,14 +2777,31 @@ function renderMeasures(){
         </select>
         ${multiFilmEnabled?`<label class="window-film-label">Film for this window<select class="window-film-select" data-windowfilm="${r.id}">${multiFilmChoices()}</select></label>`:''}
       </div>
-      <input data-mid="${r.id}" data-k="w" inputmode="decimal" placeholder="Width" value="${r.w||''}">
-      <input data-mid="${r.id}" data-k="h" inputmode="decimal" placeholder="Height" value="${r.h||''}">
+      <div class="measure-dimension-field"><div class="measure-dimension-switch"><button type="button" data-dim-toggle="${r.id}" aria-label="Toggle dimension units">${quoteDimensionModes.get(r.id)==='ft'?'Feet + inches':'Inches'} ▾</button></div>${quoteDimensionInput(r,'w')}</div>
+      <div class="measure-dimension-field">${quoteDimensionInput(r,'h')}</div>
       <input data-mid="${r.id}" data-k="qty" inputmode="numeric" placeholder="Qty" value="${r.qty||1}">
       <div class="measure-total">${area} sq ft</div>
       <button class="btn mini" data-duplicate="${r.id}" title="Duplicate window">⧉</button>
       <button class="btn danger mini" data-remove="${r.id}" title="Delete window">×</button>`;
     el.appendChild(d);
     if(multiFilmEnabled){let filmSelect=d.querySelector('[data-windowfilm]');if(filmSelect)filmSelect.value=r.film_product_id||''}
+  });
+  el.querySelectorAll('[data-dim-toggle]').forEach(button=>button.onclick=()=>{
+    const id=Number(button.dataset.dimToggle);
+    quoteDimensionModes.set(id,quoteDimensionModes.get(id)==='ft'?'in':'ft');
+    renderMeasures();
+    el.querySelector(`[data-mid="${id}"][data-k="w"], [data-dim-id="${id}"][data-dim-axis="w"]`)?.focus();
+  });
+  el.querySelectorAll('[data-dim-id]').forEach(input=>input.oninput=()=>{
+    const id=Number(input.dataset.dimId),axis=input.dataset.dimAxis,row=measures.find(r=>r.id===id);
+    if(!row)return;
+    const container=input.closest('.measure-feet-input');
+    const feet=quoteDimensionNumber(container?.querySelector('[data-dim-unit="ft"]')?.value);
+    const inches=quoteDimensionNumber(container?.querySelector('[data-dim-unit="in"]')?.value);
+    row[axis]=Number((feet*12+inches).toFixed(4));
+    const total=input.closest('.measure-row')?.querySelector('.measure-total');
+    if(total)total.textContent=((Number(row.w)*Number(row.h)*Number(row.qty||1))/144).toFixed(2)+' sq ft';
+    calculateQuote();scheduleQuoteAutosave();
   });
   el.querySelectorAll('[data-include]').forEach(input=>input.onchange=()=>{let row=measures.find(r=>r.id===Number(input.dataset.include));if(row){row.included=input.checked;scopeRevisionPending=true;renderMeasures();scheduleQuoteAutosave()}});
   el.querySelectorAll('[data-windowfilm]').forEach(sel=>sel.onchange=()=>{
@@ -2794,7 +2853,12 @@ function renderMeasures(){
 function addMeasure(focus=true,preset=null){let id=nextMeasure++,row=preset||{id,area:'',w:0,h:0,qty:1};row={...row,id};if(multiFilmEnabled){row.film_mode='multi';if(!row.film_product_id){let primary=resolveInventoryProduct(inventoryProductCache,{square_catalog_item_name:$('qSquareItem')?.value},{});row.film_product_id=primary?.id||'';row.film_name=primary?.name||''}}measures.push(row);quoteMasterRows=measures;renderMeasures();if(focus)setTimeout(()=>document.querySelector(`[data-mid="${id}"][data-k="${preset&&row.area?'w':'area'}"]`)?.focus(),40);scheduleQuoteAutosave()}
 function duplicateMeasure(id){let source=measures.find(x=>x.id===id);if(!source)return;addMeasure(false,{...source});toast('Window duplicated')}
 function duplicateLastMeasure(){let last=measures[measures.length-1];if(!last)return;duplicateMeasure(last.id)}
-function clearQuoteForm(confirmFirst=true){if(confirmFirst&&!confirm('Clear this quote and start another?'))return;quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';multiFilmEnabled=false;if($('qMultiFilm'))$('qMultiFilm').value='no';if($('qMultiFilmHint'))$('qMultiFilmHint').textContent='No changes to your normal single-film quote.';$('qStatus').value='New Lead';$('qLead').value='Angi';quoteAddons=[];renderQuoteAddons();measures=[{id:1,area:'',w:0,h:0,qty:1}];quoteMasterRows=measures;scopeRevisionPending=false;nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;setMileageAutoStatus('');renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
+function clearQuoteForm(confirmFirst=true){
+  clearTimeout(quoteAutosaveTimer);clearTimeout(quoteCloudAutosaveTimer);
+  if(confirmFirst&&!confirm('Clear this quote and start another?'))return;
+  if(!editingQuoteId)archiveCurrentQuoteDraft();
+  quoteDimensionModes.clear();
+  quoteAutosaveMuted=true;['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qNotes'].forEach(id=>$(id).value='');$('qMiles').value='0';$('qType').value='Residential';if($('qSquareItem'))$('qSquareItem').value='25% Ceramic Tint Install';multiFilmEnabled=false;if($('qMultiFilm'))$('qMultiFilm').value='no';if($('qMultiFilmHint'))$('qMultiFilmHint').textContent='No changes to your normal single-film quote.';$('qStatus').value='New Lead';$('qLead').value='Angi';quoteAddons=[];renderQuoteAddons();measures=[{id:1,area:'',w:0,h:0,qty:1}];quoteMasterRows=measures;scopeRevisionPending=false;nextMeasure=2;editingQuoteId=null;editingCustomerId=null;editingLeadId=null;quoteMilesManual=false;setMileageAutoStatus('');renderMeasures();clearQuoteDraftLocal();quoteAutosaveMuted=false}
 function currentQuoteText(){let s=qSqft(),m=Number($('qMiles').value)||0,c=qPrice(ceramicMatrix,s,m),o=qPrice(solarMatrix,s,m),list=12*s,save=Math.max(0,list-c.price),pct=list?Math.round(save/list*100):0;return `Dynamic Tintz Window Film Proposal\n\nCustomer: ${$('qFirst').value} ${$('qLast').value}\nProject: ${$('qProject').value||'Window Film Project'}\nAddress: ${$('qAddress').value}\nTotal glass: ${s.toFixed(2)} sq ft\n\nPremium Ceramic normal price: ${money(list)}\nVolume-tier price: ${money(c.price)}\nCustomer savings: ${money(save)} (${pct}%)\nSolar Control: ${money(o.price)}\n\n50% deposit due at invoicing; balance due upon completion.\nResidential Lifetime Warranty • 12 Year Commercial Warranty\nProudly Veteran Owned and Operated\nDynamic Tintz • 469-840-4008`}
 async function ensureLeadForQuoteCustomer(customerId){
   let source=$('qLead')?.value||'Organic',
@@ -4938,11 +5002,17 @@ async function saveCalendarSelection(){let ids=[...$('calendarPicker').querySele
 async function connectGoogleCalendar(){let b=$('connectCalendar'),m=$('calendarMessage');b.disabled=true;m.textContent='Opening Google sign-in…';let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'start'}});b.disabled=false;if(error||data?.ok===false||!data?.auth_url){m.textContent=error?.message||data?.error||'Could not start Google connection.';return}let popup=window.open(data.auth_url,'dynamicTintzGoogleCalendar','width=620,height=760');if(!popup){location.href=data.auth_url;return}let checks=0,timer=setInterval(async()=>{checks++;if(popup.closed||checks>60){clearInterval(timer);await loadCalendarStatus()}},2000)}
 async function disconnectGoogleCalendar(){if(!confirm('Disconnect Google Calendar? Existing calendar events will stay in Google, but future job changes will stop syncing.'))return;let{data,error}=await sb.functions.invoke('google-calendar-auth',{body:{action:'disconnect'}});if(error||data?.ok===false)return toast(error?.message||data?.error||'Could not disconnect calendar.');toast('Google Calendar disconnected.');await loadCalendarStatus()}
 async function testCalendarConnection(){let b=$('testCalendar'),m=$('calendarMessage'),st=$('calendarStatus');b.disabled=true;m.textContent='Testing selected calendars…';let{data,error}=await sb.functions.invoke('google-calendar-sync',{body:{test:true}});b.disabled=false;if(error||data?.ok===false){st.textContent='Needs attention';m.textContent=error?.message||data?.error||'Calendar test failed.';return}st.textContent=`${data.calendars.length} Selected`;m.textContent=`Connected to ${data.calendars.join(', ')}.`}
-if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('leadEstimateSave','onclick',saveLeadEstimate);bind('leadEstimateStart','onchange',leadEstimateAutoEnd);bind('leadEstimateEnd','onchange',()=>{$('leadEstimateModal').dataset.endManual='1'});bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>clearQuoteForm(false));$('quoteBuilderPanel')?.addEventListener('toggle',()=>{const button=$('newQuoteTop'),opened=$('quoteBuilderPanel').open;if(button){button.setAttribute('aria-expanded',String(opened));button.textContent=opened?'Close Fast Quote Builder':'+ Fast Quote Builder'}});bind('newQuoteTop','onclick',()=>{const panel=$('quoteBuilderPanel');if(!panel)return;if(panel.open){panel.open=false;return}panel.open=true;clearQuoteForm(false);panel.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>$('qFirst')?.focus({preventScroll:true}),350)});bind('qMultiFilm','onchange',()=>setQuoteMultiFilm($('qMultiFilm').value==='yes'));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
+if($('inventoryRollReceivedDate'))$('inventoryRollReceivedDate').value=new Date().toISOString().slice(0,10);if($('inventoryBackfillFrom'))$('inventoryBackfillFrom').value=new Date(new Date().setMonth(new Date().getMonth()-6)).toISOString().slice(0,10);bind('inventoryAddProduct','onclick',addInventoryProduct);bind('inventoryAddRoll','onclick',addInventoryRoll);bind('saveManualFilmPull','onclick',saveManualFilmPull);bind('scrapQuickAdd','onclick',addScrapFromQuickEntry);bind('scrapManualAdd','onclick',addScrapManual);bind('scrapRefresh','onclick',loadScrapInventory);bind('markSelectedScrapsUsed','onclick',markSelectedScrapsUsed);bind('clearSelectedScraps','onclick',clearScrapSelection);bind('mobileMenuBrand','onclick',openMoreMenu);bind('closeMoreMenu','onclick',closeMoreMenu);$('moreMenu')?.querySelector('.more-sheet-backdrop')?.addEventListener('click',closeMoreMenu);bind('inventoryRefresh','onclick',loadInventory);bind('inventoryQuickAddRoll','onclick',()=>openAddRollModal());bind('inventoryQuickAddFilm','onclick',openAddFilmTypeModal);bind('metricAddRoll','onclick',metricEditorAddRoll);bind('metricPullFilm','onclick',openPullFromMetricFilm);bind('metricAddFilmType','onclick',openAddFilmTypeModal);bind('saveInventoryMetricEditor','onclick',saveInventoryMetricEditor);bind('metricEditorAddRoll','onclick',metricEditorAddRoll);bind('inventoryLoadBackfill','onclick',loadInventoryBackfill);bind('inventoryAutoBackfill','onclick',autoBackfillCompletedJobs);bind('scheduleMaterialLinearFt','oninput',()=>{$('scheduleMaterialLinearFt').dataset.source='manual';$('scheduleMaterialLinearFt').dataset.optimizerPlanId='';$('scheduleMaterialLinearFt').dataset.rollWidth='';updateScheduleMaterialProjection()});bind('scheduleFilmProduct','onchange',updateScheduleMaterialProjection);bind('optimizerLoadQuote','onclick',loadSelectedOptimizerQuote);bind('optimizerRun','onclick',runRollOptimizer);bind('optimizerClear','onclick',clearRollOptimizer);bind('optimizerSavePlan','onclick',saveRollOptimizerPlan);bind('optimizerPrint','onclick',printRollOptimizer);bind('saveInstallerJobUpdate','onclick',saveInstallerJobUpdate);bind('saveScheduledJob','onclick',saveScheduledJob);bind('leadEstimateSave','onclick',saveLeadEstimate);bind('leadEstimateStart','onchange',leadEstimateAutoEnd);bind('leadEstimateEnd','onchange',()=>{$('leadEstimateModal').dataset.endManual='1'});bind('quickShotQuote','onclick',quickShotPrefill);bind('closeQuickShotPicker','onclick',closeQuickShotPicker);bind('quickShotSearch','oninput',renderQuickShotPicker);bind('closeQuickShot','onclick',closeQuickShot);bind('previewQuickShot','onclick',previewQuickShot);bind('shareQuickShot','onclick',shareQuickShot);['qsSqft','qsStandardRate','qsRate'].forEach(id=>{let el=$(id);if(el)el.addEventListener('input',updateQuickShotSummary)});bind('newQuote','onclick',()=>{saveQuoteDraftLocal();clearQuoteForm(false);updateQuoteAutosaveIndicator('New quote ready • previous draft kept in history','saved')});bind('recoverPreviousQuote','onclick',recoverPreviousQuoteDraft);$('quoteBuilderPanel')?.addEventListener('toggle',()=>{const button=$('newQuoteTop'),opened=$('quoteBuilderPanel').open;if(button){button.setAttribute('aria-expanded',String(opened));button.textContent=opened?'Close Fast Quote Builder':'+ Fast Quote Builder'}});bind('newQuoteTop','onclick',()=>{const panel=$('quoteBuilderPanel');if(!panel)return;if(panel.open){panel.open=false;return}panel.open=true;clearQuoteForm(false);panel.scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>$('qFirst')?.focus({preventScroll:true}),350)});bind('qMultiFilm','onchange',()=>setQuoteMultiFilm($('qMultiFilm').value==='yes'));bind('addMeasure','onclick',()=>addMeasure());bind('duplicateLastMeasure','onclick',duplicateLastMeasure);bind('mobileAddWindow','onclick',()=>addMeasure());bind('mobileSaveQuote','onclick',saveCloudQuote);['qFirst','qLast','qEmail','qPhone','qAddress','qProject','qType','qSquareItem','qStatus','qMiles','qLead','qNotes'].forEach(id=>{
   let el=$(id);if(!el)return;
   el.addEventListener(el.tagName==='SELECT'?'change':'input',scheduleQuoteAutosave);
 });
 window.addEventListener('beforeunload',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
+window.addEventListener('pagehide',()=>{if(!quoteAutosaveMuted)saveQuoteDraftLocal()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&!quoteAutosaveMuted)saveQuoteDraftLocal()});
+// Capture changes from dynamically rendered measurement rows and add-on controls.
+document.getElementById('quotes')?.addEventListener('input',e=>{if(e.target.closest('#quoteBuilderPanel'))scheduleQuoteAutosave()},true);
+document.getElementById('quotes')?.addEventListener('change',e=>{if(e.target.closest('#quoteBuilderPanel'))scheduleQuoteAutosave()},true);
+setInterval(()=>{if($('quotes')?.classList.contains('active')&&!quoteAutosaveMuted)saveQuoteDraftLocal()},10000);
 bind('addQuoteAddon','onclick',addQuoteAddon);bind('quoteBackToTop','onclick',scrollToCurrentQuoteTop);bind('saveQuote','onclick',saveCloudQuote);bind('quoteSaveDockButton','onclick',saveCloudQuote);bind('copyQuote','onclick',()=>navigator.clipboard.writeText(currentQuoteText()).then(()=>toast('Quote copied')));bind('emailQuote','onclick',()=>location.href=`mailto:${encodeURIComponent($('qEmail').value)}?subject=${encodeURIComponent('Your Window Film Proposal — '+($('qProject').value||$('qFirst').value))}&body=${encodeURIComponent(currentQuoteText())}`);bind('clearQuote','onclick',()=>clearQuoteForm(true));bind('qMiles','oninput',()=>{quoteMilesManual=true;setMileageAutoStatus('Manual mileage');calculateQuote()});bind('qAddress','oninput',scheduleQuoteMileageAutofill);bind('qAddress','onblur',()=>autoFillQuoteMiles($('qAddress').value));bind('addShortcut','onclick',()=>openShortcut());bind('saveShortcut','onclick',saveShortcut);bind('shortcutSearch','oninput',renderShortcuts);bind('shortcutCategoryFilter','onchange',renderShortcuts);bind('refreshShortcuts','onclick',refreshBuiltInShortcuts);
 bindOwnerCommandCenter();
 document.querySelectorAll('[data-homequick="quote"]').forEach(b=>b.onclick=()=>{clearQuoteForm(false);show('quotes');$('quoteBuilderPanel')?.setAttribute('open','');setTimeout(()=>$('qFirst')?.focus(),80)});document.querySelectorAll('[data-homequick="lead"]').forEach(b=>b.onclick=()=>openNewLeadQuote('Organic'));bind('saveOrganicLeadBtn','onclick',saveOrganicLead);bind('leadSearch','oninput',renderLeadResults);bind('leadStatusFilter','onchange',renderLeadResults);bind('openAngiCreditReport','onclick',openAngiCreditReport);bind('angiCycleSelect','onchange',()=>{});document.querySelectorAll('[data-leadquick]').forEach(b=>b.onclick=()=>{let f=$('leadStatusFilter');if(!f)return;let v=b.dataset.leadquick;if(v==='attention'){if(![...f.options].some(o=>o.value==='attention'))f.add(new Option('Needs Attention','attention'),1);f.value='attention'}else f.value=v;renderLeadResults()});bind('quoteSearch','oninput',resetQuoteVisibleLimit);bind('quoteStatusFilter','onchange',resetQuoteVisibleLimit);bind('loadMoreQuotes','onclick',()=>{quoteVisibleLimit+=5;renderQuoteResults()});bind('operationView','onchange',async()=>{
