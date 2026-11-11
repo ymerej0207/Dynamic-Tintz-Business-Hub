@@ -1351,7 +1351,7 @@ function updateQuickShotSummary(){
 }
 function quickShotOpenQuote(quote){
   if(!quote)return toast('Quote not found.');
-  if(/Cleaning$/.test(quote.project_type||''))return openCareQuickShot(quote);
+  if(/cleaning|window care/i.test(String(quote.project_type||'')+' '+String(quote.square_catalog_item_name||'')))return openCareQuickShot(quote);
   let customer=[quote.customer?.first_name,quote.customer?.last_name].filter(Boolean).join(' ').trim();
   let sqft=Math.max(0,Number(quote.total_sqft)||0);
   let base=Math.max(0,Number(quote.ceramic_price)||0);
@@ -1504,8 +1504,19 @@ async function shareQuickShot(){
 // Window Care QuickShot is kept in memory. Editing it never changes the quote or Square draft.
 let careQuickShotLines=[];
 function openCareQuickShot(q){
- const fromQuote=!!q,lines=fromQuote?(Array.isArray(q.additional_services)?q.additional_services:[]):careLines();
- if(!lines.length)return toast('Select a cleaning package first.');
+ const fromQuote=!!q;
+ let lines=fromQuote?(Array.isArray(q.additional_services)?q.additional_services:[]):careLines();
+ // Older saved cleaning quotes may have no additional_services even though their
+ // package and price are stored in the quote itself. Keep QuickShot available.
+ if(fromQuote&&!lines.length){
+   const name=q.square_catalog_item_name||q.project_name||'Window Cleaning';
+   const price=Math.max(0,Number(q.ceramic_price)||0);
+   lines=[{name,variation:'Saved cleaning quote',qty:1,price,kind:'package'}];
+ }
+ if(!lines.length){alert('Select a cleaning package first.');return;}
+ const required=['careQuickShotModal','cqsCustomer','cqsAddress','cqsProject','cqsNote','cqsSavings','careQuickShotPreviewWrap','cqsLines'];
+ const missing=required.filter(id=>!$(id));
+ if(missing.length)throw new Error('QuickShot interface is missing: '+missing.join(', '));
  careQuickShotLines=lines.map(l=>({name:l.name,variation:l.variation||'',qty:Number(l.qty)||1,price:Number(l.price)||0,minimum:Number(l.minimum)||0}));
  $('cqsCustomer').value=fromQuote?([q.customer?.first_name,q.customer?.last_name].filter(Boolean).join(' ')||q.project_name||'Customer'):[ $('careFirst').value,$('careLast').value].filter(Boolean).join(' ')||'Customer';
  $('cqsAddress').value=fromQuote?(q.service_address||q.customer?.service_address||''):$('careAddress').value;
@@ -3301,7 +3312,14 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=e=>{e.preventDefault();removeAssignment(b.dataset.removeassignment,b.dataset.jobid)});
   $('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteCloudQuote(b.dataset.deletequote)});
   $('savedQuotes').querySelectorAll('[data-windowmeasurements]').forEach(b=>b.onclick=e=>{e.preventDefault();openWindowMeasurements(b.dataset.windowmeasurements)});
-  $('savedQuotes').querySelectorAll('[data-quickshotdirect]').forEach(b=>b.onclick=e=>{e.preventDefault();let q=data.find(x=>x.id===b.dataset.quickshotdirect);quickShotOpenQuote(q)});
+  $('savedQuotes').querySelectorAll('[data-quickshotdirect]').forEach(b=>b.onclick=e=>{
+    e.preventDefault();e.stopPropagation();
+    try{
+      const q=data.find(x=>String(x.id)===String(b.dataset.quickshotdirect));
+      if(!q)throw new Error('Saved quote not found. Refresh Quotes and try again.');
+      quickShotOpenQuote(q);
+    }catch(error){console.error('Saved quote QuickShot:',error);alert('QuickShot could not open: '+(error?.message||error));}
+  });
   $('savedQuotes').querySelectorAll('[data-copycloud]').forEach(b=>b.onclick=e=>{e.preventDefault();navigator.clipboard.writeText(/Cleaning$/.test(data[Number(b.dataset.copycloud)]?.project_type||'')?careSavedSummary(data[Number(b.dataset.copycloud)]):cloudQuoteText(data[Number(b.dataset.copycloud)])).then(()=>toast('Quote copied'))});
 }
 let currentWindowMeasurementText='';
