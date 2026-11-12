@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.18.0"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.18.0"><link rel="stylesheet" href="home-command-center.css?v=7.20.0"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}
 /* iOS scheduling modal: readable, touch-friendly single-column layout */
 @media (max-width: 620px) {
   #scheduleJobModal { padding: 8px !important; align-items: center; }
@@ -210,63 +210,89 @@
   </section>
 </div>
 <div id="app" class="shell hidden"><div class="brand app-topbar"><button id="mobileMenuBrand" class="app-menu-glyph" type="button" aria-label="Open menu">☰</button><img src="dynamic-tintz-mark.png" alt="Dynamic Tintz mark"><div><h1>Dynamic Tintz</h1><p id="userline"></p></div><span class="topbar-spacer"></span></div>
-<main id="owner" class="view app-dashboard">
-  <div class="app-screen-title">
-    <div><span class="eyebrow">DYNAMIC TINTZ OS</span><h2>Dashboard</h2></div>
-    <button class="app-round-action" data-go="quotes" aria-label="New quote">+</button>
+<main id="owner" class="view app-dashboard dt-command-center">
+  <!-- Desktop command-center sidebar. Other application pages retain their existing navigation. -->
+  <aside class="dt-home-sidebar" aria-label="Command Center navigation">
+    <div class="dt-home-side-brand"><img src="dynamic-tintz-mark.png" alt="Dynamic Tintz"><div><strong>Dynamic Tintz</strong><small>BUSINESS OS</small></div></div>
+    <nav class="dt-home-side-nav" aria-label="Business modules">
+      <button class="is-current" data-go="owner"><span class="dt-side-icon">⌂</span>Home</button>
+      <button data-go="leads"><span class="dt-side-icon">♙</span>Leads</button>
+      <button data-go="quotes"><span class="dt-side-icon">▤</span>Quotes</button>
+      <button data-go="operations"><span class="dt-side-icon">▣</span>Schedule &amp; Jobs</button>
+      <button data-go="inventory"><span class="dt-side-icon">⬡</span>Inventory</button>
+      <button data-go="optimizer"><span class="dt-side-icon">◎</span>Roll Optimizer</button>
+      <button data-go="rollcalculator"><span class="dt-side-icon">▦</span>Film Calculator</button>
+    </nav>
+    <div class="dt-home-side-bottom"><button data-go="account"><span class="dt-side-icon">⚙</span>Settings</button><span class="dt-home-side-foot">DYNAMIC TINTZ OS</span><small><i class="dt-home-dot"></i>Business workspace</small></div>
+  </aside>
+
+  <div class="dt-home-content">
+    <header class="dt-home-header">
+      <div class="dt-home-head-title"><span class="dt-home-header-brand">DYNAMIC TINTZ <b>OS</b></span><h2>Command Center</h2></div>
+      <div class="dt-home-header-right"><span class="dt-home-online"><i class="dt-home-dot"></i>Workspace Ready</span><span id="homeHeaderDate" class="dt-home-date"></span><button class="dt-home-account" data-go="account" aria-label="Account and settings">⚙</button></div>
+    </header>
+    <div class="dt-home-mobile-heading"><div><span class="dt-home-eyebrow">DYNAMIC TINTZ OS</span><h2>Command Center</h2><p id="homeGreeting">Here's what's happening with your business.</p></div><span id="homeMobileDate" class="dt-home-mobile-date"></span></div>
+
+    <section class="dt-home-kpis" aria-label="Business overview">
+      <button class="dt-home-kpi" data-go="leads"><span class="dt-home-kpi-icon">♙</span><span><small>ACTIVE LEADS</small><b id="homeActiveLeads">0</b><em>In your pipeline</em></span></button>
+      <button class="dt-home-kpi" data-go="quotes"><span class="dt-home-kpi-icon">▤</span><span><small>OPEN QUOTES</small><b id="pendingQuotes">0</b><em>Currently active</em></span></button>
+      <button class="dt-home-kpi" data-go="operations"><span class="dt-home-kpi-icon">▣</span><span><small>SCHEDULED JOBS</small><b id="scheduledJobs">0</b><em>Upcoming installations</em></span></button>
+      <button class="dt-home-kpi" data-go="followups"><span class="dt-home-kpi-icon">◷</span><span><small>FOLLOW-UPS DUE</small><b id="dueLeads">0</b><em>Needs outreach</em></span></button>
+    </section>
+
+    <div class="dt-home-main-grid">
+      <section class="dt-home-panel dt-home-schedule-panel" aria-label="Today's schedule">
+        <div class="dt-home-panel-head"><div class="dt-home-panel-heading"><span class="dt-home-panel-icon">▣</span><h3>Today's Schedule</h3></div><div class="dt-home-day-controls"><button id="homePrevDay" aria-label="Previous day">‹</button><button id="homeDayToday" class="dt-home-day-label" aria-label="Return to today">Today</button><button id="homeNextDay" aria-label="Next day">›</button></div></div>
+        <div class="dt-home-schedule-filters"><button class="is-active" data-homefilter="all">All <span id="homeAllCount"></span></button><button data-homefilter="estimate">Estimates <span id="homeEstimateCount"></span></button><button data-homefilter="install">Jobs <span id="homeInstallCount"></span></button></div>
+        <div id="homeTodaySchedule" class="dt-home-schedule-list" aria-live="polite"><div class="dt-home-empty">Loading today's appointments…</div></div>
+        <button class="dt-home-panel-footer" data-go="operations">View full calendar <span>→</span></button>
+      </section>
+
+      <section class="dt-home-panel dt-home-attention-panel" aria-label="Business attention">
+        <div class="dt-home-panel-head"><div class="dt-home-panel-heading"><span class="dt-home-panel-icon">⚠</span><h3>Needs Attention</h3></div></div>
+        <div class="dt-home-alert-list">
+          <button data-go="followups"><span class="dt-home-alert-icon">✉</span><span><b>Follow-ups Due</b><small>Leads awaiting contact</small></span><strong id="homeAttentionFollowups" class="dt-home-alert-count">0</strong><i>›</i></button>
+          <button data-go="quotes"><span class="dt-home-alert-icon">▤</span><span><b>Pending Quotes</b><small>Quotes awaiting customer response</small></span><strong id="homeAttentionQuotes" class="dt-home-alert-count">0</strong><i>›</i></button>
+          <button data-go="inventory"><span class="dt-home-alert-icon">⬡</span><span><b>Inventory Alerts</b><small>Film at or below reorder point</small></span><strong id="homeAttentionInventory" class="dt-home-alert-count">0</strong><i>›</i></button>
+          <button data-go="leads"><span class="dt-home-alert-icon">♙</span><span><b>New Leads</b><small>Ready for first contact</small></span><strong id="newLeads" class="dt-home-alert-count">0</strong><i>›</i></button>
+        </div>
+      </section>
+
+      <section class="dt-home-panel dt-home-actions-panel" aria-label="Quick actions">
+        <div class="dt-home-panel-head"><div class="dt-home-panel-heading"><span class="dt-home-panel-icon">ϟ</span><h3>Quick Actions</h3></div></div>
+        <div class="dt-home-action-grid">
+          <button data-homequick="quote"><span>▤</span>New Quote</button>
+          <button data-homequick="lead"><span>♙</span>New Lead</button>
+          <button data-go="operations"><span>▣</span>Schedule</button>
+          <button data-go="inventory"><span>⬡</span>Inventory</button>
+          <button data-go="optimizer"><span>◎</span>Roll Optimizer</button>
+          <button data-go="rollcalculator"><span>▦</span>Film Calculator</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- The compact weekly list appears on mobile in place of the desktop daily schedule. -->
+    <section class="dt-home-panel dt-home-week-panel" aria-label="This week's calendar">
+      <div class="dt-home-panel-head"><div class="dt-home-panel-heading"><span class="dt-home-panel-icon">▣</span><h3>This Week</h3></div><button class="dt-home-link" data-go="operations">View Schedule →</button></div>
+      <div id="homeWeekRange" class="dt-home-week-range"></div>
+      <div id="homeWeekStrip" class="home-week-strip home-week-overview"></div>
+      <div id="liveJobs" class="home-week-detail-source" aria-hidden="true"></div>
+    </section>
+
+    <div class="dt-home-bottom-grid">
+      <section class="dt-home-panel dt-home-recent-panel" aria-label="Recent quotes">
+        <div class="dt-home-panel-head"><div class="dt-home-panel-heading"><span class="dt-home-panel-icon">▤</span><h3>Recent Quotes</h3></div><button class="dt-home-link" data-go="quotes">View All →</button></div>
+        <div class="dt-home-table-head"><span>CUSTOMER / PROJECT</span><span>AMOUNT</span><span>STATUS</span></div>
+        <div id="recentQuotes" class="dt-home-recent-rows"><div class="dt-home-empty">Loading recent quotes…</div></div>
+      </section>
+      <section class="dt-home-panel dt-home-inventory-panel" aria-label="Inventory snapshot">
+        <div class="dt-home-panel-head"><div class="dt-home-panel-heading"><span class="dt-home-panel-icon">⬡</span><h3>Inventory Snapshot</h3></div><button class="dt-home-link" data-go="inventory">View Inventory →</button></div>
+        <div id="inventoryHomeAlerts"><div class="dt-home-empty">Loading inventory forecast…</div></div>
+      </section>
+    </div>
+    <!-- Preserve data targets referenced by other established dashboard functions. -->
+    <div class="dt-home-legacy-targets" aria-hidden="true"><span id="clocked"></span><span id="completedMonth"></span><span id="mission"></span><span id="pipelineSnapshot"></span></div>
   </div>
-
-  <div class="app-kpi-row">
-    <button class="app-kpi-card" data-go="quotes"><span>QUOTES</span><b id="pendingQuotes">0</b><small>active</small></button>
-    <button class="app-kpi-card" data-go="operations"><span>JOBS</span><b id="scheduledJobs">0</b><small>scheduled</small></button>
-    <div class="app-kpi-card"><span>COMPLETED</span><b id="completedMonth">0</b><small>this month</small></div>
-  </div>
-
-  <section class="app-section">
-    <div class="app-section-head">
-      <div><h3>This Week</h3><div id="homeWeekRange" class="muted home-week-range"></div></div>
-      <button data-go="operations">Full Calendar</button>
-    </div>
-    <div id="homeWeekStrip" class="home-week-strip home-week-overview"></div>
-    <div id="liveJobs" class="home-week-detail-source" aria-hidden="true"><div class="muted">Loading this week…</div></div>
-  </section>
-
-  <section class="app-section home-quick-actions-section">
-    <div class="app-section-head"><h3>Quick Actions</h3></div>
-    <div class="home-quick-actions">
-      <button class="home-quick-action" data-homequick="quote"><span class="home-quick-icon">＋</span><b>New Quote</b></button>
-      <button class="home-quick-action" data-homequick="lead"><span class="home-quick-icon">◎</span><b>New Lead</b></button>
-      <button class="home-quick-action" data-go="operations"><span class="home-quick-icon">▣</span><b>Schedule</b></button>
-      <button class="home-quick-action" data-go="inventory"><span class="home-quick-icon">◇</span><b>Inventory</b></button>
-      <button class="home-quick-action" data-go="operations"><span class="home-quick-icon">✓</span><b>Operations</b></button>
-    </div>
-  </section>
-
-  <section class="app-section">
-    <div class="app-section-head"><h3>Recent Quotes</h3><button data-go="quotes">View All</button></div>
-    <div id="recentQuotes" class="app-recent-list"><div class="muted">Loading recent quotes…</div></div>
-  </section>
-
-  <section class="app-section inventory-home-card">
-    <div class="app-section-head"><h3>Inventory Snapshot</h3><button data-go="inventory">View All</button></div>
-    <div id="inventoryHomeAlerts"><div class="muted">Loading inventory forecast…</div></div>
-  </section>
-
-  <details class="app-dashboard-more">
-    <summary>Business Attention & Pipeline</summary>
-    <div class="app-attention-grid">
-      <div><b id="newLeads">0</b><span>New Leads</span></div>
-      <div><b id="dueLeads">0</b><span>Follow-Ups</span></div>
-      <div><b id="clocked">0</b><span>Clocked In</span></div>
-    </div>
-    <div id="mission" class="muted app-mission"></div>
-    <div id="pipelineSnapshot" class="pipeline-bars"></div>
-    <div class="actions">
-      <button class="btn" data-go="leads">Work Leads</button>
-      <button class="btn" data-go="shortcuts">Responses</button>
-      <button class="btn" data-go="quotes">New Quote</button>
-    </div>
-  </details>
 </main>
 <main id="employee" class="view"><div class="head"><h2>Installer Dashboard</h2><span class="pill">Installer</span></div><div id="employeeClock" class="card"></div><div class="card"><h3>Assigned Jobs</h3><div id="jobs" class="muted">No assigned jobs yet.</div></div></main>
 <main id="leads" class="view app-leads-screen">
@@ -982,4 +1008,4 @@
 <small class="muted">Choose either combined screen/track sets OR individual screens/tracks to avoid double billing.</small></div>
 <button id="sendCleaningOffer" class="btn primary wide">Email Both Options to Customer</button><div id="cleaningOfferMessage" class="muted" style="margin-top:8px"></div></div></div>
 <div id="cleaningGlobalAlert" style="display:none;position:fixed;right:12px;bottom:82px;z-index:1000;max-width:min(370px,calc(100vw - 24px));padding:12px 16px;background:#0d383a;color:#e9ffff;border:1px solid #45c8c2;border-radius:12px;box-shadow:0 10px 25px #0006;cursor:pointer" role="status"></div>
-<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.19.7-estimate-quote-on-draft"></script></body></html>
+<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.20.0-home-command-center"></script></body></html>

@@ -1,0 +1,185 @@
+/* Dynamic Tintz OS — Homepage Command Center v7.20.0
+ * Intentionally scoped to #owner. No Leads/Quotes/Inventory/Operations layout overrides.
+ * Original logo and #22d4cf brand palette are retained.
+ */
+#owner.dt-command-center{
+  --dtcc-bg:#030b0d;--dtcc-card:#0b171b;--dtcc-line:#26434a;--dtcc-accent:#22d4cf;
+  --dtcc-muted:#93aeb2;--dtcc-bright:#eefdff;color:#eefdff;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+#owner .dt-home-content{min-width:0}
+#owner button{cursor:pointer;font-family:inherit}
+#owner button:focus-visible{outline:2px solid #34e8de;outline-offset:3px}
+#owner .dt-home-sidebar,#owner .dt-home-header{display:none}
+#owner .dt-home-mobile-heading{display:flex;align-items:start;justify-content:space-between;gap:12px;margin:18px 1px 19px}
+#owner .dt-home-mobile-heading h2{font-size:clamp(25px,4vw,32px);font-weight:850;letter-spacing:-.035em;line-height:1.05;margin:4px 0 7px}
+#owner .dt-home-mobile-heading p{margin:0;color:#9ab2b4;font-size:12px;line-height:1.4}
+#owner .dt-home-eyebrow{font-size:10px;font-weight:850;letter-spacing:.13em;color:#24d3ce}
+#owner .dt-home-mobile-date{font-size:10px;font-weight:700;text-align:right;color:#93bfc0;white-space:nowrap;padding-top:10px}
+#owner .dt-home-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:16px}
+#owner .dt-home-kpi{min-width:0;min-height:102px;display:flex;align-items:center;gap:14px;text-align:left;padding:15px;border:1px solid rgba(34,212,207,.44);background:linear-gradient(145deg,#10242c,#071116 87%);color:#eaffff;border-radius:14px;box-shadow:inset 0 1px 0 #ffffff08;transition:border-color .18s,transform .18s}
+#owner .dt-home-kpi:hover{transform:translateY(-2px);border-color:#22d4cf}
+#owner .dt-home-kpi-icon{width:49px;height:49px;flex:0 0 49px;display:grid;place-items:center;border:1px solid #14424b;border-radius:11px;background:linear-gradient(140deg,#0c6a73,#063743);box-shadow:0 4px 18px #00e2d80c;color:#40f0ec;font-weight:600;font-size:27px}
+#owner .dt-home-kpi>span:last-child{display:flex;min-width:0;flex-direction:column;gap:3px}
+#owner .dt-home-kpi small{font-size:10px;font-weight:850;letter-spacing:.045em;color:#d9f0f2;white-space:nowrap}
+#owner .dt-home-kpi b{font-size:29px;font-weight:850;line-height:1;letter-spacing:-.03em;color:#fff;font-variant-numeric:tabular-nums}
+#owner .dt-home-kpi em{font-style:normal;color:#8ba5a8;font-size:10px}
+#owner .dt-home-main-grid{display:grid;grid-template-columns:minmax(0,1.43fr) minmax(0,1.03fr) minmax(0,1fr);gap:13px;margin-bottom:14px;align-items:stretch}
+#owner .dt-home-bottom-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:13px;align-items:start}
+#owner .dt-home-panel{min-width:0;border:1px solid #3a535d;border-radius:14px;background:linear-gradient(150deg,#10202b,#071318 92%);box-shadow:0 5px 18px #0005;padding:14px 14px 13px;margin:0}
+#owner .dt-home-panel-head{min-height:37px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:11px;border-bottom:1px solid #1b3239;margin-bottom:9px}
+#owner .dt-home-panel-heading{min-width:0;display:flex;align-items:center;gap:10px}
+#owner .dt-home-panel-icon{color:#29e5e0;font-weight:700;font-size:24px;line-height:1;display:inline-flex;justify-content:center;align-items:center;width:25px;flex-shrink:0}
+#owner .dt-home-panel-heading h3{color:#f2feff;font-size:17px;font-weight:850;letter-spacing:-.024em;margin:0;line-height:1.2}
+#owner .dt-home-link,#owner .dt-home-panel-footer{background:none;border:0;color:#28e1dc;font-size:11px;font-weight:780;white-space:nowrap;padding:5px 0}
+#owner .dt-home-panel-footer{display:block;text-align:right;margin-top:10px;width:100%;padding:10px 2px 0;border-top:1px solid #182d34}
+#owner .dt-home-empty{color:#a0babd;border:1px dashed #27434a;border-radius:10px;padding:17px 12px;text-align:center;font-size:12px;line-height:1.5}
+#owner .dt-home-day-controls{display:flex;align-items:center;gap:5px}
+#owner .dt-home-day-controls button{border:0;background:transparent;color:#d4ebef;padding:3px 6px;font-size:19px;line-height:1;min-width:21px}
+#owner .dt-home-day-controls button.dt-home-day-label{min-width:unset;color:#e5faff;font-size:11px;font-weight:800;white-space:nowrap}
+#owner .dt-home-schedule-filters{display:flex;gap:7px;margin:11px 0 8px}
+#owner .dt-home-schedule-filters button{min-height:29px;padding:5px 12px;background:#142734;color:#e0f0f2;border:1px solid #2a4651;border-radius:7px;font-size:10px;font-weight:750;white-space:nowrap}
+#owner .dt-home-schedule-filters button.is-active{background:linear-gradient(135deg,#39eee7,#13bcb9);color:#002327;border-color:#1dd5cd}
+#owner .dt-home-schedule-list{display:flex;flex-direction:column;min-height:175px}
+#owner .dt-home-agenda-row{width:100%;min-height:47px;padding:7px 3px;display:grid;grid-template-columns:65px 62px minmax(0,1fr) 15px;gap:8px;align-items:center;border:0;border-bottom:1px solid #203640;background:transparent;color:#e8f7fa;text-align:left}
+#owner .dt-home-agenda-row:last-child{border-bottom:0}
+#owner .dt-home-agenda-row:hover{background:#15313a66}
+#owner .dt-home-agenda-row time{font-weight:800;font-size:11px;white-space:nowrap}
+#owner .dt-home-agenda-status{padding:5px 7px;border-radius:7px;white-space:nowrap;text-align:center;background:#08354d;color:#6ecbff;font-size:8px;font-weight:850}
+#owner .dt-home-agenda-status.estimate{background:#13354f;color:#72bfff}
+#owner .dt-home-agenda-status.install,#owner .dt-home-agenda-status.cleaning{background:#0b4141;color:#66e9c5}
+#owner .dt-home-agenda-status.personal{background:#342340;color:#d6a9fc}
+#owner .dt-home-agenda-title{min-width:0;display:flex;flex-direction:column;gap:3px}
+#owner .dt-home-agenda-title b{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#owner .dt-home-agenda-title small{font-size:9px;color:#93aeb3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#owner .dt-home-agenda-chevron{font-size:22px;color:#8eacad;text-align:right}
+#owner .dt-home-alert-list{display:flex;flex-direction:column}
+#owner .dt-home-alert-list button{display:grid;grid-template-columns:30px minmax(0,1fr) 28px 10px;align-items:center;text-align:left;gap:9px;width:100%;min-height:64px;border:0;border-bottom:1px solid #22373e;background:none;color:#eaffff;padding:10px 3px}
+#owner .dt-home-alert-list button:last-child{border-bottom:0}
+#owner .dt-home-alert-list button:hover{background:#15313a77}
+#owner .dt-home-alert-icon{font-size:24px;font-weight:500;color:#cde5e8;text-align:center}
+#owner .dt-home-alert-list button>span:nth-child(2){display:flex;flex-direction:column;min-width:0;gap:3px}
+#owner .dt-home-alert-list b{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#owner .dt-home-alert-list small{font-size:10px;color:#93afb3;line-height:1.25}
+#owner .dt-home-alert-count{font-size:13px;text-align:center;background:#15526b;color:#adf0ff;border-radius:7px;padding:5px 0;font-variant-numeric:tabular-nums}
+#owner .dt-home-alert-list button:nth-child(1) .dt-home-alert-count{background:#503031;color:#ffbdc0}
+#owner .dt-home-alert-list button:nth-child(2) .dt-home-alert-count{background:#5b4418;color:#ffdd78}
+#owner .dt-home-alert-list button:nth-child(3) .dt-home-alert-count{background:#58431b;color:#ffe18c}
+#owner .dt-home-alert-list i{font-size:20px;font-style:normal;color:#acbfc1}
+#owner .dt-home-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding-top:5px}
+#owner .dt-home-action-grid button{border:1px solid #3b5864;border-radius:10px;background:linear-gradient(145deg,#112935,#0a1721);color:#fff;min-height:79px;padding:11px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;font-size:12px;font-weight:850;text-align:center}
+#owner .dt-home-action-grid button:hover{border-color:#29d6d1;background:#123540}
+#owner .dt-home-action-grid button span{color:#28ddd8;font-size:28px;line-height:1}
+#owner .dt-home-table-head,#owner .dt-home-quote-row{display:grid;grid-template-columns:minmax(0,1fr) 86px 94px;gap:9px;align-items:center}
+#owner .dt-home-table-head{padding:9px 12px;border-radius:7px;border:1px solid #26444e;background:#1a303c;font-size:9px;color:#c9e3e5;font-weight:850}
+#owner .dt-home-quote-row{width:100%;text-align:left;border:0;border-bottom:1px solid #20343d;background:transparent;color:#f6ffff;min-height:46px;padding:8px 12px}
+#owner .dt-home-quote-row:hover{background:#18343c77}
+#owner .dt-home-quote-row>span{display:flex;flex-direction:column;min-width:0;gap:3px}
+#owner .dt-home-quote-row b{font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#owner .dt-home-quote-row small{font-size:10px;color:#86a5a9;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#owner .dt-home-quote-row strong{font-size:11px;font-weight:760;font-variant-numeric:tabular-nums}
+#owner .dt-home-quote-status{font-size:10px;font-style:normal;text-align:center;font-weight:850;padding:5px 3px;border-radius:7px;background:#3e3017;color:#f8d46d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#owner .dt-home-quote-status.sent{background:#18405a;color:#83d6ff}
+#owner .dt-home-quote-status.approved{background:#0b4933;color:#72edb4}
+#owner .dt-home-quote-status.followup{background:#4c351e;color:#f7cc8d}
+#owner .dt-home-inventory-panel .app-inventory-snapshot{gap:0}
+#owner .dt-home-inventory-panel .app-inventory-snapshot-card{min-height:59px;grid-template-columns:minmax(0,1fr) 55px 12px;background:transparent;border:0;border-radius:0;border-bottom:1px solid #223942;padding:8px 4px;margin:0;align-items:center}
+#owner .dt-home-inventory-panel .app-stock-copy b{color:#f7feff;font-size:11px}
+#owner .dt-home-inventory-panel .app-stock-copy small{font-size:9px;color:#8fb1b4}
+#owner .dt-home-inventory-panel .app-stock-copy em{font-size:8px}
+#owner .dt-home-inventory-panel .inventory-sqft-display{max-width:58px}
+#owner .dt-home-inventory-panel .inventory-sqft-display b{font-size:17px}
+#owner .dt-home-inventory-panel .inventory-sqft-display small{font-size:8px}
+#owner .dt-home-legacy-targets{display:none!important}
+#owner .dt-home-week-panel{display:none}
+#owner .dt-home-dot{display:inline-block;width:8px;height:8px;flex:0 0 8px;background:#36df79;border-radius:50%;box-shadow:0 0 9px #36df7955}
+
+@media(min-width:1100px){
+  body:has(#owner.active){padding:0!important;background:#03090d!important}
+  #app.shell:has(#owner.active){max-width:none!important;margin:0!important;padding:0!important;min-height:100dvh;background:transparent!important}
+  #app:has(#owner.active)>.app-topbar{display:none!important}
+  #app:has(#owner.active)>#nav.bottom{display:none!important}
+  #owner.dt-command-center.active{display:grid!important;grid-template-columns:218px minmax(0,1fr);align-items:start;padding:0;min-height:100vh;background:radial-gradient(circle at 55% 0%,#10222a 0,transparent 42%),#03090d}
+  #owner .dt-home-sidebar{display:flex;position:sticky;top:0;min-height:100vh;height:100vh;flex-direction:column;overflow-y:auto;background:linear-gradient(170deg,#061016,#02080b);border-right:1px solid #28414b;padding:19px 9px 15px}
+  #owner .dt-home-side-brand{display:flex;align-items:center;flex-direction:column;gap:5px;text-align:center;padding:2px 8px 21px;margin-bottom:16px;border-bottom:1px solid #26414a}
+  #owner .dt-home-side-brand img{width:96px;height:96px;object-fit:contain}
+  #owner .dt-home-side-brand strong{display:block;font-size:21px;font-weight:900;letter-spacing:-.045em;color:#fff}
+  #owner .dt-home-side-brand small{display:block;font-size:9px;letter-spacing:.17em;margin-top:3px;color:#2ce2dc;font-weight:800}
+  #owner .dt-home-side-nav{display:flex;flex-direction:column;gap:4px}
+  #owner .dt-home-side-nav button,#owner .dt-home-side-bottom button{width:100%;display:flex;align-items:center;text-align:left;gap:13px;color:#c5d4d9;border:0;background:transparent;border-radius:8px;min-height:44px;padding:11px 10px;font-size:13px;font-weight:690}
+  #owner .dt-home-side-nav button:hover,#owner .dt-home-side-bottom button:hover{background:#0e2f36;color:#fff}
+  #owner .dt-home-side-nav button.is-current{color:#fff;background:linear-gradient(95deg,#0c777c,#0a3e49);border-left:3px solid #20e4db;padding-left:7px}
+  #owner .dt-side-icon{font-size:23px;line-height:1;color:#8ce8e5;width:26px;display:inline-flex;align-items:center;justify-content:center}
+  #owner .dt-home-side-bottom{margin-top:auto;border-top:1px solid #28414b;padding-top:10px}
+  #owner .dt-home-side-foot{display:block;font-size:10px;color:#728e93;letter-spacing:.07em;margin:22px 10px 6px}
+  #owner .dt-home-side-bottom small{display:flex;align-items:center;gap:7px;color:#90a9ae;font-size:11px;padding:0 10px}
+  #owner .dt-home-content{min-width:0;padding:0 22px 28px}
+  #owner .dt-home-header{display:flex;min-height:78px;align-items:center;justify-content:space-between;gap:12px;padding:15px 2px;margin-bottom:17px;border-bottom:1px solid #203942}
+  #owner .dt-home-head-title{display:flex;align-items:center;gap:22px}
+  #owner .dt-home-header-brand{font-size:21px;font-weight:900;color:#fff;letter-spacing:-.045em;padding-right:22px;border-right:1px solid #48616b;white-space:nowrap}
+  #owner .dt-home-header-brand b{color:#27ded8}
+  #owner .dt-home-head-title h2{font-size:27px;white-space:nowrap;letter-spacing:-.04em;margin:0;font-weight:850}
+  #owner .dt-home-header-right{display:flex;align-items:center;gap:18px;color:#bfd7d9}
+  #owner .dt-home-online{border:1px solid #2e5057;padding:8px 13px;background:#0b1b24;border-radius:8px;font-size:11px;display:flex;align-items:center;gap:7px;white-space:nowrap}
+  #owner .dt-home-date{font-size:11px;color:#92aeb2;white-space:nowrap}
+  #owner .dt-home-account{width:35px;height:35px;border:1px solid #274851;color:#71d9d4;background:#0b1d25;border-radius:50%;font-size:19px}
+  #owner .dt-home-mobile-heading{display:none}
+}
+@media(min-width:1100px) and (max-width:1399px){
+  #owner .dt-home-main-grid{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+  #owner .dt-home-actions-panel{grid-column:1/-1}
+  #owner .dt-home-action-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+  #owner .dt-home-action-grid button{min-height:81px}
+  #owner .dt-home-date{display:none}
+}
+@media(max-width:1099px){
+  #owner.dt-command-center{padding:0 1px 3px}
+  #owner .dt-home-main-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #owner .dt-home-schedule-panel{grid-column:1/-1}
+  #owner .dt-home-bottom-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #owner .dt-home-content{padding-bottom:10px}
+}
+@media(max-width:680px){
+  #owner .dt-home-content{display:flex;flex-direction:column;gap:14px}
+  #owner .dt-home-mobile-heading{order:0;margin:11px 2px 0}
+  #owner .dt-home-kpis{order:1;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0}
+  #owner .dt-home-kpi{min-height:88px;border-left:3px solid #20d8d3;padding:10px;gap:9px}
+  #owner .dt-home-kpi-icon{width:37px;height:39px;flex-basis:37px;font-size:21px;border-radius:8px}
+  #owner .dt-home-kpi small{font-size:9px;letter-spacing:0}
+  #owner .dt-home-kpi b{font-size:26px}
+  #owner .dt-home-kpi em{font-size:9px}
+  #owner .dt-home-main-grid,#owner .dt-home-bottom-grid{display:contents}
+  #owner .dt-home-schedule-panel{display:none}
+  #owner .dt-home-week-panel{display:block;order:2}
+  #owner .dt-home-attention-panel{order:3}
+  #owner .dt-home-actions-panel{order:4}
+  #owner .dt-home-recent-panel{order:5}
+  #owner .dt-home-inventory-panel{order:6}
+  #owner .dt-home-panel{padding:12px 12px 11px;border-radius:15px}
+  #owner .dt-home-panel-heading h3{font-size:18px}
+  #owner .dt-home-week-range{color:#829fa3;font-size:10px;margin:-2px 0 8px}
+  #owner .home-week-overview{display:grid!important;grid-template-columns:minmax(0,1fr)!important;overflow:visible!important;gap:5px!important;padding:0!important;scroll-snap-type:none!important}
+  #owner .dt-home-week-row{width:100%;display:grid;grid-template-columns:74px 64px minmax(0,1fr) 10px;align-items:center;gap:7px;min-height:42px;text-align:left;background:#142632;border:1px solid #254550;border-left:3px solid #21bfb9;border-radius:8px;color:#eaffff;padding:8px}
+  #owner .dt-home-week-row.today{border-left-color:#4bf5eb;border-color:#1fbcb7}
+  #owner .dt-home-week-day{display:flex;flex-direction:column;gap:2px}
+  #owner .dt-home-week-day b{font-size:10px}
+  #owner .dt-home-week-day small{font-size:9px;color:#9cb3b9}
+  #owner .dt-home-week-kind{font-size:9px;font-weight:800;color:#78d0c8}
+  #owner .dt-home-week-kind.estimate{color:#8bc1ff}
+  #owner .dt-home-week-kind.personal{color:#d9a8ff}
+  #owner .dt-home-week-kind.open{color:#90a7a9}
+  #owner .dt-home-week-title{font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#e7f5f6}
+  #owner .dt-home-week-chevron{color:#8aadb2}
+  #owner .dt-home-alert-list button{min-height:56px}
+  #owner .dt-home-action-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  #owner .dt-home-action-grid button{min-height:75px;font-size:10px;padding:7px 4px;gap:6px}
+  #owner .dt-home-action-grid button span{font-size:23px}
+}
+@media(max-width:370px){
+  #owner .dt-home-kpi{gap:6px;padding:8px}
+  #owner .dt-home-kpi-icon{display:none}
+  #owner .dt-home-week-row{grid-template-columns:59px 52px minmax(0,1fr) 8px;gap:5px;padding:6px}
+  #owner .dt-home-mobile-date{font-size:9px}
+  #owner .dt-home-table-head,#owner .dt-home-quote-row{grid-template-columns:minmax(0,1fr) 63px 67px;gap:5px}
+  #owner .dt-home-quote-status{font-size:9px}
+}

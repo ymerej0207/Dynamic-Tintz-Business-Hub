@@ -4,13 +4,14 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.19.7-estimate-quote-on-draft`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.20.0-home-command-center`; 
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./app.js",
   "./styles.css",
+  "./home-command-center.css",
   "./manifest.webmanifest",
   "./logo.png",
 ];

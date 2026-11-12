@@ -198,107 +198,142 @@ async function loadHomeWeekIcloudEvents(start,end){
     return [];
   }
 }
+/* v7.20.0: Homepage presentation only. Reuses existing business data and navigation. */
+let homeSelectedDate=new Date(),homeScheduleFilter='all',homeWeekCache=null;
+function homeScheduleEntryKind(entry){
+  if(entry.kind==='external')return 'personal';
+  let job=entry.value||{},type=String(job.appointment_type||'').trim().toLowerCase(),title=String(job.title||'');
+  if(type==='estimate'||/\b(on.?site\s+)?estimate\b/i.test(title))return 'estimate';
+  if(/\bclean(ing)?\b/i.test(title))return 'cleaning';
+  return 'install';
+}
+function homeScheduleEntries(jobs=[],external=[]){
+  return [
+    ...jobs.filter(j=>j.scheduled_start).map(j=>({kind:'job',date:j.scheduled_start,value:j})),
+    ...external.filter(e=>e.start).map(e=>({kind:'external',date:e.start,value:e}))
+  ].sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+function homeScheduleEntryText(entry){
+  let e=entry.value||{};
+  return entry.kind==='external'?String(e.summary||'Personal Event'):String(e.title||'Scheduled Job');
+}
+function homeScheduleEntryTime(entry){
+  if(entry.kind==='external'&&entry.value?.all_day)return 'ALL DAY';
+  return new Date(entry.date).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+}
+function homeScheduleEntryMarkup(entry){
+  let kind=homeScheduleEntryKind(entry),title=homeScheduleEntryText(entry),location=entry.kind==='job'?entry.value.service_address||'':entry.value.location||'',
+      kindLabel={estimate:'ESTIMATE',install:'INSTALL',cleaning:'CLEANING',personal:'PERSONAL'}[kind]||'JOB';
+  return `<button class="dt-home-agenda-row" data-homescheduledate="${esc(homeWeekDateKey(entry.date))}" data-go="operations">
+    <time>${esc(homeScheduleEntryTime(entry))}</time><span class="dt-home-agenda-status ${kind}">${kindLabel}</span>
+    <span class="dt-home-agenda-title"><b>${esc(title)}</b><small>${esc(location||String(entry.value?.status||''))}</small></span><span class="dt-home-agenda-chevron">›</span>
+  </button>`;
+}
 function renderHomeWeekSchedule(jobs,external,start,end){
-  let host=$('liveJobs'),strip=$('homeWeekStrip'),range=$('homeWeekRange');
-  if(!strip)return;
-  if(range){
-    let endDisplay=new Date(end);endDisplay.setDate(endDisplay.getDate()-1);
-    range.textContent=`${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${endDisplay.toLocaleDateString([],{month:'short',day:'numeric'})}`;
-  }
-  let entries=[
-    ...(jobs||[]).map(j=>({kind:'job',date:j.scheduled_start,value:j})),
-    ...(external||[]).map(e=>({kind:'external',date:e.start,value:e}))
-  ].filter(x=>x.date).sort((a,b)=>new Date(a.date)-new Date(b.date));
-  let byDate={};entries.forEach(x=>(byDate[homeWeekDateKey(x.date)]??=[]).push(x));
+  let strip=$('homeWeekStrip'),range=$('homeWeekRange');if(!strip)return;
+  let endDisplay=new Date(end);endDisplay.setDate(endDisplay.getDate()-1);
+  if(range)range.textContent=`${start.toLocaleDateString([],{month:'short',day:'numeric'})} – ${endDisplay.toLocaleDateString([],{month:'short',day:'numeric'})}`;
+  let entries=homeScheduleEntries(jobs||[],external||[]),byDate={};
+  entries.forEach(x=>(byDate[homeWeekDateKey(x.date)]??=[]).push(x));
   let days=[];
   for(let i=0;i<7;i++){
-    let d=new Date(start);d.setDate(start.getDate()+i);
-    let key=homeWeekDateKey(d);days.push({d,key,items:byDate[key]||[]});
+    let d=new Date(start);d.setDate(d.getDate()+i);days.push({d,key:homeWeekDateKey(d),items:byDate[homeWeekDateKey(d)]||[]});
   }
   strip.innerHTML=days.map(({d,key,items})=>{
-    let preview=items.slice(0,3).map(entry=>{
-      let dt=new Date(entry.date),
-          time=entry.kind==='external'&&entry.value.all_day?'ALL DAY':dt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}),
-          title=entry.kind==='external'?(entry.value.summary||'Personal Event'):(entry.value.title||'Window Film Installation'),
-          tag=entry.kind==='external'?'PERSONAL':String(entry.value.status||'Scheduled').toUpperCase(),
-          tagClass=entry.kind==='external'?'personal':'job';
-      return `<span class="home-week-mini-event">
-        <small>${esc(time)}</small>
-        <b>${esc(title)}</b>
-        <em class="${tagClass}">${esc(tag)}</em>
-      </span>`;
-    }).join('');
-    let more=items.length>3?`<span class="home-week-more">+${items.length-3} more</span>`:'';
-    return `<button class="home-week-overview-card ${homeWeekDateKey(new Date())===key?'today':''} ${items.length?'has-events':''}" data-go="operations" data-homeweekdate="${key}">
-      <span class="home-week-card-date"><small>${d.toLocaleDateString([],{weekday:'short'}).toUpperCase()}</small><b>${d.getDate()}</b></span>
-      <span class="home-week-card-events">${preview||'<span class="home-week-open">OPEN</span>'}${more}</span>
+    let job=items[0],detail=job?`${homeScheduleEntryText(job)}${items.length>1?` +${items.length-1} more`:''}`:'Open',
+        kind=job?homeScheduleEntryKind(job):'open',label={estimate:'Estimate',install:'Installation',cleaning:'Cleaning',personal:'Personal',open:'No appointments'}[kind];
+    return `<button class="dt-home-week-row ${key===homeWeekDateKey(new Date())?'today':''}" data-go="operations" data-homeweekdate="${key}">
+      <span class="dt-home-week-day"><b>${esc(d.toLocaleDateString([],{weekday:'short'}))}</b><small>${esc(d.toLocaleDateString([],{month:'short',day:'numeric'}))}</small></span>
+      <span class="dt-home-week-kind ${kind}">${esc(label)}</span><span class="dt-home-week-title">${esc(detail)}</span><span class="dt-home-week-chevron">›</span>
     </button>`;
   }).join('');
-  if(host){
-    host.innerHTML='';
-    host.classList.add('home-week-detail-source');
-  }
-  strip.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{
+  strip.querySelectorAll('[data-homeweekdate]').forEach(b=>b.onclick=()=>{
     try{sessionStorage.setItem('dynamicTintzOperationsDate',b.dataset.homeweekdate||'')}catch{}
-    show(b.dataset.go);
+    show('operations');
   });
-  setTimeout(()=>{
-    let today=strip.querySelector('.home-week-overview-card.today');
-    if(today)today.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
-  },50);
 }
-
+async function renderHomeSelectedDay(){
+  let host=$('homeTodaySchedule');if(!host)return;
+  let d=new Date(homeSelectedDate);d.setHours(0,0,0,0),next=new Date(d);next.setDate(d.getDate()+1);
+  let label=$('homeDayToday');if(label)label.textContent=d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+  let jobs,external;
+  if(homeWeekCache&&d>=homeWeekCache.start&&d<homeWeekCache.end){jobs=homeWeekCache.jobs;external=homeWeekCache.external}
+  else{
+    let result=await sb.from('jobs').select('id,title,status,appointment_type,service_address,scheduled_start,scheduled_end').in('status',['Scheduled','Confirmed','En Route','In Progress']).gte('scheduled_start',d.toISOString()).lt('scheduled_start',next.toISOString()).order('scheduled_start');
+    if(result.error){host.innerHTML=`<div class="dt-home-empty">Could not load schedule: ${esc(result.error.message)}</div>`;return}
+    jobs=result.data||[];external=await loadHomeWeekIcloudEvents(d,next);
+  }
+  let entries=homeScheduleEntries(jobs,external).filter(e=>homeWeekDateKey(e.date)===homeWeekDateKey(d));
+  let counts={all:entries.length,estimate:entries.filter(e=>homeScheduleEntryKind(e)==='estimate').length,
+      install:entries.filter(e=>!['estimate','personal'].includes(homeScheduleEntryKind(e))).length};
+  if($('homeAllCount'))$('homeAllCount').textContent=`(${counts.all})`;
+  if($('homeEstimateCount'))$('homeEstimateCount').textContent=`(${counts.estimate})`;
+  if($('homeInstallCount'))$('homeInstallCount').textContent=`(${counts.install})`;
+  document.querySelectorAll('#owner [data-homefilter]').forEach(b=>b.classList.toggle('is-active',b.dataset.homefilter===homeScheduleFilter));
+  let chosen=entries.filter(e=>homeScheduleFilter==='all'||(homeScheduleFilter==='estimate'?homeScheduleEntryKind(e)==='estimate':!['estimate','personal'].includes(homeScheduleEntryKind(e))));
+  host.innerHTML=chosen.length?chosen.map(homeScheduleEntryMarkup).join(''):`<div class="dt-home-empty">${entries.length?'No appointments match this filter.':'No appointments scheduled for this day.'}</div>`;
+  host.querySelectorAll('[data-homescheduledate]').forEach(b=>b.onclick=()=>{
+    try{sessionStorage.setItem('dynamicTintzOperationsDate',b.dataset.homescheduledate||'')}catch{}
+    show('operations');
+  });
+}
+function homeMoveScheduleDay(delta){
+  if(delta===0)homeSelectedDate=new Date();else homeSelectedDate.setDate(homeSelectedDate.getDate()+delta);
+  renderHomeSelectedDay();
+}
 async function dashboard(){
-  let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString(),
-      week=mondayWeekBounds(now);
-  let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult]=await Promise.all([
+  let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString(),week=mondayWeekBounds(now);
+  let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult,activeLeadResult,attentionQuotesResult]=await Promise.all([
     sb.from('leads').select('*',{count:'exact',head:true}).eq('status','new'),
     sb.from('leads').select('*',{count:'exact',head:true}).lte('next_follow_up_at',iso).not('status','in','("approved","lost","do_not_contact","no_response")'),
     sb.from('time_entries').select('*',{count:'exact',head:true}).eq('status','open'),
-    sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved']),
-    sb.from('jobs').select('*',{count:'exact',head:true}).in('status',['Scheduled','Confirmed','En Route','In Progress']),
+    sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed']),
+    sb.from('jobs').select('*',{count:'exact',head:true}).in('status',['Scheduled','Confirmed','En Route','In Progress']).or('appointment_type.is.null,appointment_type.neq.estimate'),
     sb.from('jobs').select('*',{count:'exact',head:true}).eq('status','Completed').gte('updated_at',monthStart),
-    sb.from('jobs').select('id,title,status,service_address,scheduled_start,scheduled_end,assigned_to,assignee:profiles!jobs_assigned_to_fkey(full_name,email)').in('status',['Scheduled','Confirmed','En Route','In Progress']).gte('scheduled_start',week.start.toISOString()).lt('scheduled_start',week.end.toISOString()).order('scheduled_start'),
-    sb.from('quotes').select('id,status,project_name,ceramic_price,created_at,customer:customers(first_name,last_name)').order('created_at',{ascending:false}).limit(20)
+    sb.from('jobs').select('id,title,status,appointment_type,service_address,scheduled_start,scheduled_end').in('status',['Scheduled','Confirmed','En Route','In Progress']).gte('scheduled_start',week.start.toISOString()).lt('scheduled_start',week.end.toISOString()).order('scheduled_start'),
+    sb.from('quotes').select('id,status,project_name,ceramic_price,created_at,customer:customers(first_name,last_name)').order('created_at',{ascending:false}).limit(20),
+    sb.from('leads').select('*',{count:'exact',head:true}).not('status','in','("approved","lost","bad_lead","do_not_contact","no_response","completed")'),
+    sb.from('quotes').select('*',{count:'exact',head:true}).in('status',['Quote Sent','Follow-Up Needed'])
   ]);
-
-  $('newLeads').textContent=a.count||0;
-  $('dueLeads').textContent=b.count||0;
-  $('clocked').textContent=c.count||0;
-  $('pendingQuotes').textContent=pending.count||0;
-  $('scheduledJobs').textContent=scheduled.count||0;
-  $('completedMonth').textContent=completed.count||0;
-
+  const fill=(id,n)=>{if($(id))$(id).textContent=n??0};
+  fill('homeActiveLeads',activeLeadResult.count);fill('newLeads',a.count);fill('dueLeads',b.count);
+  fill('clocked',c.count);fill('pendingQuotes',pending.count);fill('scheduledJobs',scheduled.count);
+  fill('completedMonth',completed.count);fill('homeAttentionFollowups',b.count);fill('homeAttentionQuotes',attentionQuotesResult.count);
+  if($('homeHeaderDate'))$('homeHeaderDate').textContent=now.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  if($('homeMobileDate'))$('homeMobileDate').textContent=now.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
   let tasks=[];
-  if(a.count)tasks.push(`${a.count} new lead${a.count===1?' needs':'s need'} immediate contact.`);
-  if(b.count)tasks.push(`${b.count} follow-up${b.count===1?' is':'s are'} due.`);
-  if(pending.count)tasks.push(`${pending.count} active quote${pending.count===1?' remains':'s remain'} in the pipeline.`);
-  $('mission').innerHTML=tasks.length?tasks.map(x=>`• ${x}`).join('<br>'):'Everything is caught up right now.';
+  if(a.count)tasks.push(`${a.count} new leads need contact`);
+  if(b.count)tasks.push(`${b.count} follow-ups due`);
+  if(pending.count)tasks.push(`${pending.count} active quotes`);
+  if($('mission'))$('mission').textContent=tasks.join(' · ')||'All caught up.';
 
-  let weekJobs=jobsResult.data||[],
-      weekExternal=await loadHomeWeekIcloudEvents(week.start,week.end);
+  let weekJobs=jobsResult.data||[],weekExternal=await loadHomeWeekIcloudEvents(week.start,week.end);
+  homeWeekCache={jobs:weekJobs,external:weekExternal,start:week.start,end:week.end};
   renderHomeWeekSchedule(weekJobs,weekExternal,week.start,week.end);
+  await renderHomeSelectedDay();
 
   let recent=quotesResult.data||[];
-  if($('recentQuotes'))$('recentQuotes').innerHTML=recent.length?recent.slice(0,3).map(q=>{
-    let name=`${q.customer?.first_name||''} ${q.customer?.last_name||''}`.trim()||q.project_name||'Customer';
-    return `<button class="app-recent-row" data-openquotehome="${q.id}">
-      <span class="app-recent-main"><b>${esc(name)}</b><small>${esc(q.project_name||'Window Film Project')}</small></span>
-      <strong>${money(q.ceramic_price||0)}</strong>
-      <span class="app-status-text">${esc(q.status||'')}</span>
-      <span class="app-chevron">›</span>
-    </button>`
-  }).join(''):'<div class="app-empty">No quotes yet.</div>';
+  if($('recentQuotes'))$('recentQuotes').innerHTML=recent.length?recent.slice(0,5).map(q=>{
+    let name=`${q.customer?.first_name||''} ${q.customer?.last_name||''}`.trim()||q.project_name||'Customer',status=String(q.status||'New');
+    let state=/approved|completed/i.test(status)?'approved':/sent/i.test(status)?'sent':/follow.?up/i.test(status)?'followup':'pending';
+    return `<button class="dt-home-quote-row" data-openquotehome="${q.id}">
+      <span><b>${esc(name)}</b><small>${esc(q.project_name||'Window Film Project')}</small></span>
+      <strong>${money(q.ceramic_price||0)}</strong><em class="dt-home-quote-status ${state}">${esc(status)}</em>
+    </button>`;
+  }).join(''):'<div class="dt-home-empty">No quotes yet.</div>';
   $('recentQuotes')?.querySelectorAll('[data-openquotehome]').forEach(b=>b.onclick=async()=>{await show('quotes');openCloudQuote(b.dataset.openquotehome)});
 
   let counts={};recent.forEach(q=>counts[q.status]=(counts[q.status]||0)+1);
-  let pipeline=['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved','Scheduled','Completed'],
-      max=Math.max(1,...pipeline.map(s=>counts[s]||0));
-  $('pipelineSnapshot').innerHTML=pipeline.map(s=>`<div class="pipeline-row"><span>${esc(s)}</span><div class="pipeline-track"><i style="width:${((counts[s]||0)/max)*100}%"></i></div><b>${counts[s]||0}</b></div>`).join('');
-
+  let pipeline=['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved','Scheduled','Completed'],max=Math.max(1,...pipeline.map(s=>counts[s]||0));
+  if($('pipelineSnapshot'))$('pipelineSnapshot').innerHTML=pipeline.map(s=>`<div class="pipeline-row"><span>${esc(s)}</span><div class="pipeline-track"><i style="width:${((counts[s]||0)/max)*100}%"></i></div><b>${counts[s]||0}</b></div>`).join('');
   document.querySelectorAll('#owner [data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+  if($('homePrevDay'))$('homePrevDay').onclick=()=>homeMoveScheduleDay(-1);
+  if($('homeNextDay'))$('homeNextDay').onclick=()=>homeMoveScheduleDay(1);
+  if($('homeDayToday'))$('homeDayToday').onclick=()=>homeMoveScheduleDay(0);
+  document.querySelectorAll('#owner [data-homefilter]').forEach(b=>b.onclick=()=>{homeScheduleFilter=b.dataset.homefilter;renderHomeSelectedDay()});
   await loadInventoryHomeAlerts();
 }
+
 let inventoryStatusCache=[],inventoryRollCache=[],inventoryProductCache=[];
 function invSqft(widthIn,lengthIn){return (Number(widthIn)||0)*(Number(lengthIn)||0)/144}
 function invLinearInchesFromSqft(sqft,widthIn){let w=Number(widthIn)||72;return w>0?(Number(sqft)||0)*144/w:0}
@@ -640,6 +675,7 @@ async function loadInventoryHomeAlerts(){
   if(frostPriority&&!priority.some(x=>x.product_id===frostPriority.product_id))priority.push(frostPriority);
   let priorityIds=new Set(priority.map(x=>x.product_id));
   let otherLow=rows.filter(x=>!priorityIds.has(x.product_id)&&Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft));
+  if($('homeAttentionInventory'))$('homeAttentionInventory').textContent=rows.filter(x=>Number(x.projected_sqft)<=Number(x.reorder_threshold_sqft)).length+(Number(activeReservationOverlayWarning)||0);
 
   host.innerHTML=`<div class="app-inventory-snapshot">
     ${priority.map(x=>{
