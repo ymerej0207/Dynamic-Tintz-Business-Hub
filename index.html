@@ -33,15 +33,6 @@
   #scheduleJobModal textarea { min-height: 100px; }
 }
 
-
-/* Quote dimensions: compact unit selector with feet/inches entry */
-.measure-dimension-field{min-width:0;display:flex;flex-direction:column;gap:4px}
-.measure-dimension-field>input{width:100%;min-width:0}
-.measure-dimension-switch{min-height:18px;display:flex;align-items:center}
-.measure-dimension-switch button{font-size:11px;font-weight:700;color:#7bd8d3;border:0;background:transparent;cursor:pointer;padding:0 3px;text-align:left}
-.measure-feet-input{display:flex;align-items:center;gap:4px;min-width:0}
-.measure-feet-input input{width:100%;min-width:0;flex:1 1 0;padding-left:6px;padding-right:4px}
-.measure-feet-input span{font-size:11px;color:#a4b8be;flex:none}
 </style><title>Dynamic Tintz OS</title><style>
 /* v7.14.1 new opportunity service selector */
 .service-quote-modal{align-items:center;justify-content:center;padding:20px}
@@ -294,7 +285,7 @@
 
   <section class="lead-filter-bar">
     <div class="field"><label>Search</label><input id="leadSearch" placeholder="Name, phone, address, request..."></div>
-    <div class="field"><label>Status</label><select id="leadStatusFilter"><option value="active">Active Pipeline</option><option value="archived">Archive</option><option value="">All Leads</option><option value="new">New</option><option value="contacted">Contacted</option><option value="follow_up">Follow Up</option><option value="approved">Approved / Won</option><option value="deposit_paid">Deposit Paid</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="bad_lead">Bad Lead</option><option value="lost">Lost</option><option value="no_response">No Response</option><option value="do_not_contact">Do Not Contact</option></select></div>
+    <div class="field"><label>Status</label><select id="leadStatusFilter"><option value="active" selected>Active Pipeline</option><option value="archived">Archive</option><option value="">All Leads</option><option value="new">New</option><option value="contacted">Contacted</option><option value="follow_up">Follow Up</option><option value="approved">Approved / Won</option><option value="deposit_paid">Deposit Paid</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="bad_lead">Bad Lead</option><option value="lost">Lost</option><option value="no_response">No Response</option><option value="do_not_contact">Do Not Contact</option></select></div>
   </section>
 
   <section id="angiCreditBanner" class="angi-credit-banner hidden"></section>
@@ -305,7 +296,7 @@
       <h3>Angi Credit Center</h3>
       <small id="angiCreditCycleLabel" class="muted">Current billing cycle</small>
     </div>
-    <div class="actions" style="align-items:center;gap:8px;flex-wrap:wrap"><label for="angiCycleSelect" class="muted">Billing cycle</label><select id="angiCycleSelect" aria-label="Angi billing cycle" style="max-width:260px"><option>Current billing cycle</option></select><button id="openAngiCreditReport" class="btn">View Selected Report</button></div>
+    <button id="openAngiCreditReport" class="btn">View Current Report</button>
   </section>
 
   <div id="leadList" class="lead-card-list"><div class="app-empty">Loading leads…</div></div>
@@ -313,11 +304,9 @@
 
 <div id="angiCreditReasonModal" class="modal"><div class="panel" style="max-width:530px">
   <div class="head"><div><span class="eyebrow">ANGI CREDIT REVIEW</span><h2>Why are you flagging this lead?</h2><div id="angiCreditReasonLead" class="muted"></div></div><button id="angiCreditReasonClose" type="button" class="btn">Cancel</button></div>
-  <div class="field"><label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="automotive"> Auto Tint Request</label>
-  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="out_of_area"> Out Of Service Area</label>
-  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="no_opportunity"> Already Chosen Someone Else/No Opportunity</label>
-  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="no_contact"> No Answer/Pickup After 3 Separate Attempts</label>
-  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="wrong_number"> Wrong Number/Number Not In Service</label></div>
+  <div class="field"><label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="automotive"> Automotive tinting, service not offered</label>
+  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="no_contact"> Unable to contact / no response</label>
+  <label style="display:block;padding:9px 0"><input type="radio" name="angiCreditReasonChoice" value="wrong_number"> Wrong number / invalid contact</label></div>
   <div class="muted" style="margin:10px 0 16px">This records your reason for Angi review. Credit approval is determined by Angi. No email or text is sent automatically.</div>
   <div class="actions"><button id="angiCreditReasonSave" type="button" class="btn primary">Flag for Angi Credit</button><button id="angiCreditReasonCancel" type="button" class="btn">Cancel</button></div>
 </div></div>
@@ -328,7 +317,6 @@
 
 
 <div id="angiPdfPreviewModal" class="modal"><div class="panel angi-pdf-panel"><div class="head"><div><span class="eyebrow">READY TO SEND</span><h2>Angi PDF Report</h2></div><div class="angi-pdf-actions"><button id="angiPdfClose" class="btn">Close</button><button id="angiPdfSave" class="btn primary">Save PDF</button><button id="angiPdfPrint" class="btn">Print</button><button id="angiPdfShare" class="btn">Share</button></div></div><div id="angiPdfPreviewBody"></div></div></div>
-<div id="leadEstimateModal" class="modal"><div class="panel" style="max-width:640px;max-height:90dvh;overflow:auto"><div class="head"><div><span class="eyebrow">LEADS / ESTIMATE</span><h2>Schedule Estimate</h2><div id="leadEstimateCustomer" class="muted"></div></div><button class="btn" data-close="leadEstimateModal">Close</button></div><div class="field"><label>Appointment title</label><input id="leadEstimateTitle" autocomplete="off"></div><div class="field"><label>Service address</label><input id="leadEstimateAddress" autocomplete="street-address"></div><div class="grid2"><div class="field"><label>Start date & time</label><input id="leadEstimateStart" type="datetime-local"></div><div class="field"><label>End date & time</label><input id="leadEstimateEnd" type="datetime-local"></div></div><div class="field"><label>Assign team members</label><div id="leadEstimateInstallers" class="installer-picker"></div></div><div class="field"><label>Estimate notes</label><textarea id="leadEstimateNotes" rows="4"></textarea></div><div id="leadEstimateMessage" class="muted" role="status" aria-live="polite"></div><div class="actions"><button id="leadEstimateSave" class="btn primary wide">Save & Schedule Estimate</button></div></div></div>
 <div id="leadWorkspaceModal" class="modal lead-workspace-modal"><div class="panel lead-workspace-panel"><div class="head"><div><span class="eyebrow">LEAD WORKSPACE</span><h2 id="leadWorkspaceName">Lead</h2></div><button class="btn" data-close="leadWorkspaceModal">Close</button></div><div id="leadWorkspaceBody"></div></div></div>
 <main id="followups" class="view"><div class="head"><h2>Follow-Up Center</h2><span class="pill warn">Angi Cadence</span></div><div class="card muted">Immediate call, voicemail, and text → same evening → next morning → 3 days → final at 7 days.</div><div class="grid2"><div class="card metric"><b id="overdueFollowups">0</b><span>Due Now</span></div><div class="card metric"><b id="upcomingFollowups">0</b><span>Upcoming 7 Days</span></div></div><div class="head"><h2>Due Now</h2></div><div id="followList"></div><div class="head"><h2>Upcoming</h2></div><div id="upcomingFollowList"></div></main>
 
@@ -348,7 +336,7 @@
 <div class="card">
 <div class="grid2">
 <div class="field"><label>Search Quotes</label><input id="quoteSearch" placeholder="Customer, project, address..."></div>
-<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="active">Active Pipeline</option><option value="archived">Archive</option><option value="awaiting_cleaning">Awaiting Approval</option><option value="" selected>All Quotes (Recent)</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
+<div class="field"><label>Status</label><select id="quoteStatusFilter"><option value="active" selected>Active Pipeline</option><option value="archived">Archive</option><option value="awaiting_cleaning">Awaiting Approval</option><option value="">All Quotes</option><option>New Lead</option><option>Estimate Requested</option><option>Quote Sent</option><option>Follow-Up Needed</option><option>Approved</option><option>Deposit Paid</option><option>Scheduled</option><option>Completed</option><option>Lost</option></select></div>
 </div>
 <div class="grid3"><div class="mini-stat"><b id="quotePipelineValue">$0</b><span>Open Pipeline</span></div><div class="mini-stat"><b id="quoteAverage">$0</b><span>Average Quote</span></div><div class="mini-stat"><b id="quoteCount">0</b><span>Quote Count</span></div></div>
 </div>
@@ -365,7 +353,7 @@
   <details id="quoteBuilderPanel" class="app-builder-sheet">
     <summary><span>Fast Quote Builder</span><small>Tap to open / close</small></summary>
     <div class="app-builder-inner">
-      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="recoverPreviousQuote" class="btn" type="button">Recover Previous Draft</button><button id="newQuote" class="btn primary">New Quote</button></div></div>
+      <div class="head quote-head"><div><h2>Fast Quote Builder</h2><div class="muted">Rapid room-by-room estimating</div><div id="quoteAutosaveStatus" class="quote-autosave-status"></div></div><div class="actions" style="margin-top:0"><button id="newQuote" class="btn primary">New Quote</button></div></div>
       <div id="quoteEditorTop" class="quote-editor-top-anchor"></div>
 <div id="quoteEditor" class="quote-layout">
 <section class="quote-main">
@@ -781,6 +769,12 @@
     <section class="content-launch-card"><h3>Standalone Content</h3><div class="muted">Perfect for older jobs, reposts, or photos that are not in DT OS. Every field below is optional.</div><div class="field"><label>City (optional)</label><input id="contentManualCity" placeholder="Example: McKinney"></div><div class="field"><label>Film (optional)</label><input id="contentManualFilm" placeholder="Example: Frost, 35% Ceramic, Reeded Decorative"></div><div class="field"><label>Project Type (optional)</label><select id="contentManualProject"><option value="">Leave blank</option><option>Residential</option><option>Commercial</option></select></div><button id="contentOpenStandalone" class="btn primary wide">Open Standalone Content Studio</button></section>
   </div>
 </main>
+<main id="rollcalculator" class="view">
+<div class="head"><div><h2>Film Roll Calculator</h2><div class="muted">Independent purchase forecast. Does not modify the Roll Optimizer, quotes, or inventory.</div></div></div>
+<div class="card"><h3>Roll you're considering</h3><div class="grid2"><div class="field"><label>Roll width (inches)</label><input id="frcRollWidth" type="number" min="1" step="0.1" value="72"></div><div class="field"><label>Roll length (feet)</label><input id="frcRollLength" type="number" min="0.1" step="0.1" value="50"></div></div><div class="field"><label>Allowance for trimming / setup (%)</label><input id="frcAllowance" type="number" min="0" max="50" step="1" value="5"></div></div>
+<div class="card"><div class="head"><h3>Job glass dimensions</h3><button id="frcAdd" class="btn primary" type="button">+ Add size</button></div><div class="muted" style="margin-bottom:12px">Enter glass dimensions in inches. Each row is one window size and quantity. Rotation is considered automatically.</div><div id="frcRows"></div><div class="actions" style="margin-top:12px"><button id="frcCalculate" class="btn primary" type="button">Check Roll Coverage</button><button id="frcClear" class="btn" type="button">Reset</button></div></div>
+<div id="frcResult" class="card" aria-live="polite">Enter your window sizes and select Check Roll Coverage.</div>
+</main>
 <main id="shortcuts" class="view"><div class="head"><div><h2>Hometown Response Hub</h2><div id="shortcutCountLabel" class="muted">Loading responses…</div></div><button id="addShortcut" class="btn primary">+ Add</button></div><div class="actions" style="margin:10px 0 14px;gap:8px;flex-wrap:wrap"><button class="btn primary" data-response-mode="standard">Standard Responses</button><button class="btn" data-response-mode="ayala">Nick Ayala Responses</button><button class="btn" data-response-mode="menus">Pricing Menus</button></div><div id="shortcutModeNote" class="muted" style="margin-bottom:12px;display:none"></div><div class="card"><div class="grid2"><div class="field"><label>Search Responses</label><input id="shortcutSearch" placeholder="Keyword, category, or message"></div><div class="field"><label>Category</label><select id="shortcutCategoryFilter"><option>All</option></select></div></div><div class="actions"><button id="refreshShortcuts" class="btn">Refresh Built-In Responses</button></div></div><div id="shortcutList"></div></main>
 <main id="time" class="view"><div class="head"><h2>My Time Clock</h2></div><div id="timeCard" class="card"></div><div id="timeList"></div></main>
 <main id="team" class="view"><div class="head"><h2>Team Time</h2><button id="exportTimeCsv" class="btn primary">Export Weekly CSV</button></div><div class="card muted">Weekly pay period • unpaid breaks deducted • no automatic overtime calculation</div><div id="teamList"></div></main>
@@ -843,6 +837,7 @@
       <button data-more-go="inventory"><span>▱</span><b>Inventory</b><small>Film, rolls & scraps</small></button>
       <button data-more-go="followups"><span>↻</span><b>Follow-Ups</b><small>Due & upcoming</small></button>
       <button data-more-go="optimizer"><span>✂</span><b>Roll Optimizer</b><small>Cut plans & scraps</small></button>
+      <button data-more-go="rollcalculator"><span>▤</span><b>Film Roll Calculator</b><small>Check roll before ordering</small></button>
       <button data-more-go="contentstudio"><span>▣</span><b>Content Studio</b><small>Before & after posts</small></button><button data-more-go="shortcuts"><span>◌</span><b>Responses</b><small>Quick messages</small></button>
       <button data-more-go="team"><span>◴</span><b>Team</b><small>Time & installers</small></button>
       <button data-more-go="account"><span>⚙</span><b>Account</b><small>Settings & sync</small></button>
@@ -968,4 +963,4 @@
 <small class="muted">Choose either combined screen/track sets OR individual screens/tracks to avoid double billing.</small></div>
 <button id="sendCleaningOffer" class="btn primary wide">Email Both Options to Customer</button><div id="cleaningOfferMessage" class="muted" style="margin-top:8px"></div></div></div>
 <div id="cleaningGlobalAlert" style="display:none;position:fixed;right:12px;bottom:82px;z-index:1000;max-width:min(370px,calc(100vw - 24px));padding:12px 16px;background:#0d383a;color:#e9ffff;border:1px solid #45c8c2;border-radius:12px;box-shadow:0 10px 25px #0006;cursor:pointer" role="status"></div>
-<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.20.0-lead-estimates"></script></body></html>
+<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.19.4-care-quickshot-fix"></script></body></html>

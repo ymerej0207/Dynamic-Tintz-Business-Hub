@@ -8,13 +8,13 @@ async function login(){$("message").textContent="Signing in…";let{error}=await
 async function reset(){let e=$("email").value.trim();if(!e)return $("message").textContent="Enter your email first.";let{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.href});$("message").textContent=error?error.message:"Password reset sent."}
 function lastViewKey(){return `dt.lastView.${session?.user?.id||"guest"}`}
 function allowedView(id){
-  const ownerViews=['owner','leads','followups','quotes','optimizer','inventory','operations','contentstudio','shortcuts','team','account'];
+  const ownerViews=['owner','leads','followups','quotes','optimizer','rollcalculator','inventory','operations','contentstudio','shortcuts','team','account'];
   const employeeViews=['employee','time','account'];
   return (owner()?ownerViews:employeeViews).includes(id)&&!!$(id);
 }
 function navigationViewMap(){
   return owner()
-    ?{owner:'dashboard',leads:'loadLeads',followups:'loadFollowups',quotes:'loadQuotes',optimizer:'loadRollOptimizer',inventory:'loadInventory',operations:'loadOperations',contentstudio:'loadContentStudioPage',shortcuts:'renderShortcuts',team:'loadTeam',account:'account'}
+    ?{owner:'dashboard',leads:'loadLeads',followups:'loadFollowups',quotes:'loadQuotes',optimizer:'loadRollOptimizer',rollcalculator:'renderRollCalculator',inventory:'loadInventory',operations:'loadOperations',contentstudio:'loadContentStudioPage',shortcuts:'renderShortcuts',team:'loadTeam',account:'account'}
     :{employee:'loadEmployee',time:'loadTime',account:'account'};
 }
 function auditNavigation(){
@@ -170,7 +170,7 @@ function renderNav(){
   $("nav").innerHTML=t.map(x=>`<button data-v="${x[0]}"><b class="nav-icon">${navIcon(x[1])}</b><span>${x[2]}</span></button>`).join('');
   /* Navigation clicks are handled by delegated app-level routing. */
 }
-async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner'){dashboard();loadCleaningApprovals()}if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='contentstudio')loadContentStudioPage();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
+async function show(id){if(!$(id)||!allowedView(id))id=owner()?'owner':'employee';if(id!=='quotes'&&typeof closeQuickShot==='function')closeQuickShot();closeMoreMenu();localStorage.setItem(lastViewKey(),id);document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));$(id).classList.add('active');document.querySelectorAll('#nav button').forEach(b=>{let active=b.dataset.v===id||(b.dataset.v==='more'&&moreViews().includes(id));b.classList.toggle('active',active)});if(id==='owner'){dashboard();loadCleaningApprovals()}if(id==='leads')loadLeads();if(id==='followups')loadFollowups();if(id==='time')loadTime();if(id==='employee')loadEmployee();if(id==='team')loadTeam();if(id==='quotes'){loadQuotes();renderMeasures();setTimeout(()=>restoreQuoteDraftIfNeeded(),40)}if(id==='optimizer')loadRollOptimizer();if(id==='rollcalculator')renderRollCalculator();if(id==='inventory')loadInventory();if(id==='shortcuts')renderShortcuts();if(id==='operations')loadOperations();if(id==='contentstudio')loadContentStudioPage();if(id==='account'&&owner()){loadEmployeeAdmin();loadGoogleLsaStatus();loadCalendarStatus();loadIcloudCalendarStatus();syncPushNotificationUI()}}
 function mondayWeekBounds(reference=new Date()){
   let d=new Date(reference);d.setHours(0,0,0,0);
   let day=d.getDay(),diff=day===0?-6:1-day;
@@ -2045,15 +2045,27 @@ function leadIsTerminal(l){return ['approved','deposit_paid','scheduled','comple
 function leadNeedsAttention(l){let due=l.next_follow_up_at&&new Date(l.next_follow_up_at)<=new Date();return l.status==='new'||(!leadIsTerminal(l)&&due)}
 function leadAgeText(l){let ms=Date.now()-leadDate(l).getTime();if(!Number.isFinite(ms)||ms<0)return '—';let h=Math.floor(ms/36e5);if(h<1)return 'Just now';if(h<24)return `${h}h`;let d=Math.floor(h/24);return `${d}d`}
 function updateLeadCommandCounts(){if(!$('leadAttentionCount'))return;let set=(id,n)=>{if($(id))$(id).textContent=n};set('leadAttentionCount',leads.filter(leadNeedsAttention).length);set('leadNewCount',leads.filter(x=>x.status==='new').length);set('leadFollowCount',leads.filter(x=>x.status==='follow_up').length);set('leadWonCount',leads.filter(x=>['approved','deposit_paid','scheduled','completed'].includes(x.status)).length)}
-function renderLeadResults(){let q=($('leadSearch')?.value||'').trim().toLowerCase(),status=$('leadStatusFilter')?.value||'active',archived=['completed','lost','bad_lead','do_not_contact','no_response'],items=leads.filter(l=>{let statusMatch=status==='active'?!archived.includes(l.status):status==='archived'?archived.includes(l.status):status==='attention'?leadNeedsAttention(l):(!status||status==='all'||l.status===status);return statusMatch&&JSON.stringify(l).toLowerCase().includes(q)}).sort((a,b)=>{let aa=leadNeedsAttention(a),bb=leadNeedsAttention(b);if(aa!==bb)return aa?-1:1;return leadDate(b)-leadDate(a)});updateLeadCommandCounts();$('leadList').innerHTML=items.length?items.map(x=>card(x,!!(x.next_follow_up_at&&new Date(x.next_follow_up_at)<=new Date()))).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'));$('leadList').querySelectorAll('.lead-app-card').forEach((el,i)=>{let id=items[i]?.id;if(id){el.classList.toggle('needs-attention',leadNeedsAttention(items[i]));el.insertAdjacentHTML('afterbegin',`<div class="lead-ops-strip"><span>${leadNeedsAttention(items[i])?'NEEDS ATTENTION':'IN PIPELINE'}</span><b>${esc(leadAgeText(items[i]))} old</b></div>`);let actions=el.querySelector('.lead-actions');if(actions)actions.insertAdjacentHTML('afterbegin',`<button class="btn primary" data-managelead="${id}">Manage Lead</button>`)}});$('leadList').querySelectorAll('[data-managelead]').forEach(b=>b.onclick=()=>openLeadWorkspace(b.dataset.managelead))}
+function renderLeadResults(){let q=($('leadSearch')?.value||'').trim().toLowerCase(),status=$('leadStatusFilter')?.value??'all',archived=['completed','lost','bad_lead','do_not_contact','no_response'],items=leads.filter(l=>{let statusMatch=status==='active'?!archived.includes(l.status):status==='archived'?archived.includes(l.status):status==='attention'?leadNeedsAttention(l):status==='all'||status===''?true:l.status===status;return statusMatch&&JSON.stringify(l).toLowerCase().includes(q)}).sort((a,b)=>{if(status==='all'||status==='')return leadDate(b)-leadDate(a);let aa=leadNeedsAttention(a),bb=leadNeedsAttention(b);if(aa!==bb)return aa?-1:1;return leadDate(b)-leadDate(a)});updateLeadCommandCounts();$('leadList').innerHTML=items.length?items.map(x=>card(x,!!(x.next_follow_up_at&&new Date(x.next_follow_up_at)<=new Date()))).join(''):'<div class="card muted">No matching leads.</div>';bindLeadActions($('leadList'));$('leadList').querySelectorAll('.lead-app-card').forEach((el,i)=>{let id=items[i]?.id;if(id){el.classList.toggle('needs-attention',leadNeedsAttention(items[i]));el.insertAdjacentHTML('afterbegin',`<div class="lead-ops-strip"><span>${leadNeedsAttention(items[i])?'NEEDS ATTENTION':'IN PIPELINE'}</span><b>${esc(leadAgeText(items[i]))} old</b></div>`);let actions=el.querySelector('.lead-actions');if(actions)actions.insertAdjacentHTML('afterbegin',`<button class="btn primary" data-managelead="${id}">Manage Lead</button>`)}});$('leadList').querySelectorAll('[data-managelead]').forEach(b=>b.onclick=()=>openLeadWorkspace(b.dataset.managelead))}
 // Load every page. Supabase/PostgREST commonly caps individual requests at 1,000 rows.
 // Without pagination, older Angi leads can disappear even while remaining in the database.
 let leadLoadSequence=0;
 function ensureLeadStatusOptions(){
   const filter=$('leadStatusFilter');
-  if(filter){
-    if(![...filter.options].some(o=>o.value==='all'))filter.add(new Option('All Leads','all'),0);
-    if(![...filter.options].some(o=>o.value==='estimate_scheduled'))filter.add(new Option('Estimate Scheduled','estimate_scheduled'));
+  if(!filter)return;
+  // The original HTML already includes All Leads with an empty value.
+  // Normalize that existing option rather than inserting a duplicate.
+  const options=[...filter.options];
+  const allOptions=options.filter(o=>o.value===''||o.value==='all');
+  let allOption=allOptions[0];
+  if(!allOption){allOption=new Option('All Leads','all');filter.add(allOption,0)}
+  allOption.value='all';allOption.textContent='All Leads';
+  for(const duplicate of allOptions.slice(1))duplicate.remove();
+  if(![...filter.options].some(o=>o.value==='estimate_scheduled'))
+    filter.add(new Option('Estimate Scheduled','estimate_scheduled'));
+  // Default to the complete lead list on initial load; preserve explicit choices.
+  if(!filter.dataset.dtLeadFilterInitialized){
+    filter.value='all';
+    filter.dataset.dtLeadFilterInitialized='true';
   }
 }
 async function loadLeads(){
@@ -5248,3 +5260,63 @@ document.querySelectorAll("[data-response-mode]").forEach(b=>b.addEventListener(
 bind('selectAllWindows','onclick',()=>setAllWindowSelections(true));
 bind('clearWindowSelection','onclick',()=>setAllWindowSelections(false));
 bind('saveQuoteOption','onclick',()=>saveQuoteAsOption().catch(e=>toast(e.message)));
+
+
+// Standalone purchasing forecast. Deliberately independent of Roll Optimizer state and logic.
+let frcSizes=[{w:'',h:'',qty:1}];
+function renderRollCalculator(){
+ const host=$('frcRows');if(!host)return;
+ host.innerHTML=frcSizes.map((r,i)=>`<div class="grid2" style="margin:0 0 12px;align-items:end;border-bottom:1px solid #5555;padding-bottom:10px">
+ <div class="field"><label>Width (in)</label><input type="number" min="0.1" step="0.1" data-frc="w" data-i="${i}" value="${esc(r.w)}"></div>
+ <div class="field"><label>Height (in)</label><input type="number" min="0.1" step="0.1" data-frc="h" data-i="${i}" value="${esc(r.h)}"></div>
+ <div class="field"><label>Quantity</label><input type="number" min="1" step="1" data-frc="qty" data-i="${i}" value="${esc(r.qty)}"></div>
+ <button class="btn" type="button" data-frc-remove="${i}" ${frcSizes.length===1?'disabled':''}>Remove</button></div>`).join('');
+ host.querySelectorAll('[data-frc]').forEach(el=>el.oninput=()=>{frcSizes[Number(el.dataset.i)][el.dataset.frc]=el.value});
+ host.querySelectorAll('[data-frc-remove]').forEach(el=>el.onclick=()=>{frcSizes.splice(Number(el.dataset.frcRemove),1);renderRollCalculator()});
+}
+function frcForecast(){
+ const rollWidth=Number($('frcRollWidth').value),feet=Number($('frcRollLength').value),allowance=Number($('frcAllowance').value);
+ const result=$('frcResult');
+ if(!(rollWidth>0&&feet>0)||!Number.isFinite(allowance)||allowance<0||allowance>50){result.textContent='Enter a valid roll width, length and allowance (0 to 50%).';return}
+ let pieces=[],glass=0;
+ for(const [i,r] of frcSizes.entries()){
+  let w=Number(r.w),h=Number(r.h),q=Number(r.qty);
+  if(!(w>0&&h>0&&Number.isInteger(q)&&q>0&&q<=500)){result.textContent=`Check window row ${i+1}: dimensions must be positive and quantity must be 1–500.`;return}
+  if(w>rollWidth&&h>rollWidth){result.innerHTML=`<b>Not compatible:</b> Window row ${i+1} (${w} × ${h} in) is wider than this roll in both orientations.`;return}
+  glass+=w*h*q/144;
+  if(pieces.length+q>2000){result.textContent='Too many pieces for a quick forecast. Reduce quantities.';return}
+  for(let k=0;k<q;k++)pieces.push({w,h});
+ }
+ // Shelf packing: try both descending-area and descending-long-side ordering, and both orientations.
+ function pack(order){
+  let shelves=[];
+  for(const p of order){
+   const opts=[{w:p.w,h:p.h},...(p.w!==p.h?[{w:p.h,h:p.w}]:[])].filter(o=>o.w<=rollWidth);
+   let best=null;
+   for(const o of opts){
+    for(let j=0;j<shelves.length;j++){
+     const s=shelves[j];if(s.used+o.w<=rollWidth&&o.h<=s.height){let score=(rollWidth-s.used-o.w)+((s.height-o.h)*0.01);if(!best||score<best.score)best={j,o,score}}
+    }
+   }
+   if(best){shelves[best.j].used+=best.o.w;continue}
+   const fresh=opts.sort((a,b)=>a.h-b.h)[0];
+   shelves.push({used:fresh.w,height:fresh.h});
+  }
+  return shelves.reduce((sum,s)=>sum+s.height,0);
+ }
+ const areaSort=[...pieces].sort((a,b)=>b.w*b.h-a.w*a.h);
+ const maxSort=[...pieces].sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h));
+ const packedIn=Math.min(pack(areaSort),pack(maxSort));
+ const neededIn=packedIn*(1+allowance/100),availableIn=feet*12;
+ const area=rollWidth*feet/12,neededFt=neededIn/12,remainingFt=(availableIn-neededIn)/12;
+ const fits=neededIn<=availableIn;
+ result.innerHTML=`<h3>${fits?'✓ Roll appears sufficient':'⚠ Roll may be too short'}</h3>
+ <div><b>Roll:</b> ${rollWidth.toFixed(1)} in × ${feet.toFixed(1)} ft (${area.toFixed(1)} sq ft)</div>
+ <div><b>Glass area:</b> ${glass.toFixed(2)} sq ft across ${pieces.length} pieces</div>
+ <div><b>Estimated cut length:</b> ${(packedIn/12).toFixed(2)} ft</div>
+ <div><b>Length with ${allowance}% allowance:</b> ${neededFt.toFixed(2)} ft</div>
+ <div><b>${fits?'Estimated leftover':'Estimated shortage'}:</b> ${Math.abs(remainingFt).toFixed(2)} linear ft</div>
+ <div class="muted" style="margin-top:10px">Planning estimate using row-based cutting and rotation. Confirm your actual cutting layout, edge margins, defects and film direction before ordering. A shortage here does not prove a more efficient layout is impossible.</div>`;
+}
+
+document.addEventListener('click',event=>{const id=event.target?.id;if(id==='frcAdd'){frcSizes.push({w:'',h:'',qty:1});renderRollCalculator()}else if(id==='frcCalculate')frcForecast();else if(id==='frcClear'){frcSizes=[{w:'',h:'',qty:1}];if($('frcRollWidth'))$('frcRollWidth').value=72;if($('frcRollLength'))$('frcRollLength').value=50;if($('frcAllowance'))$('frcAllowance').value=5;renderRollCalculator();$('frcResult').textContent='Enter your window sizes and select Check Roll Coverage.'}});
