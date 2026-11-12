@@ -3041,9 +3041,9 @@ async function saveCloudQuote(){
 async function loadQuotes(options={}){
   let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('updated_at',{ascending:false});
   if(error){if(options.strict)throw error;toast('Unable to load quotes: '+error.message);return}
-  await syncSquareSentQuotes(data||[]);
-  // Keep the displayed status current after a Square-published invoice sync.
-  for(let q of (data||[]))if(squareSentSyncedQuoteIds.has(q.id)&&squareInvoiceIsSent(q.square_status)&&quoteCanAdvanceToSent(q.status))q.status='Quote Sent';
+  await syncSquareDraftQuotes(data||[]);
+  // A linked Square draft means Quote Sent in Dynamic Tintz OS, even if it is still a DRAFT in Square.
+  for(let q of (data||[]))if(squareDraftSyncedQuoteIds.has(q.id)&&q.square_invoice_id&&quoteCanAdvanceToSent(q.status))q.status='Quote Sent';
   window._cloudQuotes=data||[];
   renderQuoteResults();
   try{await loadCleaningApprovals()}catch(e){console.warn('Cleaning approvals refresh:',e)}
@@ -3067,8 +3067,8 @@ async function syncQuoteLifecycle(quoteId,quoteStatus,leadStatus){
   if(leadStatus&&q.customer_id)await syncCustomerLifecycle(q.customer_id,leadStatus);
   return {ok:true,customer_id:q.customer_id};
 }
-// Square drafts are UNSENT. Do not advance a lead merely because a draft was created.
-// Square invoice statuses after publication are generally UNPAID / PARTIALLY_PAID / PAID.
+// Dynamic Tintz OS workflow: creating a Square draft IS the Quote Sent milestone.
+// It is not a Square publication/sending check, and customer approval remains manual.
 function squareInvoiceIsSent(status){
   return ['UNPAID','PARTIALLY_PAID','PAID','PUBLISHED','SENT','PAYMENT_PENDING'].includes(String(status||'').trim().toUpperCase());
 }
@@ -3078,13 +3078,15 @@ function quoteCanAdvanceToSent(status){
 function leadCanAdvanceToSent(status){
   return !['approved','deposit_paid','scheduled','completed','lost','bad_lead','do_not_contact'].includes(String(status||'').toLowerCase());
 }
-async function markQuoteAndLeadSent(quoteId,{squareStatus='',ownerConfirmed=false,knownInvoiceId=null}={}){
-  let {data:q,error}=await sb.from('quotes').select('id,customer_id,status,square_invoice_id,square_status').eq('id',quoteId).single();
+// Called only after a successful Square draft creation, or when a quote already has a Square invoice linked.
+async function markQuoteAndLeadSent(quoteId,{draftCreated=false,knownInvoiceId=null}={}){
+  let {data:q,error}=await sb.from('quotes').select('id,customer_id,status,square_invoice_id').eq('id',quoteId).single();
   if(error)throw error;
-  if(!(q.square_invoice_id||knownInvoiceId))throw new Error('No Square invoice is linked to this quote.');
-  if(!ownerConfirmed&&!squareInvoiceIsSent(squareStatus||q.square_status))return {ok:true,skipped:true,reason:'Square invoice is not sent'};
+  if(!draftCreated&&!q.square_invoice_id&&!knownInvoiceId)throw new Error('No Square invoice is linked to this quote.');
+  // Preserve explicit owner choices such as Approved, Deposit Paid, Scheduled, or Completed.
+  if(!quoteCanAdvanceToSent(q.status))return {ok:true,skipped:true,reason:'Quote has progressed past Quote Sent'};
   const now=new Date().toISOString();
-  if(quoteCanAdvanceToSent(q.status)&&q.status!=='Quote Sent'){
+  if(q.status!=='Quote Sent'){
     let r=await sb.from('quotes').update({status:'Quote Sent',updated_at:now}).eq('id',quoteId).eq('status',q.status);
     if(r.error)throw r.error;
   }
@@ -3093,34 +3095,21 @@ async function markQuoteAndLeadSent(quoteId,{squareStatus='',ownerConfirmed=fals
     if(leadError)throw leadError;
     for(let lead of (customerLeads||[])){
       if(!leadCanAdvanceToSent(lead.status)||lead.status==='quote_sent')continue;
-      // Match the status we just read so a simultaneous approval cannot be downgraded.
+      // Only update the status read from the database; never overwrite a simultaneous approval.
       let r=await sb.from('leads').update({status:'quote_sent',next_follow_up_at:null,updated_at:now}).eq('id',lead.id).eq('status',lead.status);
       if(r.error)throw r.error;
     }
   }
   return {ok:true};
 }
-// Auto-sync statuses whenever Square's published state is available on the quote.
-let squareSentSyncedQuoteIds=new Set();
-async function syncSquareSentQuotes(rows){
-  const pending=(rows||[]).filter(q=>q.square_invoice_id&&squareInvoiceIsSent(q.square_status)&&!squareSentSyncedQuoteIds.has(q.id));
+// Reconcile pre-existing Square drafts, including Leon's, without creating another invoice.
+let squareDraftSyncedQuoteIds=new Set();
+async function syncSquareDraftQuotes(rows){
+  const pending=(rows||[]).filter(q=>q.square_invoice_id&&quoteCanAdvanceToSent(q.status)&&!squareDraftSyncedQuoteIds.has(q.id));
   for(let q of pending){
-    try{await markQuoteAndLeadSent(q.id,{squareStatus:q.square_status});squareSentSyncedQuoteIds.add(q.id)}
-    catch(e){console.warn('Square sent-status lifecycle sync failed:',q.id,e)}
+    try{await markQuoteAndLeadSent(q.id);squareDraftSyncedQuoteIds.add(q.id)}
+    catch(e){console.warn('Square draft lifecycle sync failed:',q.id,e)}
   }
-}
-async function manuallyConfirmSquareInvoiceSent(quoteId,button){
-  if(!confirm('Have you actually published/sent this invoice in Square? An UNSENT draft should remain a draft.'))return;
-  if(button){button.disabled=true;button.textContent='Updating…'}
-  try{
-    await markQuoteAndLeadSent(quoteId,{ownerConfirmed:true});
-    squareSentSyncedQuoteIds.add(quoteId);
-    toast('Quote and eligible lead updated to Quote Sent. Approved / Won records were preserved.');
-    await loadQuotes();
-    if($('leads')?.classList.contains('active'))await loadLeads();
-    await dashboard();
-  }catch(e){alert(e?.message||'Could not synchronize invoice status.')}
-  finally{if(button&&document.body.contains(button)){button.disabled=false;button.textContent='Mark Invoice Sent'}}
 }
 
 async function lifecycleAfterSchedule(quoteId,status){
@@ -3136,7 +3125,7 @@ async function createSquareDraft(quoteId,button){
   let actual=Number(quote.total_sqft)||0,billed=Math.ceil(actual);
   if(!billed)return toast('Add window measurements before creating the Square draft.');
   let item=quote.square_catalog_item_name||'25% Ceramic Tint Install';
-  if(!confirm(`Create a Square draft?\n\n${item}\n${actual.toFixed(2)} measured sq ft → ${billed} billed sq ft\n\nNothing will be sent to the customer.`))return;
+  if(!confirm(`Create a Square draft?\n\n${item}\n${actual.toFixed(2)} measured sq ft → ${billed} billed sq ft\n\nThe quote and linked lead will be marked Quote Sent in Dynamic Tintz OS. Square will still create a draft.`))return;
   let original=button?.textContent||'Create Square Draft';
   if(button){button.disabled=true;button.textContent='Creating…'}
   try{
@@ -3156,10 +3145,10 @@ async function createSquareDraft(quoteId,button){
       throw new Error(message);
     }
     if(!data||data.status!=='success')throw new Error(data?.message||'Square did not create the draft.');
-    // A draft is not Quote Sent; only sync if the server confirms a published invoice.
-    const squareStatus=data.squareInvoiceStatus||data.square_status||data.invoice?.status||'';
-    if(squareInvoiceIsSent(squareStatus))await markQuoteAndLeadSent(quoteId,{squareStatus});
-    toast(data.duplicate?'Square draft already exists.':`Square draft created • ${data.billedSqft} sq ft • ${data.catalogItemName}`);
+    // A successful Square draft is the Quote Sent action in Dynamic Tintz OS.
+    await markQuoteAndLeadSent(quoteId,{draftCreated:true});
+    squareDraftSyncedQuoteIds.add(quoteId);
+    toast(data.duplicate?'Square draft already exists. Quote Sent status updated.':`Square draft created • ${data.billedSqft} sq ft • ${data.catalogItemName} • Quote Sent`);
     await loadQuotes();
     if($('leads')?.classList.contains('active'))await loadLeads();
     await dashboard();
@@ -3177,7 +3166,7 @@ async function createSquareDraft(quoteId,button){
 async function createSquareCleaningDraft(quoteId,button){
  let quote=(window._cloudQuotes||[]).find(q=>q.id===quoteId),lines=quote?.additional_services||[];
  if(!lines.length)return toast('Add cleaning services before creating a Square draft.');
- if(!confirm('Create a Square draft with '+lines.length+' window care line item(s)?\n\nNothing will be sent to the customer.'))return;
+ if(!confirm('Create a Square draft with '+lines.length+' window care line item(s)?\n\nThe quote and linked lead will be marked Quote Sent in Dynamic Tintz OS. Square will still create a draft.'))return;
  let original=button?.textContent||'Create Square Draft';
  if(button){button.disabled=true;button.textContent='Creating…'}
  try{
@@ -3186,9 +3175,9 @@ async function createSquareCleaningDraft(quoteId,button){
   let{data,error}=await sb.functions.invoke('create-square-cleaning-draft',{body:{quoteId},headers:{Authorization:'Bearer '+activeSession.access_token}});
   if(error){let msg=error.message;try{let details=await error.context?.json();msg=details?.error||details?.message||msg}catch{}throw new Error(msg)}
   if(data?.status!=='success')throw new Error(data?.error||'Square did not create the draft.');
-  const squareStatus=data.squareInvoiceStatus||data.square_status||data.invoice?.status||'';
-  if(squareInvoiceIsSent(squareStatus))await markQuoteAndLeadSent(quoteId,{squareStatus});
-  toast(data.duplicate?'Square draft already exists.':'Square cleaning draft created.');
+  await markQuoteAndLeadSent(quoteId,{draftCreated:true});
+  squareDraftSyncedQuoteIds.add(quoteId);
+  toast(data.duplicate?'Square draft already exists. Quote Sent status updated.':'Square cleaning draft created • Quote Sent.');
   await loadQuotes();
   if($('leads')?.classList.contains('active'))await loadLeads();
   await dashboard();
@@ -3274,6 +3263,12 @@ async function loadCleaningApprovals(){
   const{data,error}=await sb.from('cleaning_quote_options').select('quote_id,status,selected_keys,selected_lines,selected_total_cents,selected_at,square_invoice_id,square_error,notification_error,recipient_email,quote_snapshot').order('selected_at',{ascending:false,nullsFirst:false});
   if(error)throw error;
   cleaningOptionByQuote=new Map((data||[]).map(x=>[x.quote_id,x]));
+  // Customer-selected cleaning draft is also a quote creation milestone.
+  for(const row of (data||[]).filter(x=>x.square_invoice_id&&x.status==='draft_ready'&&!squareDraftSyncedQuoteIds.has(x.quote_id))){
+    try{await markQuoteAndLeadSent(row.quote_id,{knownInvoiceId:row.square_invoice_id});squareDraftSyncedQuoteIds.add(row.quote_id);
+      const q=(window._cloudQuotes||[]).find(x=>x.id===row.quote_id);if(q&&quoteCanAdvanceToSent(q.status))q.status='Quote Sent';
+    }catch(e){console.warn('Cleaning draft status sync failed:',row.quote_id,e)}
+  }
   const pending=(data||[]).filter(x=>['processing','draft_ready','draft_error'].includes(x.status));
   const panel=$('cleaningApprovalPanel');if(panel){panel.style.display=pending.length?'':'none';$('cleaningApprovalCount').textContent='('+pending.length+')';
    $('cleaningApprovalRows').innerHTML=pending.map(row=>{
@@ -3299,9 +3294,9 @@ async function markCleaningSent(id,btn){
  try{
   await cleaningOptionCall('mark_sent',{quote_id:id});
   const knownInvoiceId=cleaningOptionByQuote.get(id)?.square_invoice_id||null;
-  await markQuoteAndLeadSent(id,{ownerConfirmed:true,knownInvoiceId});
-  squareSentSyncedQuoteIds.add(id);
-  toast('Cleaning invoice confirmed sent. Quote and eligible lead synchronized.');
+  await markQuoteAndLeadSent(id,{knownInvoiceId});
+  squareDraftSyncedQuoteIds.add(id);
+  toast('Cleaning approval recorded. Quote and eligible lead are Quote Sent.');
   await loadQuotes();
   if($('leads')?.classList.contains('active'))await loadLeads();
   await dashboard();
@@ -3346,7 +3341,7 @@ function renderQuoteResults(){
         isCare=/Cleaning$/.test(q.project_type||''),
         cleaningOption=cleaningOptionByQuote.get(q.id),
         squareButton=q.square_invoice_id
-          ?`<button class="btn" disabled>Square ${squareInvoiceIsSent(q.square_status)?'Invoice':'Draft'} ${esc(q.square_invoice_number||q.square_status||'Created')}</button>${!squareInvoiceIsSent(q.square_status)&&quoteCanAdvanceToSent(q.status)&&q.status!=='Quote Sent'?`<button class="btn primary" data-confirmsquaresent="${q.id}">Mark Invoice Sent</button>`:''}<button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
+          ?`<button class="btn" disabled>Square ${squareInvoiceIsSent(q.square_status)?'Invoice':'Draft'} ${esc(q.square_invoice_number||q.square_status||'Created')}</button><button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
           :isCare&&cleaningOption&&['sent','processing','draft_error'].includes(cleaningOption.status)
             ?`<button class="btn" disabled>${cleaningOption.status==='sent'?'Awaiting Customer Selection':'Use Cleaning Approval Panel'}</button>`
             :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
@@ -3432,7 +3427,6 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=e=>{e.preventDefault();openCloudQuote(b.dataset.openquote)});
   $('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();createSquareDraft(b.dataset.squaredraft,b)});
   $('savedQuotes').querySelectorAll('[data-releasesquaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();releaseSquareDraft(b.dataset.releasesquaredraft)});
-  $('savedQuotes').querySelectorAll('[data-confirmsquaresent]').forEach(b=>b.onclick=e=>{e.preventDefault();manuallyConfirmSquareInvoiceSent(b.dataset.confirmsquaresent,b)});
   $('savedQuotes').querySelectorAll('[data-offercleaning]').forEach(b=>b.onclick=e=>{e.preventDefault();openCleaningOffer(b.dataset.offercleaning)});
   $('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=e=>{e.preventDefault();openQuoteInOptimizer(b.dataset.optimizequote)});
   $('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=e=>{e.preventDefault();duplicateCloudQuote(b.dataset.duplicatequote)});
