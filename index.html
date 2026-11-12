@@ -579,6 +579,7 @@
             <button id="optimizerLoadQuote" class="btn wide">Load Selected Quote</button>
           </div>
         </div>
+        <div class="field"><label for="optimizerFilmShade">Film shade for this roll / cutting plan</label><select id="optimizerFilmShade"><option value="">Choose shade</option><option value="45%">45% Ceramic</option><option value="35%">35% Ceramic</option><option value="25%">25% Ceramic</option><option value="other">Other / custom</option></select><small class="muted">When loading a mixed-film quote, only windows assigned to this shade are included.</small></div>
         <div class="field">
           <label>Measurements</label>
           <textarea id="optimizerInput" class="optimizer-input" placeholder="2 @ 44x88&#10;1 @ 32x56&#10;11 @ 34x28&#10;3 @ 34x53"></textarea>
@@ -779,6 +780,7 @@
       <div><h3>Quick Roll Square Footage</h3><div class="muted">Width in inches, length in feet. Results update as you type.</div></div>
       <span class="pill">Quick Calculator</span>
     </div>
+    <div class="field"><label for="quickRollShade">Film shade on this roll</label><select id="quickRollShade"><option value="">Choose shade</option><option value="45%">45% Ceramic</option><option value="35%">35% Ceramic</option><option value="25%">25% Ceramic</option><option value="other">Other / custom</option></select><small class="muted">Roll footage only applies to windows receiving this shade.</small></div>
     <div class="film-quick-grid">
       <div class="field"><label for="quickRollWidth">Roll Width (inches)</label><input id="quickRollWidth" type="number" inputmode="decimal" value="72" min="0" step="any" autocomplete="off"></div>
       <div class="field"><label for="quickRollLength">Roll Length (feet)</label><input id="quickRollLength" type="number" inputmode="decimal" value="50" min="0" step="any" autocomplete="off"></div>

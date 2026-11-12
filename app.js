@@ -4517,6 +4517,29 @@ function quoteOptimizerPieces(quote){
     label:x.area||`Window ${i+1}`,w:Number(x.w),h:Number(x.h),qty:Number(x.qty)||1,rotatable:x.rotatable!==false
   }));
 }
+function optimizerShadeKey(value){
+  const name=String(value||'').trim().toLowerCase();
+  const match=name.match(/(?:^|\D)(25|35|45)\s*%/);
+  return match?match[1]+'%':name||'';
+}
+function optimizerRowShade(row,quote){
+  return optimizerShadeKey(row.film_name||inventoryProductCache.find(p=>p.id===row.film_product_id)?.name||quote?.square_catalog_item_name||'');
+}
+function optimizerQuoteShadeChoices(quote){
+  const rows=Array.isArray(quote?.measurements)?quote.measurements:[];
+  return [...new Set(rows.filter(r=>Number(r.w)>0&&Number(r.h)>0).map(r=>optimizerRowShade(r,quote)).filter(Boolean))];
+}
+function optimizerSyncShadeChoices(quote){
+  const select=$('optimizerFilmShade');if(!select)return;
+  const current=select.value,choices=optimizerQuoteShadeChoices(quote);
+  for(const shade of choices){if(![...select.options].some(o=>o.value===shade))select.add(new Option(shade,shade));}
+  if(choices.length===1)select.value=choices[0];
+  else if(choices.length>1&&!choices.includes(current))select.value='';
+}
+function optimizerPiecesForShade(quote,shade){
+  const rows=Array.isArray(quote?.measurements)?quote.measurements:[];
+  return rows.filter(r=>Number(r.w)>0&&Number(r.h)>0&&Number(r.qty||1)>0&&optimizerRowShade(r,quote)===shade).map((r,i)=>({label:r.area||`Window ${i+1}`,w:Number(r.w),h:Number(r.h),qty:Number(r.qty)||1,rotatable:r.rotatable!==false}));
+}
 function optimizerPiecesToText(pieces){
   return pieces.map(p=>`${p.label?`${p.label}: `:''}${p.qty} @ ${optimizerRound(p.w,3)}x${optimizerRound(p.h,3)}`).join('\n');
 }
@@ -4542,11 +4565,18 @@ function loadSelectedOptimizerQuote(){
   let id=$('optimizerQuote')?.value||'';
   let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===id);
   if(!q){rollOptimizerQuoteId=null;return toast('Select a saved quote first.')}
-  let pieces=quoteOptimizerPieces(q);
-  if(!pieces.length)return toast('This quote has no usable window dimensions.');
+  optimizerSyncShadeChoices(q);
+  let shades=optimizerQuoteShadeChoices(q),selected=$('optimizerFilmShade')?.value||'';
+  if(shades.length>1&&!shades.includes(selected)){
+    $('optimizerInput').value='';
+    $('optimizerMessage').textContent='This quote contains multiple film shades. Select the shade for the roll, then load the quote.';
+    return;
+  }
+  let pieces=selected?optimizerPiecesForShade(q,selected):quoteOptimizerPieces(q);
+  if(!pieces.length)return toast('No usable windows assigned to the selected film shade.');
   rollOptimizerQuoteId=id;
   $('optimizerInput').value=optimizerPiecesToText(pieces);
-  $('optimizerMessage').textContent=`Loaded ${pieces.reduce((s,p)=>s+p.qty,0)} pieces from ${q.project_name||'saved quote'}.`;
+  $('optimizerMessage').textContent=`Loaded ${pieces.reduce((s,p)=>s+p.qty,0)} ${selected||''} pieces from ${q.project_name||'saved quote'}.`;
   applyInventoryToOptimizer(q);
 }
 
@@ -4897,8 +4927,16 @@ async function runRollOptimizer(){
     };
     if(settings.rollWidth<=0)throw new Error('Roll width must be greater than zero.');
     let q=(window._optimizerQuotes||window._cloudQuotes||[]).find(x=>x.id===rollOptimizerQuoteId);
+    const shade=$('optimizerFilmShade')?.value||'';
+    if(!shade)throw new Error('Choose the film shade for this roll before optimizing.');
+    if(q){
+      const choices=optimizerQuoteShadeChoices(q);
+      if(choices.length>1&&!choices.includes(shade))throw new Error('This shade is not assigned to the loaded quote.');
+    }
     message.textContent='Checking scrap inventory before cutting fresh roll…';
-    let scrapPlan=await optimizerScrapFirst(groups,q,settings);
+    // Scrap matching must use the selected shade, never a different primary quote shade.
+    const scrapQuote=q?{...q,square_catalog_item_name:(Array.isArray(q.measurements)?q.measurements:[]).find(r=>optimizerRowShade(r,q)===shade)?.film_name||((optimizerShadeKey(q.square_catalog_item_name)===shade)?q.square_catalog_item_name:'')}:null;
+    let scrapPlan=await optimizerScrapFirst(groups,scrapQuote,settings);
     let sd=scrapPlan.diagnostics;
     message.textContent=scrapPlan.matches.length
       ?`${scrapPlan.matches.length} scrap match${scrapPlan.matches.length===1?'':'es'} found from ${sd?.eligibleScraps??'?'} eligible cutoff${(sd?.eligibleScraps??0)===1?'':'s'}. Optimizing remaining fresh-roll cuts…`
@@ -5279,11 +5317,19 @@ function renderRollCalculator(){
 function filmUseRollInPlanner(){
   const w=Number($('quickRollWidth')?.value),l=Number($('quickRollLength')?.value);
   if(filmRollAreaSqft(w,l)===null)return;
+  if($('optimizerFilmShade'))$('optimizerFilmShade').value=$('quickRollShade')?.value||'';
   if($('optimizerRollWidth'))$('optimizerRollWidth').value=w;
   if($('optimizerRollLength'))$('optimizerRollLength').value=l;
   show('optimizer');
   $('optimizerInput')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
+$('optimizerFilmShade')?.addEventListener('change',()=>{
+  if($('optimizerQuote')?.value)loadSelectedOptimizerQuote();
+});
+$('quickRollShade')?.addEventListener('change',()=>{
+  const selected=$('quickRollShade')?.value||'';
+  if($('optimizerFilmShade'))$('optimizerFilmShade').value=selected;
+});
 $('quickRollWidth')?.addEventListener('input',renderRollCalculator);
 $('quickRollLength')?.addEventListener('input',renderRollCalculator);
 $('quickRollToPlanner')?.addEventListener('click',filmUseRollInPlanner);
