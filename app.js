@@ -393,10 +393,11 @@ async function reconcileCurrentScheduledReservations(){
     try{
       let products=await inventoryProducts();
       let{data:jobs,error:jobError}=await sb.from('jobs')
-        .select('id,quote_id,title,status,quote:quotes!jobs_quote_id_fkey(id,total_sqft,measurements,square_catalog_item_name,inventory_product_id,project_name,notes)')
+        .select('id,quote_id,title,status,appointment_type,quote:quotes!jobs_quote_id_fkey(id,total_sqft,measurements,square_catalog_item_name,inventory_product_id,project_name,notes)')
         .in('status',['Scheduled','Confirmed','En Route','In Progress']);
       if(jobError)throw jobError;
-      jobs=jobs||[];
+      // Estimates are calendar appointments, not installation jobs. Legacy jobs may have a null type.
+      jobs=(jobs||[]).filter(j=>String(j.appointment_type||'').toLowerCase()!=='estimate');
       if(!jobs.length)return {created:0,skipped:0,unmatched:0,unmatchedJobs:[]};
 
       let jobIds=jobs.map(j=>j.id),
@@ -423,6 +424,8 @@ async function reconcileCurrentScheduledReservations(){
       let created=0,skipped=0,unmatched=0,unmatchedJobs=[];
       for(let j of jobs){
         if(existing.has(j.id)){skipped++;continue}
+        // A scheduled appointment without a real quote cannot reserve material.
+        if(!j.quote_id){skipped++;continue}
         let q=j.quote||{};
         if(quoteIsMultiFilm(q.measurements)){
           try{await syncMultiFilmPlanForJob(j.id,q);created++;continue}
@@ -502,6 +505,10 @@ async function reconcileCurrentScheduledReservations(){
 let activeReservationOverlayWarning=0,unmatchedScheduledReservationJobs=[];
 async function assignScheduledReservationFilm(jobId,quoteId,productId,totalSqft){
   if(!jobId||!productId)return toast('Choose the film for this scheduled job.');
+  const {data:job,error:jobError}=await sb.from('jobs').select('id,quote_id,appointment_type').eq('id',jobId).maybeSingle();
+  if(jobError||!job)return toast(jobError?.message||'Scheduled job not found.');
+  if(String(job.appointment_type||'').toLowerCase()==='estimate')return toast('Estimates are appointments and do not reserve film.');
+  if(!job.quote_id||job.quote_id!==quoteId)return toast('A saved quote must be linked before reserving film.');
   let product=inventoryProductCache.find(p=>p.id===productId);
   if(!product){
     try{await inventoryProducts();product=inventoryProductCache.find(p=>p.id===productId)}catch{}
@@ -587,7 +594,7 @@ function bindUnmatchedScheduledReservationControls(host){
 async function applyActiveReservationOverlay(rows=[]){
   try{
     let{data:plans,error}=await sb.from('job_material_plans')
-      .select('product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,film_allocations,job:jobs!job_material_plans_job_id_fkey(id,status)');
+      .select('product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,film_allocations,job:jobs!job_material_plans_job_id_fkey(id,status,appointment_type)');
     if(error)throw error;
 
     let activeStatuses=new Set(['Scheduled','Confirmed','En Route','In Progress']),
@@ -596,7 +603,7 @@ async function applyActiveReservationOverlay(rows=[]){
 
     for(let p of (plans||[])){
       let status=p.job?.status;
-      if(!activeStatuses.has(status))continue;
+      if(!activeStatuses.has(status)||String(p.job?.appointment_type||'').toLowerCase()==='estimate')continue;
       let allocations=multiFilmAllocationList(p);
       let filmLines=allocations.length?allocations:[p];
       for(let a of filmLines){let sqft=invSqft(a.roll_width_inches,a.planned_linear_inches);if(!(sqft>0))continue;reservedByProduct[a.product_id]=(reservedByProduct[a.product_id]||0)+sqft;countByProduct[a.product_id]=(countByProduct[a.product_id]||0)+1;}
@@ -1192,12 +1199,12 @@ async function openInventoryMetricEditor(productId,focus='projected'){
     </div>`).join(''):'<div class="app-empty">No active rolls. Add a roll to establish physical inventory.</div>';
 
   let{data:plans,error:planError}=await sb.from('job_material_plans')
-    .select('id,job_id,product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,film_allocations,source,job:jobs!job_material_plans_job_id_fkey(id,title,status,scheduled_start,quote:quotes!jobs_quote_id_fkey(project_name,customer:customers(first_name,last_name)))');
+    .select('id,job_id,product_id,roll_width_inches,planned_linear_inches,actual_linear_inches,film_allocations,source,job:jobs!job_material_plans_job_id_fkey(id,title,status,appointment_type,scheduled_start,quote:quotes!jobs_quote_id_fkey(project_name,customer:customers(first_name,last_name)))');
   if(planError){
     console.warn('Reservation editor query:',planError);
     plans=[];
   }
-  inventoryMetricReservations=(plans||[]).filter(p=>['Scheduled','Confirmed','Rescheduled','En Route','In Progress'].includes(p.job?.status)&&(p.product_id===productId||multiFilmAllocationList(p).some(a=>a.product_id===productId)));
+  inventoryMetricReservations=(plans||[]).filter(p=>['Scheduled','Confirmed','Rescheduled','En Route','In Progress'].includes(p.job?.status)&&String(p.job?.appointment_type||'').toLowerCase()!=='estimate'&&(p.product_id===productId||multiFilmAllocationList(p).some(a=>a.product_id===productId)));
   $('inventoryMetricReservations').innerHTML=inventoryMetricReservations.length?inventoryMetricReservations.map(p=>{
     let c=p.job?.quote?.customer||{},name=[c.first_name,c.last_name].filter(Boolean).join(' ')||p.job?.quote?.project_name||p.job?.title||'Scheduled Job';
     let allocation=multiFilmAllocationList(p).find(a=>a.product_id===productId),sqft=allocation?invSqft(allocation.roll_width_inches,allocation.planned_linear_inches):invSqft(p.roll_width_inches,p.actual_linear_inches==null?p.planned_linear_inches:p.actual_linear_inches);
@@ -1644,6 +1651,10 @@ function scheduleMultiFilmDisplay(active,allocations=[]){
 }
 async function syncMultiFilmPlanForJob(jobId,quote=null){
   if(!jobId)return null;
+  // Never create a multi-film material reservation for an on-site estimate.
+  let {data:jobType,error:jobTypeError}=await sb.from('jobs').select('appointment_type').eq('id',jobId).maybeSingle();
+  if(jobTypeError)throw jobTypeError;
+  if(!jobType||String(jobType.appointment_type||'').toLowerCase()==='estimate')return null;
   if(!quote){let {data:job,error:jobError}=await sb.from('jobs').select('quote:quotes!jobs_quote_id_fkey(id,measurements,total_sqft)').eq('id',jobId).single();if(jobError)throw jobError;quote=job?.quote}
   if(!quoteIsMultiFilm(quote?.measurements)){
     let previous=await sb.from('job_material_plans').select('film_allocations').eq('job_id',jobId).maybeSingle();
@@ -1705,6 +1716,10 @@ function updateScheduleMaterialProjection(){
 }
 // DB source constraint: quote-calculated reservations use source='manual'; optimizer reservations use source='optimizer'.
 async function saveScheduleMaterialPlan(jobId,quote=null){
+  if(!jobId)return;
+  let {data:jobType,error:jobTypeError}=await sb.from('jobs').select('appointment_type').eq('id',jobId).maybeSingle();
+  if(jobTypeError)throw jobTypeError;
+  if(!jobType||String(jobType.appointment_type||'').toLowerCase()==='estimate')return;
   if(quoteIsMultiFilm(quote?.measurements)){await syncMultiFilmPlanForJob(jobId,quote);return}
   let productId=$('scheduleFilmProduct')?.value,plannedSqft=Number($('scheduleMaterialLinearFt')?.value)||0,actualRaw=$('scheduleMaterialActualFt')?.value??'',actualSqft=actualRaw===''?null:Number(actualRaw),plannedEl=$('scheduleMaterialLinearFt');if(!jobId)return;
   if(!productId||plannedSqft<=0){let prior=await sb.from('job_material_plans').select('multi_film_finalized_at').eq('job_id',jobId).maybeSingle();if(prior.error)throw prior.error;if(prior.data?.multi_film_finalized_at)throw new Error('This job already deducted inventory.');await sb.from('job_material_plans').delete().eq('job_id',jobId);return}
@@ -3026,6 +3041,9 @@ async function saveCloudQuote(){
 async function loadQuotes(options={}){
   let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('updated_at',{ascending:false});
   if(error){if(options.strict)throw error;toast('Unable to load quotes: '+error.message);return}
+  await syncSquareSentQuotes(data||[]);
+  // Keep the displayed status current after a Square-published invoice sync.
+  for(let q of (data||[]))if(squareSentSyncedQuoteIds.has(q.id)&&squareInvoiceIsSent(q.square_status)&&quoteCanAdvanceToSent(q.status))q.status='Quote Sent';
   window._cloudQuotes=data||[];
   renderQuoteResults();
   try{await loadCleaningApprovals()}catch(e){console.warn('Cleaning approvals refresh:',e)}
@@ -3049,7 +3067,62 @@ async function syncQuoteLifecycle(quoteId,quoteStatus,leadStatus){
   if(leadStatus&&q.customer_id)await syncCustomerLifecycle(q.customer_id,leadStatus);
   return {ok:true,customer_id:q.customer_id};
 }
-async function lifecycleAfterInvoice(quoteId){return syncQuoteLifecycle(quoteId,'Approved','approved')}
+// Square drafts are UNSENT. Do not advance a lead merely because a draft was created.
+// Square invoice statuses after publication are generally UNPAID / PARTIALLY_PAID / PAID.
+function squareInvoiceIsSent(status){
+  return ['UNPAID','PARTIALLY_PAID','PAID','PUBLISHED','SENT','PAYMENT_PENDING'].includes(String(status||'').trim().toUpperCase());
+}
+function quoteCanAdvanceToSent(status){
+  return ['New Lead','Estimate Requested','Follow-Up Needed','Quote Sent'].includes(String(status||''));
+}
+function leadCanAdvanceToSent(status){
+  return !['approved','deposit_paid','scheduled','completed','lost','bad_lead','do_not_contact'].includes(String(status||'').toLowerCase());
+}
+async function markQuoteAndLeadSent(quoteId,{squareStatus='',ownerConfirmed=false,knownInvoiceId=null}={}){
+  let {data:q,error}=await sb.from('quotes').select('id,customer_id,status,square_invoice_id,square_status').eq('id',quoteId).single();
+  if(error)throw error;
+  if(!(q.square_invoice_id||knownInvoiceId))throw new Error('No Square invoice is linked to this quote.');
+  if(!ownerConfirmed&&!squareInvoiceIsSent(squareStatus||q.square_status))return {ok:true,skipped:true,reason:'Square invoice is not sent'};
+  const now=new Date().toISOString();
+  if(quoteCanAdvanceToSent(q.status)&&q.status!=='Quote Sent'){
+    let r=await sb.from('quotes').update({status:'Quote Sent',updated_at:now}).eq('id',quoteId).eq('status',q.status);
+    if(r.error)throw r.error;
+  }
+  if(q.customer_id){
+    let {data:customerLeads,error:leadError}=await sb.from('leads').select('id,status').eq('customer_id',q.customer_id);
+    if(leadError)throw leadError;
+    for(let lead of (customerLeads||[])){
+      if(!leadCanAdvanceToSent(lead.status)||lead.status==='quote_sent')continue;
+      // Match the status we just read so a simultaneous approval cannot be downgraded.
+      let r=await sb.from('leads').update({status:'quote_sent',next_follow_up_at:null,updated_at:now}).eq('id',lead.id).eq('status',lead.status);
+      if(r.error)throw r.error;
+    }
+  }
+  return {ok:true};
+}
+// Auto-sync statuses whenever Square's published state is available on the quote.
+let squareSentSyncedQuoteIds=new Set();
+async function syncSquareSentQuotes(rows){
+  const pending=(rows||[]).filter(q=>q.square_invoice_id&&squareInvoiceIsSent(q.square_status)&&!squareSentSyncedQuoteIds.has(q.id));
+  for(let q of pending){
+    try{await markQuoteAndLeadSent(q.id,{squareStatus:q.square_status});squareSentSyncedQuoteIds.add(q.id)}
+    catch(e){console.warn('Square sent-status lifecycle sync failed:',q.id,e)}
+  }
+}
+async function manuallyConfirmSquareInvoiceSent(quoteId,button){
+  if(!confirm('Have you actually published/sent this invoice in Square? An UNSENT draft should remain a draft.'))return;
+  if(button){button.disabled=true;button.textContent='Updating…'}
+  try{
+    await markQuoteAndLeadSent(quoteId,{ownerConfirmed:true});
+    squareSentSyncedQuoteIds.add(quoteId);
+    toast('Quote and eligible lead updated to Quote Sent. Approved / Won records were preserved.');
+    await loadQuotes();
+    if($('leads')?.classList.contains('active'))await loadLeads();
+    await dashboard();
+  }catch(e){alert(e?.message||'Could not synchronize invoice status.')}
+  finally{if(button&&document.body.contains(button)){button.disabled=false;button.textContent='Mark Invoice Sent'}}
+}
+
 async function lifecycleAfterSchedule(quoteId,status){
   if(status==='Completed')return syncQuoteLifecycle(quoteId,'Completed','completed');
   if(status==='Canceled')return syncQuoteLifecycle(quoteId,'Approved','approved');
@@ -3083,7 +3156,9 @@ async function createSquareDraft(quoteId,button){
       throw new Error(message);
     }
     if(!data||data.status!=='success')throw new Error(data?.message||'Square did not create the draft.');
-    await lifecycleAfterInvoice(quoteId);
+    // A draft is not Quote Sent; only sync if the server confirms a published invoice.
+    const squareStatus=data.squareInvoiceStatus||data.square_status||data.invoice?.status||'';
+    if(squareInvoiceIsSent(squareStatus))await markQuoteAndLeadSent(quoteId,{squareStatus});
     toast(data.duplicate?'Square draft already exists.':`Square draft created • ${data.billedSqft} sq ft • ${data.catalogItemName}`);
     await loadQuotes();
     if($('leads')?.classList.contains('active'))await loadLeads();
@@ -3111,7 +3186,8 @@ async function createSquareCleaningDraft(quoteId,button){
   let{data,error}=await sb.functions.invoke('create-square-cleaning-draft',{body:{quoteId},headers:{Authorization:'Bearer '+activeSession.access_token}});
   if(error){let msg=error.message;try{let details=await error.context?.json();msg=details?.error||details?.message||msg}catch{}throw new Error(msg)}
   if(data?.status!=='success')throw new Error(data?.error||'Square did not create the draft.');
-  await lifecycleAfterInvoice(quoteId);
+  const squareStatus=data.squareInvoiceStatus||data.square_status||data.invoice?.status||'';
+  if(squareInvoiceIsSent(squareStatus))await markQuoteAndLeadSent(quoteId,{squareStatus});
   toast(data.duplicate?'Square draft already exists.':'Square cleaning draft created.');
   await loadQuotes();
   if($('leads')?.classList.contains('active'))await loadLeads();
@@ -3217,7 +3293,20 @@ async function loadCleaningApprovals(){
  finally{cleaningApprovalsLoading=false}
 }
 async function retryCleaningSquare(id,btn){if(!confirm('Retry automatic Square draft creation? Check Square first to avoid duplicate invoices.'))return;btn.disabled=true;try{await cleaningOptionCall('retry',{quote_id:id});toast('Square draft created. Review before sending.')}catch(e){alert(e.message)}finally{btn.disabled=false;await loadQuotes()}}
-async function markCleaningSent(id,btn){if(!confirm('Have you reviewed AND sent the invoice in Square? This only clears the in-app reminder.'))return;btn.disabled=true;try{await cleaningOptionCall('mark_sent',{quote_id:id});toast('Marked as sent.');await loadQuotes()}catch(e){alert(e.message)}finally{btn.disabled=false}}
+async function markCleaningSent(id,btn){
+ if(!confirm('Have you reviewed AND sent the invoice in Square? This confirms the cleaning invoice was actually sent.'))return;
+ btn.disabled=true;
+ try{
+  await cleaningOptionCall('mark_sent',{quote_id:id});
+  const knownInvoiceId=cleaningOptionByQuote.get(id)?.square_invoice_id||null;
+  await markQuoteAndLeadSent(id,{ownerConfirmed:true,knownInvoiceId});
+  squareSentSyncedQuoteIds.add(id);
+  toast('Cleaning invoice confirmed sent. Quote and eligible lead synchronized.');
+  await loadQuotes();
+  if($('leads')?.classList.contains('active'))await loadLeads();
+  await dashboard();
+ }catch(e){alert(e.message)}finally{btn.disabled=false}
+}
 if($('sendCleaningOffer'))$('sendCleaningOffer').onclick=sendCleaningOffer;
 if($('closeCleaningOffer'))$('closeCleaningOffer').onclick=()=>$('cleaningOfferModal').classList.remove('show');
 if($('refreshCleaningApprovals'))$('refreshCleaningApprovals').onclick=loadCleaningApprovals;
@@ -3257,7 +3346,7 @@ function renderQuoteResults(){
         isCare=/Cleaning$/.test(q.project_type||''),
         cleaningOption=cleaningOptionByQuote.get(q.id),
         squareButton=q.square_invoice_id
-          ?`<button class="btn" disabled>Square Draft ${esc(q.square_invoice_number||q.square_status||'Created')}</button><button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
+          ?`<button class="btn" disabled>Square ${squareInvoiceIsSent(q.square_status)?'Invoice':'Draft'} ${esc(q.square_invoice_number||q.square_status||'Created')}</button>${!squareInvoiceIsSent(q.square_status)&&quoteCanAdvanceToSent(q.status)&&q.status!=='Quote Sent'?`<button class="btn primary" data-confirmsquaresent="${q.id}">Mark Invoice Sent</button>`:''}<button class="btn warn" data-releasesquaredraft="${q.id}">Release Square Draft</button>`
           :isCare&&cleaningOption&&['sent','processing','draft_error'].includes(cleaningOption.status)
             ?`<button class="btn" disabled>${cleaningOption.status==='sent'?'Awaiting Customer Selection':'Use Cleaning Approval Panel'}</button>`
             :`<button class="btn primary" data-squaredraft="${q.id}">Create Square Draft</button>`;
@@ -3343,6 +3432,7 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-openquote]').forEach(b=>b.onclick=e=>{e.preventDefault();openCloudQuote(b.dataset.openquote)});
   $('savedQuotes').querySelectorAll('[data-squaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();createSquareDraft(b.dataset.squaredraft,b)});
   $('savedQuotes').querySelectorAll('[data-releasesquaredraft]').forEach(b=>b.onclick=e=>{e.preventDefault();releaseSquareDraft(b.dataset.releasesquaredraft)});
+  $('savedQuotes').querySelectorAll('[data-confirmsquaresent]').forEach(b=>b.onclick=e=>{e.preventDefault();manuallyConfirmSquareInvoiceSent(b.dataset.confirmsquaresent,b)});
   $('savedQuotes').querySelectorAll('[data-offercleaning]').forEach(b=>b.onclick=e=>{e.preventDefault();openCleaningOffer(b.dataset.offercleaning)});
   $('savedQuotes').querySelectorAll('[data-optimizequote]').forEach(b=>b.onclick=e=>{e.preventDefault();openQuoteInOptimizer(b.dataset.optimizequote)});
   $('savedQuotes').querySelectorAll('[data-duplicatequote]').forEach(b=>b.onclick=e=>{e.preventDefault();duplicateCloudQuote(b.dataset.duplicatequote)});

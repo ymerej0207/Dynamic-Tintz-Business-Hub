@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.19.5-film-calculator`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.19.6-estimate-square-status`; 
 
 const APP_SHELL = [
   "./",
