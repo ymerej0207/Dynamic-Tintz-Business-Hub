@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.20.2-quotes-newest-five`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.21.0-visual-only-pages`; 
 
 const APP_SHELL = [
   "./",
@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./app.js",
   "./styles.css",
   "./home-command-center.css",
+  "./command-center-pages.css",
   "./manifest.webmanifest",
   "./logo.png",
 ];

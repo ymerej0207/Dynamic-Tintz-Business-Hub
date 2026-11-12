@@ -1,0 +1,368 @@
+/*
+ * Dynamic Tintz OS — Command Center visual system
+ * v7.21.0 | Presentation only
+ * No DOM restructuring, event handlers, state mutations or business-logic changes.
+ * Existing page order, controls, calculations and responsive interactions are retained.
+ */
+
+:root{
+  --dtcc-bg:#030a0e;
+  --dtcc-panel:#0a1921;
+  --dtcc-panel-hi:#10242f;
+  --dtcc-border:#2b4c58;
+  --dtcc-hairline:#203a44;
+  --dtcc-cyan:#25ddd8;
+  --dtcc-text:#f2fcfe;
+  --dtcc-muted:#93b0b7;
+  --dtcc-glow:0 9px 28px rgba(0,0,0,.17);
+}
+
+/* The existing Command Center homepage is deliberately excluded. */
+#app:not(.hidden) > .view.active:not(#owner){
+  color:var(--dtcc-text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;
+  font-size:13px;
+  line-height:1.45;
+  min-width:0;
+}
+#app > .view.active:not(#owner) :is(.head,.app-screen-title) h2{
+  color:#f5ffff;
+  font-weight:850;
+  letter-spacing:-.035em;
+}
+#app > .view.active:not(#owner) :is(.app-screen-title,.inventory-page-head){
+  border-bottom:1px solid var(--dtcc-hairline);
+  padding:6px 0 16px;
+  margin:7px 0 16px;
+  gap:12px;
+}
+#app > .view.active:not(#owner) .app-screen-title .eyebrow{
+  font-size:10px;
+  color:var(--dtcc-cyan);
+  letter-spacing:.13em;
+}
+#app > .view.active:not(#owner) .muted,
+#app > .view.active:not(#owner) small{color:var(--dtcc-muted)}
+
+/* Premium Command Center panel surfaces: cosmetic properties only. */
+#app > .view.active:not(#owner) :is(
+  .card,.item,.app-quote-list-panel,.app-builder-sheet,.quote-filters-sheet,
+  .lead-filter-bar,.lead-command-card,.lead-app-card,.lead-request-block,
+  .lead-description-block,.operations-calendar-shell,.operations-filter-panel,
+  .operations-selected-day,.inventory-section-accordion,
+  .inventory-product-card.inventory-accordion,.inventory-roll-card.inventory-accordion,
+  .inventory-roll-group,.scrap-film-group.inventory-accordion,.scrap-size-group,
+  .optimizer-results,.optimizer-status-card,.quote-summary,
+  .app-operation-card,.calendar-agenda-card,.content-launch-card,
+  .app-schedule-item,.app-recent-row,.app-inventory-snapshot-card
+ ){
+  background:linear-gradient(150deg,var(--dtcc-panel-hi) 0%,var(--dtcc-panel) 42%,#071219 100%)!important;
+  border:1px solid var(--dtcc-border)!important;
+  border-radius:13px!important;
+  box-shadow:var(--dtcc-glow)!important;
+}
+#app > .view.active:not(#owner) :is(.app-quote-list-panel,.operations-calendar-shell,.inventory-section-accordion,.app-builder-sheet,.quote-filters-sheet){
+  overflow:hidden;
+}
+#app > .view.active:not(#owner) :is(.card,.item,.lead-app-card,.quote-card,.app-operation-card){
+  overflow-wrap:anywhere;
+}
+#app > .view.active:not(#owner) :is(.head,.app-section-head){gap:10px}
+#app > .view.active:not(#owner) :is(.card,.item)>.head:first-child{margin-top:0}
+
+/* Headers, section dividers, column labels and table surfaces. */
+#app > .view.active:not(#owner) :is(.app-quote-list-panel,.lead-filter-bar,.operations-calendar-shell,.inventory-section-accordion,.app-builder-sheet) > :is(.head,summary,.operations-calendar-toolbar){
+  border-bottom-color:var(--dtcc-hairline);
+}
+#app > .view.active:not(#owner) :is(h3,.app-section-head h3){color:#f4ffff}
+#app > .view.active:not(#owner) :is(.table-wrap,.angi-credit-table-wrap){
+  background:#081720;
+  border-color:var(--dtcc-border);
+  border-radius:10px;
+  scrollbar-color:#2b5860 #08171b;
+}
+#app > .view.active:not(#owner) :is(table,th,td){border-color:var(--dtcc-hairline)}
+#app > .view.active:not(#owner) :is(th,.dt-home-table-head){background:#19303c;color:#d0e9ee}
+#app > .view.active:not(#owner) :is(.app-status-pill,.lead-source-badge,.pill){
+  font-weight:750;
+  letter-spacing:.012em;
+}
+
+/* Buttons, text fields, switches and accessible focus states. */
+#app > .view.active:not(#owner) button.btn,
+#app > .view.active:not(#owner) a.btn{
+  background:linear-gradient(155deg,#132b37,#0d202a)!important;
+  border:1px solid #335663!important;
+  border-radius:10px!important;
+  color:#ecfbfe!important;
+  box-shadow:none!important;
+  transition:background-color .15s,border-color .15s,box-shadow .15s;
+}
+#app > .view.active:not(#owner) :is(button.btn,a.btn).primary{
+  background:linear-gradient(120deg,#30e9e2,#1cc2c2)!important;
+  border-color:rgba(35,233,221,.6)!important;
+  color:#002227!important;
+}
+#app > .view.active:not(#owner) :is(button.btn,a.btn).danger{
+  background:#261619!important;
+  border-color:#6a363b!important;
+  color:#ffbdc3!important;
+}
+#app > .view.active:not(#owner) button.btn:not(:disabled):hover{
+  border-color:#35dcd6!important;
+  background:#163541!important;
+}
+#app > .view.active:not(#owner) button.btn.primary:not(:disabled):hover{
+  background:#4aeee6!important;
+}
+#app > .view.active:not(#owner) :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea){
+  color:#f4ffff!important;
+  background:#081c24!important;
+  border:1px solid #30515a!important;
+  border-radius:10px!important;
+  box-shadow:none!important;
+}
+#app > .view.active:not(#owner) :is(input,select,textarea):focus-visible,
+#app > .view.active:not(#owner) :is(button,summary,a):focus-visible{
+  outline:2px solid #22e1dc;
+  outline-offset:2px;
+}
+#app > .view.active:not(#owner) :is(input[type="checkbox"],input[type="radio"]){accent-color:var(--dtcc-cyan)}
+#app > .view.active:not(#owner) label{color:#a5c5c9!important}
+#app > .view.active:not(#owner) :is(.app-round-action,.calendar-nav-btn){
+  background:#0d3039;
+  color:var(--dtcc-cyan);
+  border:1px solid #2b6a70;
+}
+
+/* Leads: existing lead counters, search/filter toolbar, and action positions. */
+#leads.active .lead-command-card{
+  border-color:#27626b!important;
+  background:linear-gradient(155deg,#112b35,#071821)!important;
+}
+#leads.active .lead-command-card b{color:#2de5dc}
+#leads.active .lead-command-card.is-attention b{color:#ffd36a}
+#leads.active .lead-command-card span{font-weight:750;color:#e5f7f8}
+#leads.active .lead-command-card small{color:#93b0b7}
+#leads.active .lead-filter-bar{background:#0b1b23!important;padding:12px!important}
+#leads.active #leadList{gap:10px}
+#leads.active .lead-app-card{border-left:3px solid #1ec9c7!important;padding:15px!important}
+#leads.active .lead-app-card.needs-attention{border-left-color:#f3ba54!important}
+#leads.active .lead-request-block{background:#0b232b!important;border-color:#28515b!important}
+#leads.active .lead-description-block{background:#081920!important;border-color:#27414b!important}
+
+/* Quotes: five-most-recent display and Load More remain entirely in app.js. */
+#quotes.active #savedQuotes{gap:9px}
+#quotes.active .quote-card.app-quote-card{
+  border-left:3px solid #22d0cc!important;
+  padding:14px!important;
+}
+#quotes.active .quote-filters-sheet>summary,
+#quotes.active .app-builder-sheet>summary{
+  color:#edffff;
+  background:linear-gradient(110deg,#10242f,#0a1a23);
+}
+#quotes.active .quote-filters-sheet[open]>summary,
+#quotes.active .app-builder-sheet[open]>summary{border-bottom:1px solid #274653}
+#quotes.active .app-quote-list-panel{padding:14px}
+#quotes.active .app-builder-inner{padding:14px}
+
+/* Calendar and job status visuals only: no date or job logic touched. */
+#operations.active .operations-calendar-toolbar{background:#0f2530}
+#operations.active .operations-day-cell{
+  border-radius:9px;
+  background:#0a1b23;
+  border-color:rgba(48,87,98,.45);
+}
+#operations.active .operations-day-cell.is-selected{
+  border-color:#20e3dc;
+  background:#104149;
+}
+#operations.active .operations-day-cell.is-today:not(.is-selected){border-color:#3c9297}
+#operations.active .calendar-agenda-card{border-left:3px solid #22ccc6!important}
+#operations.active .operations-filter-panel{padding:13px}
+
+/* Inventory: visually align existing accordions and stock cards. */
+#inventory.active .inventory-section-accordion{margin:12px 0!important}
+#inventory.active .inventory-section-accordion>summary{
+  background:linear-gradient(110deg,#102936,#0b1d27);
+  border-bottom-color:#2a4650;
+}
+#inventory.active :is(.inventory-product-card,.inventory-roll-card,.scrap-film-group){
+  border-color:#2f5960!important;
+}
+#inventory.active .inventory-summary-balance b,
+#inventory.active .inventory-roll-balance b{color:#29ddd7!important}
+
+/* Optimizer and calculator: exact existing controls and cut-plan outputs. */
+#optimizer.active :is(.optimizer-results,.optimizer-status-card),
+#rollcalculator.active :is(.film-quick-card,.card){border-color:#2b5760!important}
+#optimizer.active .optimizer-layout>:is(section,aside),
+#rollcalculator.active .card{min-width:0}
+#rollcalculator.active .film-quick-card{background:linear-gradient(140deg,#12343d,#0b1b23)!important}
+
+/* Settings, marketing, time, team, follow-ups also inherit same surfaces. */
+#app > .view.active:is(#account,#contentstudio,#followups,#shortcuts,#team,#time) .card{
+  background:linear-gradient(150deg,#10252f,#071820)!important;
+  border-color:#2b505b!important;
+}
+
+/* Existing modals keep markup, button handlers and input order. */
+#app .modal.show > :is(.panel,.modal-card,.lead-workspace-panel,.inventory-metric-modal){
+  background:linear-gradient(160deg,#10252e,#07141b)!important;
+  border:1px solid #315764!important;
+  box-shadow:0 24px 85px rgba(0,0,0,.65)!important;
+}
+
+/* Desktop: reuse the homepage's *existing* sidebar rather than adding navigation.
+   The original 5-tab navigation remains as a compact dock so More is still reachable. */
+@media(min-width:1100px){
+  body:has(#nav [data-v="owner"]):has(#app:not(.hidden) > .view.active:not(#owner)){
+    background:radial-gradient(circle at 60% -15%,#10232c 0,transparent 42%),#03090d!important;
+    padding:0!important;
+  }
+  #app.shell:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)){
+    max-width:none!important;
+    margin:0!important;
+    min-height:100vh!important;
+    padding:0 22px 104px 240px!important;
+    background:transparent!important;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner.dt-command-center:not(.active){
+    display:contents!important;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active)>.dt-home-content{
+    display:none!important;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active)>.dt-home-sidebar{
+    display:flex!important;
+    position:fixed!important;
+    inset:0 auto 0 0!important;
+    z-index:51;
+    width:218px;
+    height:100vh;
+    min-height:100vh;
+    padding:19px 9px 15px;
+    flex-direction:column;
+    overflow-y:auto;
+    background:linear-gradient(170deg,#061016,#02080b);
+    border-right:1px solid #28414b;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-brand{
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    text-align:center;padding:2px 8px 21px;margin-bottom:16px;
+    border-bottom:1px solid #26414a;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-brand img{
+    width:96px;height:96px;object-fit:contain;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-brand strong{
+    display:block;font-size:21px;font-weight:900;letter-spacing:-.045em;color:#fff;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-brand small{
+    display:block;font-size:9px;letter-spacing:.17em;margin-top:3px;color:#2ce2dc;font-weight:800;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-nav{
+    display:flex;flex-direction:column;gap:4px;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) :is(.dt-home-side-nav,.dt-home-side-bottom) button{
+    display:flex;align-items:center;text-align:left;gap:13px;
+    width:100%;min-height:44px;padding:11px 10px;
+    color:#c5d4d9;background:transparent;
+    border:0;border-radius:8px;font-size:13px;font-weight:690;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) :is(.dt-home-side-nav,.dt-home-side-bottom) button:hover{
+    background:#0e2f36;color:#fff;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-side-icon{
+    font-size:23px;line-height:1;color:#8ce8e5;width:26px;
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-bottom{
+    margin-top:auto;border-top:1px solid #28414b;padding-top:10px;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-foot{
+    display:block;font-size:10px;color:#728e93;letter-spacing:.07em;margin:22px 10px 6px;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-bottom small{
+    display:flex;align-items:center;gap:7px;color:#90a9ae;font-size:11px;padding:0 10px;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner:not(.active) .dt-home-side-nav button.is-current{
+    color:#c5d4d9;background:transparent;border-left:0;padding-left:10px;
+  }
+  /* Selected sidebar entry follows the app's unchanged active-view class. */
+  #app:has(#leads.active) #owner .dt-home-side-nav [data-go="leads"],
+  #app:has(#quotes.active) #owner .dt-home-side-nav [data-go="quotes"],
+  #app:has(#operations.active) #owner .dt-home-side-nav [data-go="operations"],
+  #app:has(#inventory.active) #owner .dt-home-side-nav [data-go="inventory"],
+  #app:has(#optimizer.active) #owner .dt-home-side-nav [data-go="optimizer"],
+  #app:has(#rollcalculator.active) #owner .dt-home-side-nav [data-go="rollcalculator"],
+  #app:has(#account.active) #owner .dt-home-side-bottom [data-go="account"]{
+    color:#fff!important;
+    background:linear-gradient(95deg,#0c777c,#0a3e49)!important;
+    border-left:3px solid #20e4db!important;
+    padding-left:7px!important;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner))>.app-topbar{
+    position:relative;top:auto;z-index:2;
+    min-height:78px;
+    width:auto;
+    margin:0 -22px 16px!important;
+    padding:13px 24px!important;
+    border-bottom:1px solid #203942;
+    background:linear-gradient(90deg,#07131b,#10252d 55%,#07141a)!important;
+  }
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner))>.app-topbar :is(h1,p){color:#ecffff!important}
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner))>.app-topbar img{width:44px!important;height:44px!important}
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) > .view.active:not(#owner){
+    max-width:1600px;margin:0 auto;padding:0 0 22px;
+  }
+  /* Preserve original Home, Leads, Quotes, Schedule, More routes without reimplementation. */
+  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner))>#nav.bottom{
+    position:fixed!important;
+    left:auto!important;right:18px!important;bottom:15px!important;
+    width:min(440px,calc(100vw - 260px))!important;
+    height:61px!important;
+    padding:4px 9px!important;
+    transform:none!important;
+    border:1px solid #2b4d57!important;
+    border-radius:16px!important;
+    background:#081922ef!important;
+    box-shadow:0 12px 30px #0009!important;
+    z-index:65!important;
+  }
+}
+
+/* Tablet: existing navigation and page organization are preserved. */
+@media(min-width:681px) and (max-width:1099px){
+  #app:not(.hidden) > .view.active:not(#owner){
+    width:100%;max-width:none;margin:0 auto;
+  }
+  #app > .view.active:not(#owner) :is(.card,.lead-app-card,.app-builder-sheet){border-radius:13px!important}
+  #app > .view.active:not(#owner) :is(.app-screen-title,.inventory-page-head){padding-top:10px}
+  #app > .view.active:not(#owner) .lead-command-grid{gap:10px}
+  #app > .view.active:not(#owner) .grid2>*{min-width:0}
+}
+
+/* Phone: tight touch-friendly styling, no columns or action reordering imposed. */
+@media(max-width:680px){
+  #app:not(.hidden) > .view.active:not(#owner){font-size:12px}
+  #app > .view.active:not(#owner) :is(.app-screen-title,.inventory-page-head){
+    flex-wrap:wrap;align-items:flex-start;padding:8px 0 13px;margin:8px 0 12px;
+  }
+  #app > .view.active:not(#owner) :is(.app-screen-title,.inventory-page-head) h2{font-size:23px}
+  #app > .view.active:not(#owner) :is(.card,.item,.lead-app-card,.app-quote-list-panel,.operations-calendar-shell){
+    border-radius:12px!important;
+  }
+  #app > .view.active:not(#owner) :is(.app-quote-list-panel,.operations-filter-panel){padding:10px}
+  #app > .view.active:not(#owner) .lead-filter-bar{padding:9px!important}
+  #app > .view.active:not(#owner) button.btn{min-height:42px}
+  #app > .view.active:not(#owner) :is(input,select,textarea){font-size:16px}
+  #app > .view.active:not(#owner) :is(.table-wrap,.optimizer-table,.inventory-metric-section){max-width:100%}
+  #app > .view.active:not(#owner) :is(.table-wrap){overflow-x:auto}
+  #app > .view.active:not(#owner) :is(.actions,.lead-contact-line){row-gap:7px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  #app > .view.active:not(#owner) :is(.btn,input,select,textarea){transition:none!important}
+}
