@@ -254,7 +254,10 @@ function renderHomeWeekSchedule(jobs,external,start,end){
 }
 async function renderHomeSelectedDay(){
   let host=$('homeTodaySchedule');if(!host)return;
-  let d=new Date(homeSelectedDate);d.setHours(0,0,0,0),next=new Date(d);next.setDate(d.getDate()+1);
+  let d=new Date(homeSelectedDate);
+  d.setHours(0,0,0,0);
+  const next=new Date(d);
+  next.setDate(d.getDate()+1);
   let label=$('homeDayToday');if(label)label.textContent=d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
   let jobs,external;
   if(homeWeekCache&&d>=homeWeekCache.start&&d<homeWeekCache.end){jobs=homeWeekCache.jobs;external=homeWeekCache.external}
