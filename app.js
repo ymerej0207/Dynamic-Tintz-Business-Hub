@@ -5263,60 +5263,29 @@ bind('saveQuoteOption','onclick',()=>saveQuoteAsOption().catch(e=>toast(e.messag
 
 
 // Standalone purchasing forecast. Deliberately independent of Roll Optimizer state and logic.
-let frcSizes=[{w:'',h:'',qty:1}];
+// Restored from Dynamic-Tintz-Film-Calculator-Patch(1).zip.
+// Standalone roll area tool; no optimizer engine, quote or inventory changes.
+function filmRollAreaSqft(widthIn,lengthFt){
+  const w=Number(widthIn),l=Number(lengthFt);
+  return Number.isFinite(w)&&Number.isFinite(l)&&w>0&&l>0?w*l/12:null;
+}
 function renderRollCalculator(){
- const host=$('frcRows');if(!host)return;
- host.innerHTML=frcSizes.map((r,i)=>`<div class="grid2" style="margin:0 0 12px;align-items:end;border-bottom:1px solid #5555;padding-bottom:10px">
- <div class="field"><label>Width (in)</label><input type="number" min="0.1" step="0.1" data-frc="w" data-i="${i}" value="${esc(r.w)}"></div>
- <div class="field"><label>Height (in)</label><input type="number" min="0.1" step="0.1" data-frc="h" data-i="${i}" value="${esc(r.h)}"></div>
- <div class="field"><label>Quantity</label><input type="number" min="1" step="1" data-frc="qty" data-i="${i}" value="${esc(r.qty)}"></div>
- <button class="btn" type="button" data-frc-remove="${i}" ${frcSizes.length===1?'disabled':''}>Remove</button></div>`).join('');
- host.querySelectorAll('[data-frc]').forEach(el=>el.oninput=()=>{frcSizes[Number(el.dataset.i)][el.dataset.frc]=el.value});
- host.querySelectorAll('[data-frc-remove]').forEach(el=>el.onclick=()=>{frcSizes.splice(Number(el.dataset.frcRemove),1);renderRollCalculator()});
+  const w=Number($('quickRollWidth')?.value),l=Number($('quickRollLength')?.value);
+  const sqft=filmRollAreaSqft(w,l),output=$('quickRollSqft'),formula=$('quickRollFormula');
+  if(output)output.textContent=sqft===null?'Enter valid dimensions':`${Math.round(sqft*100)/100} sq ft`;
+  if(formula)formula.textContent=sqft===null?'Width and length must be greater than zero.':`${w} in × ${l} ft ÷ 12`;
+  const button=$('quickRollToPlanner');if(button)button.disabled=sqft===null;
 }
-function frcForecast(){
- const rollWidth=Number($('frcRollWidth').value),feet=Number($('frcRollLength').value),allowance=Number($('frcAllowance').value);
- const result=$('frcResult');
- if(!(rollWidth>0&&feet>0)||!Number.isFinite(allowance)||allowance<0||allowance>50){result.textContent='Enter a valid roll width, length and allowance (0 to 50%).';return}
- let pieces=[],glass=0;
- for(const [i,r] of frcSizes.entries()){
-  let w=Number(r.w),h=Number(r.h),q=Number(r.qty);
-  if(!(w>0&&h>0&&Number.isInteger(q)&&q>0&&q<=500)){result.textContent=`Check window row ${i+1}: dimensions must be positive and quantity must be 1–500.`;return}
-  if(w>rollWidth&&h>rollWidth){result.innerHTML=`<b>Not compatible:</b> Window row ${i+1} (${w} × ${h} in) is wider than this roll in both orientations.`;return}
-  glass+=w*h*q/144;
-  if(pieces.length+q>2000){result.textContent='Too many pieces for a quick forecast. Reduce quantities.';return}
-  for(let k=0;k<q;k++)pieces.push({w,h});
- }
- // Shelf packing: try both descending-area and descending-long-side ordering, and both orientations.
- function pack(order){
-  let shelves=[];
-  for(const p of order){
-   const opts=[{w:p.w,h:p.h},...(p.w!==p.h?[{w:p.h,h:p.w}]:[])].filter(o=>o.w<=rollWidth);
-   let best=null;
-   for(const o of opts){
-    for(let j=0;j<shelves.length;j++){
-     const s=shelves[j];if(s.used+o.w<=rollWidth&&o.h<=s.height){let score=(rollWidth-s.used-o.w)+((s.height-o.h)*0.01);if(!best||score<best.score)best={j,o,score}}
-    }
-   }
-   if(best){shelves[best.j].used+=best.o.w;continue}
-   const fresh=opts.sort((a,b)=>a.h-b.h)[0];
-   shelves.push({used:fresh.w,height:fresh.h});
-  }
-  return shelves.reduce((sum,s)=>sum+s.height,0);
- }
- const areaSort=[...pieces].sort((a,b)=>b.w*b.h-a.w*a.h);
- const maxSort=[...pieces].sort((a,b)=>Math.max(b.w,b.h)-Math.max(a.w,a.h));
- const packedIn=Math.min(pack(areaSort),pack(maxSort));
- const neededIn=packedIn*(1+allowance/100),availableIn=feet*12;
- const area=rollWidth*feet/12,neededFt=neededIn/12,remainingFt=(availableIn-neededIn)/12;
- const fits=neededIn<=availableIn;
- result.innerHTML=`<h3>${fits?'✓ Roll appears sufficient':'⚠ Roll may be too short'}</h3>
- <div><b>Roll:</b> ${rollWidth.toFixed(1)} in × ${feet.toFixed(1)} ft (${area.toFixed(1)} sq ft)</div>
- <div><b>Glass area:</b> ${glass.toFixed(2)} sq ft across ${pieces.length} pieces</div>
- <div><b>Estimated cut length:</b> ${(packedIn/12).toFixed(2)} ft</div>
- <div><b>Length with ${allowance}% allowance:</b> ${neededFt.toFixed(2)} ft</div>
- <div><b>${fits?'Estimated leftover':'Estimated shortage'}:</b> ${Math.abs(remainingFt).toFixed(2)} linear ft</div>
- <div class="muted" style="margin-top:10px">Planning estimate using row-based cutting and rotation. Confirm your actual cutting layout, edge margins, defects and film direction before ordering. A shortage here does not prove a more efficient layout is impossible.</div>`;
+function filmUseRollInPlanner(){
+  const w=Number($('quickRollWidth')?.value),l=Number($('quickRollLength')?.value);
+  if(filmRollAreaSqft(w,l)===null)return;
+  if($('optimizerRollWidth'))$('optimizerRollWidth').value=w;
+  if($('optimizerRollLength'))$('optimizerRollLength').value=l;
+  show('optimizer');
+  $('optimizerInput')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
-
-document.addEventListener('click',event=>{const id=event.target?.id;if(id==='frcAdd'){frcSizes.push({w:'',h:'',qty:1});renderRollCalculator()}else if(id==='frcCalculate')frcForecast();else if(id==='frcClear'){frcSizes=[{w:'',h:'',qty:1}];if($('frcRollWidth'))$('frcRollWidth').value=72;if($('frcRollLength'))$('frcRollLength').value=50;if($('frcAllowance'))$('frcAllowance').value=5;renderRollCalculator();$('frcResult').textContent='Enter your window sizes and select Check Roll Coverage.'}});
+$('quickRollWidth')?.addEventListener('input',renderRollCalculator);
+$('quickRollLength')?.addEventListener('input',renderRollCalculator);
+$('quickRollToPlanner')?.addEventListener('click',filmUseRollInPlanner);
+$('filmOpenCuttingPlanner')?.addEventListener('click',filmUseRollInPlanner);
+renderRollCalculator();

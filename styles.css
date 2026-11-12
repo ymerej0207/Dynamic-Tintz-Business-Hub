@@ -1963,3 +1963,25 @@ button.app-kpi-card{cursor:pointer}
   #quoteMeasurementsCard .selection-buttons{display:grid;grid-template-columns:1fr 1fr;width:100%}
   #quoteMeasurementsCard .selection-buttons #saveQuoteOption{grid-column:1/-1}
 }
+
+/* Film Calculator and Cutting Planner: fast, mobile-first roll area calculation. */
+.film-quick-card{border-color:rgba(0,213,216,.25);background:linear-gradient(125deg,rgba(0,213,216,.065),rgba(6,20,22,.9))}
+.film-quick-head{gap:12px;align-items:flex-start}
+.film-quick-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(185px,1fr);gap:12px;align-items:end}
+.film-quick-grid .field{margin-bottom:0;min-width:0}
+.film-quick-grid input{width:100%;box-sizing:border-box;font-size:16px;min-height:48px}
+.film-quick-result{border:1px solid rgba(0,213,216,.35);border-radius:15px;background:#05191b;padding:11px 14px;min-height:70px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.film-quick-result span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.film-quick-result strong{font-size:clamp(22px,2.8vw,31px);line-height:1.1;color:var(--teal2);margin:5px 0;overflow-wrap:anywhere}
+.film-quick-result small{color:var(--muted);font-size:11px}
+.film-quick-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:13px}
+.film-quick-actions small{flex:1 1 220px;line-height:1.4}
+.optimizer-roll-area-note,.optimizer-trim-note{border-radius:10px;padding:10px 12px;margin:12px 0;background:rgba(0,213,216,.07);border:1px solid rgba(0,213,216,.16);color:#c7e5e5;font-size:12px;line-height:1.5}
+@media(max-width:700px){
+ .film-quick-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+ .film-quick-result{grid-column:1/-1}
+ .film-quick-head .pill{font-size:10px}
+ .film-quick-actions .btn{width:100%;min-height:46px}
+}
+@media(max-width:380px){.film-quick-head{flex-direction:column}.film-quick-head .pill{align-self:flex-start}}
+

@@ -770,10 +770,27 @@
   </div>
 </main>
 <main id="rollcalculator" class="view">
-<div class="head"><div><h2>Film Roll Calculator</h2><div class="muted">Independent purchase forecast. Does not modify the Roll Optimizer, quotes, or inventory.</div></div></div>
-<div class="card"><h3>Roll you're considering</h3><div class="grid2"><div class="field"><label>Roll width (inches)</label><input id="frcRollWidth" type="number" min="1" step="0.1" value="72"></div><div class="field"><label>Roll length (feet)</label><input id="frcRollLength" type="number" min="0.1" step="0.1" value="50"></div></div><div class="field"><label>Allowance for trimming / setup (%)</label><input id="frcAllowance" type="number" min="0" max="50" step="1" value="5"></div></div>
-<div class="card"><div class="head"><h3>Job glass dimensions</h3><button id="frcAdd" class="btn primary" type="button">+ Add size</button></div><div class="muted" style="margin-bottom:12px">Enter glass dimensions in inches. Each row is one window size and quantity. Rotation is considered automatically.</div><div id="frcRows"></div><div class="actions" style="margin-top:12px"><button id="frcCalculate" class="btn primary" type="button">Check Roll Coverage</button><button id="frcClear" class="btn" type="button">Reset</button></div></div>
-<div id="frcResult" class="card" aria-live="polite">Enter your window sizes and select Check Roll Coverage.</div>
+  <div class="head">
+    <div><h2>Film Calculator &amp; Cutting Planner</h2><div class="muted">Check roll square footage instantly, or plan a job to confirm you have enough film.</div></div>
+    <span class="pill">Production Planning</span>
+  </div>
+  <div class="card film-quick-card" id="filmQuickCalculator">
+    <div class="head film-quick-head" style="margin-top:0">
+      <div><h3>Quick Roll Square Footage</h3><div class="muted">Width in inches, length in feet. Results update as you type.</div></div>
+      <span class="pill">Quick Calculator</span>
+    </div>
+    <div class="film-quick-grid">
+      <div class="field"><label for="quickRollWidth">Roll Width (inches)</label><input id="quickRollWidth" type="number" inputmode="decimal" value="72" min="0" step="any" autocomplete="off"></div>
+      <div class="field"><label for="quickRollLength">Roll Length (feet)</label><input id="quickRollLength" type="number" inputmode="decimal" value="50" min="0" step="any" autocomplete="off"></div>
+      <div class="film-quick-result" aria-live="polite"><span>Total Roll Area</span><strong id="quickRollSqft">300 sq ft</strong><small id="quickRollFormula">72 in × 50 ft ÷ 12</small></div>
+    </div>
+    <div class="film-quick-actions"><button id="quickRollToPlanner" type="button" class="btn primary">Use Roll in Cutting Planner</button><small class="muted">Square footage is the total area of the roll, not a guarantee every window cut will fit.</small></div>
+  </div>
+
+  <div class="card">
+    <div class="head" style="margin-top:0"><div><h3>Job Coverage &amp; Cutting Planner</h3><div class="muted">Use your roll dimensions with your actual window measurements to confirm coverage and plan the cuts.</div></div></div>
+    <button type="button" class="btn primary" id="filmOpenCuttingPlanner">Open Cutting Planner</button>
+  </div>
 </main>
 <main id="shortcuts" class="view"><div class="head"><div><h2>Hometown Response Hub</h2><div id="shortcutCountLabel" class="muted">Loading responses…</div></div><button id="addShortcut" class="btn primary">+ Add</button></div><div class="actions" style="margin:10px 0 14px;gap:8px;flex-wrap:wrap"><button class="btn primary" data-response-mode="standard">Standard Responses</button><button class="btn" data-response-mode="ayala">Nick Ayala Responses</button><button class="btn" data-response-mode="menus">Pricing Menus</button></div><div id="shortcutModeNote" class="muted" style="margin-bottom:12px;display:none"></div><div class="card"><div class="grid2"><div class="field"><label>Search Responses</label><input id="shortcutSearch" placeholder="Keyword, category, or message"></div><div class="field"><label>Category</label><select id="shortcutCategoryFilter"><option>All</option></select></div></div><div class="actions"><button id="refreshShortcuts" class="btn">Refresh Built-In Responses</button></div></div><div id="shortcutList"></div></main>
 <main id="time" class="view"><div class="head"><h2>My Time Clock</h2></div><div id="timeCard" class="card"></div><div id="timeList"></div></main>
@@ -837,7 +854,7 @@
       <button data-more-go="inventory"><span>▱</span><b>Inventory</b><small>Film, rolls & scraps</small></button>
       <button data-more-go="followups"><span>↻</span><b>Follow-Ups</b><small>Due & upcoming</small></button>
       <button data-more-go="optimizer"><span>✂</span><b>Roll Optimizer</b><small>Cut plans & scraps</small></button>
-      <button data-more-go="rollcalculator"><span>▤</span><b>Film Roll Calculator</b><small>Check roll before ordering</small></button>
+      <button data-more-go="rollcalculator"><span>▤</span><b>Film Calculator</b><small>Roll area &amp; cut plans</small></button>
       <button data-more-go="contentstudio"><span>▣</span><b>Content Studio</b><small>Before & after posts</small></button><button data-more-go="shortcuts"><span>◌</span><b>Responses</b><small>Quick messages</small></button>
       <button data-more-go="team"><span>◴</span><b>Team</b><small>Time & installers</small></button>
       <button data-more-go="account"><span>⚙</span><b>Account</b><small>Settings & sync</small></button>
