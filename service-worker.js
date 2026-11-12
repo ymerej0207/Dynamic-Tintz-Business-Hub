@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.21.0-visual-only-pages`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.21.2-nav-performance`; 
 
 const APP_SHELL = [
   "./",

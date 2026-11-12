@@ -225,7 +225,7 @@
     max-width:none!important;
     margin:0!important;
     min-height:100vh!important;
-    padding:0 22px 104px 240px!important;
+    padding:0 22px 24px 240px!important;
     background:transparent!important;
   }
   #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) #owner.dt-command-center:not(.active){
@@ -317,19 +317,10 @@
   #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner)) > .view.active:not(#owner){
     max-width:1600px;margin:0 auto;padding:0 0 22px;
   }
-  /* Preserve original Home, Leads, Quotes, Schedule, More routes without reimplementation. */
-  #app:has(#nav [data-v="owner"]):has(> .view.active:not(#owner))>#nav.bottom{
-    position:fixed!important;
-    left:auto!important;right:18px!important;bottom:15px!important;
-    width:min(440px,calc(100vw - 260px))!important;
-    height:61px!important;
-    padding:4px 9px!important;
-    transform:none!important;
-    border:1px solid #2b4d57!important;
-    border-radius:16px!important;
-    background:#081922ef!important;
-    box-shadow:0 12px 30px #0009!important;
-    z-index:65!important;
+  /* On desktop, the sidebar already provides navigation. Keep the original
+     nav element and its event handlers for tablet/mobile; hide only its dock. */
+  #app:has(#nav [data-v="owner"])>#nav.bottom{
+    display:none!important;
   }
 }
 

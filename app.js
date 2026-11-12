@@ -1549,8 +1549,10 @@ async function shareQuickShot(){
 
 // Window Care QuickShot is kept in memory. Editing it never changes the quote or Square draft.
 let careQuickShotLines=[];
+let careQuickShotTaxRate=6.25;
 function openCareQuickShot(q){
  const fromQuote=!!q;
+ careQuickShotTaxRate=fromQuote?(Number(q.tax_rate)||0):6.25;
  let lines=fromQuote?(Array.isArray(q.additional_services)?q.additional_services:[]):careLines();
  // Older saved cleaning quotes may have no additional_services even though their
  // package and price are stored in the quote itself. Keep QuickShot available.
@@ -1575,12 +1577,16 @@ function renderCareQuickShot(){
  host.innerHTML=careQuickShotLines.map((l,i)=>`<div class="care-quickshot-line"><div><b>${esc(l.name)}</b><small>${esc(l.variation)}</small></div><label>Qty<input type="number" min="1" step="1" data-cqs-qty="${i}" value="${l.qty}"></label><label>Price $<input type="number" min="0" step="0.01" data-cqs-price="${i}" value="${l.price}"></label><strong>${money(careLineTotal(l))}</strong></div>`).join('');
  host.querySelectorAll('[data-cqs-qty],[data-cqs-price]').forEach(el=>el.onchange=()=>{let i=Number(el.dataset.cqsQty??el.dataset.cqsPrice),field=el.hasAttribute('data-cqs-qty')?'qty':'price';careQuickShotLines[i][field]=field==='qty'?Math.max(1,Math.floor(Number(el.value)||1)):Math.max(0,Number(el.value)||0);renderCareQuickShot()});
  let sum=careQuickShotLines.reduce((n,l)=>n+careLineTotal(l),0),savings=Math.min(sum,Math.max(0,Number($('cqsSavings').value)||0));
- $('cqsSubtotal').textContent=money(sum);$('cqsSavingsValue').textContent=money(savings);$('cqsTotal').textContent=money(sum-savings);
+ let taxable=Math.max(0,sum-savings),tax=Math.round(taxable*careQuickShotTaxRate)/100;
+ $('cqsSubtotal').textContent=money(sum);$('cqsSavingsValue').textContent=money(savings);
+ if($('cqsTaxValue'))$('cqsTaxValue').textContent=money(tax);
+ $('cqsTotal').textContent=money(taxable+tax);
 }
 function closeCareQuickShot(){$('careQuickShotModal').classList.remove('show');$('careQuickShotModal').setAttribute('aria-hidden','true')}
 async function buildCareQuickShotImage(){
  const customer=$('cqsCustomer').value.trim()||'Customer',address=$('cqsAddress').value.trim(),project=$('cqsProject').value.trim()||'Window Cleaning - Interior and/or Exterior',note=$('cqsNote').value.trim();
  const subtotal=careQuickShotLines.reduce((n,l)=>n+careLineTotal(l),0),savings=Math.min(subtotal,Math.max(0,Number($('cqsSavings').value)||0));
+ const taxable=Math.max(0,subtotal-savings),tax=Math.round(taxable*careQuickShotTaxRate)/100;
  if(!subtotal)throw new Error('Add a priced cleaning service first.');
  const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=Math.max(1450,1080+careQuickShotLines.length*105);const ctx=canvas.getContext('2d');let h=canvas.height;
  let bg=ctx.createLinearGradient(0,0,1200,h);bg.addColorStop(0,'#020808');bg.addColorStop(.55,'#07191b');bg.addColorStop(1,'#020707');ctx.fillStyle=bg;ctx.fillRect(0,0,1200,h);ctx.strokeStyle='rgba(84,236,231,.34)';ctx.lineWidth=3;ctx.beginPath();ctx.roundRect(38,38,1124,h-76,42);ctx.stroke();
@@ -1592,7 +1598,8 @@ async function buildCareQuickShotImage(){
  for(let l of careQuickShotLines){ctx.fillStyle='rgba(255,255,255,.045)';ctx.beginPath();ctx.roundRect(72,y-27,1056,88,14);ctx.fill();ctx.fillStyle='#fff';ctx.font='700 23px Arial,sans-serif';quickShotWrap(ctx,l.name,98,y+1,690,28,2);ctx.fillStyle='#b6cacc';ctx.font='18px Arial,sans-serif';ctx.fillText(l.variation||'Qty '+l.qty,98,y+36);ctx.textAlign='right';ctx.fillStyle='#8ff9f3';ctx.font='800 25px Arial,sans-serif';ctx.fillText(quickShotMoney(careLineTotal(l)),1095,y+16);ctx.textAlign='left';y+=105}
  y+=45;ctx.strokeStyle='rgba(255,255,255,.18)';ctx.beginPath();ctx.moveTo(90,y);ctx.lineTo(1110,y);ctx.stroke();y+=55;ctx.fillStyle='#d3dfe0';ctx.font='23px Arial,sans-serif';ctx.fillText('Services',100,y);ctx.textAlign='right';ctx.fillText(quickShotMoney(subtotal),1095,y);ctx.textAlign='left';
  if(savings){y+=49;ctx.fillStyle='#8ff9f3';ctx.fillText('Courtesy savings',100,y);ctx.textAlign='right';ctx.fillText('-'+quickShotMoney(savings),1095,y);ctx.textAlign='left'}
- y+=87;ctx.fillStyle='#8ff9f3';ctx.font='800 27px Arial,sans-serif';ctx.fillText('ESTIMATED TOTAL',100,y);ctx.textAlign='right';ctx.font='900 45px Arial,sans-serif';ctx.fillText(quickShotMoney(subtotal-savings),1095,y);ctx.textAlign='left';
+ y+=49;ctx.fillStyle='#d3dfe0';ctx.font='22px Arial,sans-serif';ctx.fillText('Sales tax ('+careQuickShotTaxRate+'%)',100,y);ctx.textAlign='right';ctx.fillText(quickShotMoney(tax),1095,y);ctx.textAlign='left';
+ y+=87;ctx.fillStyle='#8ff9f3';ctx.font='800 27px Arial,sans-serif';ctx.fillText('ESTIMATED TOTAL',100,y);ctx.textAlign='right';ctx.font='900 45px Arial,sans-serif';ctx.fillText(quickShotMoney(taxable+tax),1095,y);ctx.textAlign='left';
  if(note){ctx.fillStyle='#d3dfe0';ctx.font='19px Arial,sans-serif';quickShotWrap(ctx,note,100,Math.min(h-225,y+70),990,29,3)}
  ctx.fillStyle='#9cb1b3';ctx.font='16px Arial,sans-serif';ctx.fillText('Preliminary visual estimate. Final scope and pricing confirmed before invoicing.',72,h-117);ctx.fillStyle='#fff';ctx.font='800 20px Arial,sans-serif';ctx.fillText('dynamictintz.com  •  469-840-4008  •  Locally owned in Anna, Texas',72,h-77);
  let blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Could not create the picture.');let url=URL.createObjectURL(blob),img=$('careQuickShotPreview');if(img.dataset.url)URL.revokeObjectURL(img.dataset.url);img.src=url;img.dataset.url=url;$('careQuickShotPreviewWrap').classList.remove('hidden');return blob;
@@ -1600,6 +1607,18 @@ async function buildCareQuickShotImage(){
 async function previewCareQuickShot(){try{await buildCareQuickShotImage();toast('Window Care QuickShot ready.')}catch(e){toast(e.message)}}
 async function shareCareQuickShot(){try{let blob=await buildCareQuickShotImage(),safe=($('cqsCustomer').value||'Customer').replace(/[^a-z0-9]+/gi,'-'),file=new File([blob],`Dynamic-Tintz-Window-Care-${safe}.png`,{type:'image/png'});if(navigator.share&&navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:'Dynamic Tintz Window Care'});return}let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast('QuickShot picture saved.')}catch(e){if(e?.name!=='AbortError')toast(e.message||'Could not share the picture.')}}
 $('closeCareQuickShot').onclick=closeCareQuickShot;$('previewCareQuickShot').onclick=previewCareQuickShot;$('shareCareQuickShot').onclick=shareCareQuickShot;$('cqsSavings').oninput=renderCareQuickShot;
+// QuickShot dialogs were authored inside the collapsed Fast Quote Builder <details>.
+// A fixed-position modal cannot display while an ancestor <details> is closed.
+// Move the EXISTING dialogs into the Quotes view once; do not clone or alter them.
+(function keepQuickShotDialogsOutsideClosedBuilder(){
+  const host=$('quotes');
+  if(!host)return;
+  for(const id of ['quickShotPicker','quickShotModal','careQuickShotModal']){
+    const dialog=$(id);
+    if(dialog&&dialog.parentElement!==host)host.appendChild(dialog);
+  }
+})();
+
 
 let manualPullRollId=null,manualPullJobs=[];
 
@@ -3080,11 +3099,22 @@ async function saveCloudQuote(){
 async function loadQuotes(options={}){
   let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});
   if(error){if(options.strict)throw error;toast('Unable to load quotes: '+error.message);return}
-  await syncSquareDraftQuotes(data||[]);
-  // A linked Square draft means Quote Sent in Dynamic Tintz OS, even if it is still a DRAFT in Square.
-  for(let q of (data||[]))if(squareDraftSyncedQuoteIds.has(q.id)&&q.square_invoice_id&&quoteCanAdvanceToSent(q.status))q.status='Quote Sent';
+  // Show the quotes immediately after the read. Existing Square-draft lifecycle
+  // reconciliation must not hold the Quotes page blank while it makes writes.
   window._cloudQuotes=data||[];
+  for(let q of window._cloudQuotes)if(squareDraftSyncedQuoteIds.has(q.id)&&q.square_invoice_id&&quoteCanAdvanceToSent(q.status))q.status='Quote Sent';
   renderQuoteResults();
+  await syncSquareDraftQuotes(data||[]);
+  // Keep the original Quote Sent behavior; refresh only if reconciliation
+  // changed a visible status. No invoice or customer pricing is modified here.
+  let statusUpdated=false;
+  for(let q of (data||[])){
+    if(squareDraftSyncedQuoteIds.has(q.id)&&q.square_invoice_id&&quoteCanAdvanceToSent(q.status)&&q.status!=='Quote Sent'){
+      q.status='Quote Sent';
+      statusUpdated=true;
+    }
+  }
+  if(statusUpdated&&$('quotes')?.classList.contains('active'))renderQuoteResults();
   try{await loadCleaningApprovals()}catch(e){console.warn('Cleaning approvals refresh:',e)}
 }
 
@@ -3347,6 +3377,60 @@ if($('refreshCleaningApprovals'))$('refreshCleaningApprovals').onclick=loadClean
 if($('cleaningGlobalAlert'))$('cleaningGlobalAlert').onclick=async()=>{await show('quotes');$('quoteStatusFilter').value='awaiting_cleaning';renderQuoteResults();$('cleaningApprovalPanel')?.scrollIntoView({behavior:'smooth',block:'start'});};
 setInterval(()=>{if(profile?.role==='owner'&&session)loadCleaningApprovals()},45000);
 
+// Manual pipeline status is independent of the Square draft and saved quote contents.
+const QUOTE_MANUAL_STATUSES=['New Lead','Estimate Requested','Quote Sent','Follow-Up Needed','Approved','Deposit Paid','Scheduled','Completed','Lost'];
+const QUOTE_LEAD_STATUS_MAP={
+  'New Lead':'new','Estimate Requested':'contacted','Quote Sent':'quote_sent',
+  'Follow-Up Needed':'follow_up','Approved':'approved','Deposit Paid':'deposit_paid',
+  'Scheduled':'scheduled','Completed':'completed','Lost':'lost'
+};
+async function changeSavedQuoteStatus(quoteId,newStatus,control){
+  const current=(window._cloudQuotes||[]).find(q=>String(q.id)===String(quoteId));
+  const original=current?.status||'';
+  if(!current||!QUOTE_MANUAL_STATUSES.includes(newStatus)){
+    if(control)control.value=original;
+    return toast('Choose a valid quote status.');
+  }
+  if(newStatus===original)return;
+  if(control)control.disabled=true;
+  try{
+    const {data:stored,error:lookupError}=await sb.from('quotes')
+      .select('id,customer_id,status').eq('id',quoteId).single();
+    if(lookupError)throw lookupError;
+    if(stored.status!==original)throw new Error('This status changed elsewhere. Refresh Quotes and try again.');
+    const now=new Date().toISOString();
+    // ONLY these two columns change. A linked Square invoice, saved price and
+    // measurements are never written, released or regenerated here.
+    const {data:updated,error:quoteError}=await sb.from('quotes')
+      .update({status:newStatus,updated_at:now})
+      .eq('id',quoteId).eq('status',original).select('id');
+    if(quoteError)throw quoteError;
+    if(!updated?.length)throw new Error('The quote changed elsewhere. Refresh and try again.');
+    current.status=newStatus;
+    // Keep the related lead in the same pipeline stage, where one exists.
+    // Do not clear a manually scheduled follow-up for a follow-up status.
+    let leadWarning='';
+    if(stored.customer_id){
+      const leadStatus=QUOTE_LEAD_STATUS_MAP[newStatus];
+      const leadPayload={status:leadStatus,updated_at:now};
+      if(['quote_sent','approved','deposit_paid','scheduled','completed','lost'].includes(leadStatus))leadPayload.next_follow_up_at=null;
+      const {error:leadError}=await sb.from('leads').update(leadPayload)
+        .eq('customer_id',stored.customer_id);
+      if(leadError){console.warn('Manual quote status: linked lead not updated',leadError);leadWarning=' Linked lead could not update: '+leadError.message;}
+    }
+    // An explicit owner decision must not get replaced by an in-session
+    // automatic historical Square-draft reconciliation.
+    squareDraftSyncedQuoteIds.add(quoteId);
+    renderQuoteResults();
+    toast(`Quote status changed to ${newStatus}.${leadWarning}`);
+    if($('leads')?.classList.contains('active'))await loadLeads();
+    await dashboard();
+  }catch(error){
+    console.error('Manual quote status update:',error);
+    if(control){control.disabled=false;control.value=original;}
+    toast('Could not change quote status: '+(error?.message||error));
+  }
+}
 let quoteVisibleLimit=5;
 function resetQuoteVisibleLimit(){quoteVisibleLimit=5;renderQuoteResults()}
 function renderQuoteResults(){
@@ -3438,7 +3522,7 @@ function renderQuoteResults(){
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="btn primary" data-copymanualdiscount="${manualDiscount.amount.toFixed(2)}">Copy Discount Amount</button><small style="opacity:.75">Saved customer price: ${money(savedQuoteTotal)}. Use dollar discount for exact cents.</small></div>
           </div>`:''}
-          <span><b>Status</b>${esc(q.status||'')}</span>
+          <span><b>Status • editable independently of Square</b><select aria-label="Change quote status for ${esc(name)}" data-manualquotestatus="${q.id}" style="margin-top:4px;min-height:34px;padding:7px 10px;font-size:12px">${QUOTE_MANUAL_STATUSES.map(st=>`<option value="${esc(st)}"${st===q.status?' selected':''}>${esc(st)}</option>`).join('')}</select></span>
           <span><b>${isCare?'Package':'Film'}</b>${esc(isCare?squareItem:squareItem.replace(' Tint Install',''))}</span>
           <span><b>Schedule</b>${job?`${when(job.scheduled_start)} • ${esc(job.status)}`:'Not scheduled'}</span>
         </div>
@@ -3473,6 +3557,9 @@ function renderQuoteResults(){
   $('savedQuotes').querySelectorAll('[data-removeassignment]').forEach(b=>b.onclick=e=>{e.preventDefault();removeAssignment(b.dataset.removeassignment,b.dataset.jobid)});
   $('savedQuotes').querySelectorAll('[data-deletequote]').forEach(b=>b.onclick=e=>{e.preventDefault();deleteCloudQuote(b.dataset.deletequote)});
   $('savedQuotes').querySelectorAll('[data-windowmeasurements]').forEach(b=>b.onclick=e=>{e.preventDefault();openWindowMeasurements(b.dataset.windowmeasurements)});
+  $('savedQuotes').querySelectorAll('[data-manualquotestatus]').forEach(el=>el.onchange=()=>{
+    changeSavedQuoteStatus(el.dataset.manualquotestatus,el.value,el);
+  });
   $('savedQuotes').querySelectorAll('[data-quickshotdirect]').forEach(b=>b.onclick=e=>{
     e.preventDefault();e.stopPropagation();
     try{
