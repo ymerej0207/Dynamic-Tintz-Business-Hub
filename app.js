@@ -3078,7 +3078,7 @@ async function saveCloudQuote(){
   }
 }
 async function loadQuotes(options={}){
-  let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('updated_at',{ascending:false});
+  let{data,error}=await sb.from('quotes').select('*,customer:customers(first_name,last_name,email,phone,service_address,lead_source),jobs:jobs!jobs_quote_id_fkey(id,title,scheduled_start,scheduled_end,status,assigned_to)').order('created_at',{ascending:false});
   if(error){if(options.strict)throw error;toast('Unable to load quotes: '+error.message);return}
   await syncSquareDraftQuotes(data||[]);
   // A linked Square draft means Quote Sent in Dynamic Tintz OS, even if it is still a DRAFT in Square.
@@ -3355,7 +3355,7 @@ function renderQuoteResults(){
       status=$('quoteStatusFilter')?.value??'',
       filtered=data
         .filter(x=>{let archived=['Completed','Lost'],statusMatch=status==='active'?!archived.includes(x.status):status==='archived'?archived.includes(x.status):status==='awaiting_cleaning'?['processing','draft_ready','draft_error'].includes(cleaningOptionByQuote.get(x.id)?.status):!status||x.status===status;return statusMatch&&JSON.stringify(x).toLowerCase().includes(q)})
-        .sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0)),
+        .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)),
       open=data.filter(x=>!['Completed','Lost'].includes(x.status)),
       value=open.reduce((s,x)=>s+Number(x.ceramic_price||0),0),
       avg=data.length?data.reduce((s,x)=>s+Number(x.ceramic_price||0),0)/data.length:0;

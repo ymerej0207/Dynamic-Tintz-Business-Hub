@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.20.1-home-schedule-fix`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.20.2-quotes-newest-five`; 
 
 const APP_SHELL = [
   "./",
