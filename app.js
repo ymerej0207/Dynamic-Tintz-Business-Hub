@@ -287,6 +287,8 @@ function homeMoveScheduleDay(delta){
   renderHomeSelectedDay();
 }
 async function dashboard(){
+  // Independent, read-only Angi summary. Never blocks the other Command Center panels.
+  void reporting.loadHomeBudget();
   let now=new Date(),iso=now.toISOString(),monthStart=new Date(now.getFullYear(),now.getMonth(),1).toISOString(),week=mondayWeekBounds(now);
   let[a,b,c,pending,scheduled,completed,jobsResult,quotesResult,activeLeadResult,attentionQuotesResult]=await Promise.all([
     sb.from('leads').select('*',{count:'exact',head:true}).eq('status','new'),

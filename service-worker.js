@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.22.0-reports`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.22.1-home-angi`; 
 
 const APP_SHELL = [
   "./",
@@ -12,6 +12,7 @@ const APP_SHELL = [
   "./app.js",
   "./styles.css",
   "./home-command-center.css",
+  "./home-angi-budget.css",
   "./command-center-pages.css",
   "./reports-dashboard.css",
   "./reports-core.js",

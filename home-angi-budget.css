@@ -1,0 +1,24 @@
+/* Home-only Angi budget module. Does not restyle or restructure any other page. */
+#owner .dt-home-budget-panel{min-width:0;}
+#owner .dt-home-budget-panel .dt-home-panel-head{margin-bottom:4px;}
+#owner .dt-home-budget-content{display:flex;flex-direction:column;gap:10px;min-height:248px;}
+#owner .dt-home-budget-cycle{margin:1px 0 0;color:#8eaeb5;font-size:10px;font-weight:600;}
+#owner .dt-home-budget-top,#owner .dt-home-budget-bottom{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+#owner .dt-home-budget-top>div,#owner .dt-home-budget-bottom>div{min-width:0;display:flex;flex-direction:column;gap:4px;padding:10px 11px;background:linear-gradient(130deg,#102a33,#0b1b23);border:1px solid #2a4a54;border-radius:9px;}
+#owner .dt-home-budget-top small,#owner .dt-home-budget-bottom small{font-size:9px;line-height:1.35;font-weight:760;letter-spacing:.02em;color:#9dbbc1;}
+#owner .dt-home-budget-top strong{font-size:21px;font-weight:850;color:#f7ffff;letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+#owner .dt-home-budget-bottom strong{font-size:19px;font-weight:800;color:#57e5a7;font-variant-numeric:tabular-nums;}
+#owner .dt-home-budget-progress-list{display:flex;flex-direction:column;gap:11px;padding:3px 0;}
+#owner .dt-home-budget-progress-row{display:flex;flex-direction:column;gap:6px;}
+#owner .dt-home-budget-progress-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;color:#dceff0;font-size:10px;}
+#owner .dt-home-budget-progress-head span{min-width:0;}
+#owner .dt-home-budget-progress-head b{font-variant-numeric:tabular-nums;font-size:10px;color:#f0ffff;white-space:nowrap;}
+#owner .dt-home-budget-track{height:10px;background:#233e46;border-radius:20px;overflow:hidden;border:1px solid #2a515a;}
+#owner .dt-home-budget-track i{height:100%;display:block;background:linear-gradient(90deg,#169b9c,#2be4d9);border-radius:inherit;transition:width .25s ease;}
+#owner .dt-home-budget-track.muted i{background:linear-gradient(90deg,#1e8996,#60c8b2);}
+#owner .dt-home-budget-footnote{margin:0;color:#91afb2;font-size:9px;line-height:1.4;text-align:center;}
+#owner .dt-home-budget-loading{min-height:185px;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;color:#99b4ba;font-size:12px;}
+@media(min-width:1100px) and (max-width:1399px){#owner .dt-home-budget-panel{grid-column:1/-1;}}
+@media(max-width:1399px){#owner .dt-home-budget-content{min-height:0;}#owner .dt-home-budget-top strong{font-size:20px;}}
+@media(max-width:680px){#owner .dt-home-budget-panel{order:4;}#owner .dt-home-budget-top strong{font-size:22px;}#owner .dt-home-budget-content{gap:11px;}#owner .dt-home-budget-top>div,#owner .dt-home-budget-bottom>div{padding:12px;}}
+@media(max-width:370px){#owner .dt-home-budget-progress-head{font-size:9px;}#owner .dt-home-budget-progress-head b{font-size:9px;}#owner .dt-home-budget-top>div,#owner .dt-home-budget-bottom>div{padding:9px;}#owner .dt-home-budget-top strong{font-size:18px;}}

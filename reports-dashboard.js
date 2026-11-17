@@ -33,6 +33,7 @@ function card(label,value,note,icon){return `<div class="dr-metric"><span class=
 function heading(title,caption=''){return `<div class="dr-panel-head"><h3>${title}</h3>${caption?`<span>${esc(caption)}</span>`:''}</div>`}
 export function initReports({sb,notify=()=>{}}){
  let settings={...defaults},expenses=[],leads=[],quotes=[],jobs=[],mode='cycle',lastLoad=0,schemaReady=false;
+ let homeBudgetRows=[],homeBudgetLoadedAt=0,homeBudgetPromise=null,homeBudgetConfigLoaded=false;
  const el=id=>document.getElementById(id);
  let busy=false;
  const statusText=(msg)=>{if(el('reportStatus'))el('reportStatus').textContent=msg};
@@ -61,6 +62,49 @@ export function initReports({sb,notify=()=>{}}){
     statusText(schemaReady?'Live data • financial expenses available':'Live lead & job data • run Reports SQL to enable expenses and budget settings');
   }catch(e){statusText('Could not load reports: '+e.message);console.error('Reports error:',e)}
   finally{busy=false}
+ }
+ /** Home widget: a compact view of the same Angi billing-cycle calculation used on Reports. */
+ function renderHomeBudget(rows=homeBudgetRows){
+  const root=el('homeAngiBudget');if(!root)return;
+  const range=cycleAt(new Date(),settings.billing_day||7);
+  const usage=budgetUsage(rows,range,settings.monthly_cash_spend,settings.monthly_credit_value);
+  const allocatedCash=usage.creditTarget>0?Math.min(usage.cashSpend,usage.creditsUsed*usage.cashSpend/usage.creditTarget):0;
+  const cashPct=usage.creditTarget>0?usage.usagePct:0;
+  const width=v=>Math.max(0,Math.min(100,v)).toFixed(1);
+  root.innerHTML=`<p class="dt-home-budget-cycle">Billing cycle: ${esc(labelFor(range))}</p>
+   <div class="dt-home-budget-top">
+     <div><small>MONTHLY CASH PAYMENT</small><strong>${money(usage.cashSpend)}</strong></div>
+     <div><small>LEAD CREDIT TARGET</small><strong>${money(usage.creditTarget)}</strong></div>
+   </div>
+   <div class="dt-home-budget-progress-list">
+     <div class="dt-home-budget-progress-row"><div class="dt-home-budget-progress-head"><span>Lead credits used</span><b>${money(usage.creditsUsed)} / ${money(usage.creditTarget)}</b></div><div class="dt-home-budget-track" role="progressbar" aria-label="Lead credit target consumed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${width(usage.usagePct)}"><i style="width:${width(usage.usagePct)}%"></i></div></div>
+     <div class="dt-home-budget-progress-row"><div class="dt-home-budget-progress-head"><span>Cash equivalent allocated*</span><b>${money(allocatedCash)}</b></div><div class="dt-home-budget-track muted" role="progressbar" aria-label="Estimated share of fixed monthly cash payment allocated to leads" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${width(cashPct)}"><i style="width:${width(cashPct)}%"></i></div></div>
+   </div>
+   <div class="dt-home-budget-bottom"><div><small>Credits remaining</small><strong>${money(usage.creditsRemaining)}</strong></div><div><small>Angi leads received</small><strong>${usage.count}</strong></div></div>
+   <p class="dt-home-budget-footnote">*Cash allocation is estimated from the fixed ${money(usage.cashSpend)} monthly payment.${usage.usagePct>=100?' Angi may pause new leads.':''}</p>`;
+ }
+ /** Nonblocking homepage data request. Never writes to existing records or Square. */
+ async function loadHomeBudget(force=false){
+  const root=el('homeAngiBudget');if(!root)return;
+  if(!force&&homeBudgetLoadedAt&&Date.now()-homeBudgetLoadedAt<45000){renderHomeBudget();return}
+  if(homeBudgetPromise)return homeBudgetPromise;
+  if(!homeBudgetLoadedAt)root.innerHTML='<div class="dt-home-budget-loading">Loading Angi budget…</div>';
+  homeBudgetPromise=(async()=>{
+    if(!homeBudgetConfigLoaded){
+      const result=await sb.from('report_budget_settings').select('monthly_cash_spend,monthly_credit_value,billing_day').eq('id','angi').maybeSingle();
+      if(!result.error&&result.data)settings={...settings,...result.data};
+      homeBudgetConfigLoaded=true;
+    }
+    const range=cycleAt(new Date(),settings.billing_day||7);
+    // Monthly Angi lead fees are small; fetch this billing cycle only, not all historic leads.
+    const {data,error}=await sb.from('leads').select('*').gte('received_at',range.start.toISOString()).lt('received_at',range.end.toISOString()).order('received_at',{ascending:false}).limit(1000);
+    if(error)throw new Error(error.message);
+    homeBudgetRows=data||[];homeBudgetLoadedAt=Date.now();renderHomeBudget();
+  })().catch(error=>{
+    console.warn('Home Angi Budget Tracker:',error);
+    root.innerHTML='<div class="dt-home-budget-loading">Budget data unavailable. <span>Open Reports for details.</span></div>';
+  }).finally(()=>{homeBudgetPromise=null});
+  return homeBudgetPromise;
  }
  function renderLeadBudget(rows){
   const root=el('reportsLeadBudget');if(!root)return;
@@ -108,7 +152,7 @@ export function initReports({sb,notify=()=>{}}){
   if(!schemaReady||cash<0||credit<=0)return notify('Enter a valid budget.');
   const {data,error}=await sb.from('report_budget_settings').upsert({id:'angi',monthly_cash_spend:cash,monthly_credit_value:credit,billing_day:7,updated_at:new Date().toISOString()},{onConflict:'id'}).select().single();
   if(error){notify('Budget update failed: '+error.message);return}
-  settings={...settings,...data};el('reportBudgetModal').classList.remove('show');render();notify('Budget settings saved.');
+  settings={...settings,...data};homeBudgetLoadedAt=0;renderHomeBudget();el('reportBudgetModal').classList.remove('show');render();notify('Budget settings saved.');
  }
  async function saveExpense(e){
   e.preventDefault();if(!schemaReady)return;
@@ -125,5 +169,5 @@ export function initReports({sb,notify=()=>{}}){
   if(el('reportExpenseForm'))el('reportExpenseForm').onsubmit=saveExpense;
   for(const id of ['reportBudgetClose','reportExpenseClose'])if(el(id))el(id).onclick=()=>el(id==='reportBudgetClose'?'reportBudgetModal':'reportExpenseModal').classList.remove('show');
  }
- wire();return {load,renderLeadBudget,render:()=>render(),budgetState:()=>({...settings})};
+ wire();return {load,loadHomeBudget,renderHomeBudget,renderLeadBudget,render:()=>render(),budgetState:()=>({...settings})};
 }
