@@ -92,3 +92,22 @@
 @media(min-width:1100px){#app:has(#reports.active) #owner .dt-home-side-nav [data-go="reports"]{color:#fff!important;background:linear-gradient(95deg,#0c777c,#0a3e49)!important;border-left:3px solid #20e4db!important;padding-left:7px!important}}
 
 @media(max-width:540px){#reports .dr-funnel{flex-wrap:wrap;overflow-x:visible}#reports .dr-funnel-step{flex:1 1 calc(33.333% - 10px);min-width:0}#reports .dr-chevron{display:none}#reports .dr-source-sub{font-size:9px;color:#82a9b0}}
+
+/* v7.22.2 expense history and editor; Reports-only styles */
+#reports .dr-expense-summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+#reports .dr-expense-summary span{display:inline-flex;align-items:center;gap:4px;padding:7px 10px;border-radius:8px;background:#0a2630;border:1px solid #2c505a;color:#abcad0;font-size:11px}
+#reports .dr-expense-summary b{color:#e8ffff;font-size:12px}
+#reports .dr-expense-list-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+#reports .dr-expense-list-controls label{color:#c2dce1;font-size:11px}
+#reports .dr-expense-list-controls select{width:auto;min-width:175px;padding:7px 9px}
+#reports .dr-expense-list-controls>span{margin-left:auto;color:#9ab8bf;font-size:10px}
+#reports .dr-expense-period{display:inline-block;border-radius:6px;padding:4px 7px;font-size:10px;white-space:nowrap}
+#reports .dr-expense-period.in{color:#9bffdf;background:#123d36}
+#reports .dr-expense-period.out{color:#eac796;background:#392b1e}
+#reports .dr-expense-actions{white-space:nowrap}
+#reports .dr-expense-actions .dr-text-btn{display:inline-block}
+#reports .dr-expense-actions .dr-edit-btn{color:#63eae7!important}
+#reports .dr-expense-more{margin-top:12px}
+#reports .dr-expense-feedback{grid-column:1/-1;margin:0;min-height:17px;font-size:11px;color:#83edda}
+#reports .dr-expense-feedback.dr-expense-error{color:#ffbbb9;font-weight:600}
+@media(max-width:540px){#reports .dr-expense-list-controls>span{margin-left:0;width:100%}#reports .dr-expense-summary span{flex:1 1 40%}}

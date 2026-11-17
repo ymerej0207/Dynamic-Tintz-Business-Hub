@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.22.1-home-angi`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.22.2-expenses`; 
 
 const APP_SHELL = [
   "./",

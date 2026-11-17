@@ -33,6 +33,7 @@ function card(label,value,note,icon){return `<div class="dr-metric"><span class=
 function heading(title,caption=''){return `<div class="dr-panel-head"><h3>${title}</h3>${caption?`<span>${esc(caption)}</span>`:''}</div>`}
 export function initReports({sb,notify=()=>{}}){
  let settings={...defaults},expenses=[],leads=[],quotes=[],jobs=[],mode='cycle',lastLoad=0,schemaReady=false;
+ let expenseView='all',expensePageSize=50,editingExpenseId=null,expenseSaving=false,expenseError='';
  let homeBudgetRows=[],homeBudgetLoadedAt=0,homeBudgetPromise=null,homeBudgetConfigLoaded=false;
  const el=id=>document.getElementById(id);
  let busy=false;
@@ -46,10 +47,35 @@ export function initReports({sb,notify=()=>{}}){
   }
   return all;
  }
+ // Fetch every expense, not just the default API page or the selected billing period.
+ // The expense history is independent of the financial reporting date range.
+ async function fetchAllExpenses(){
+   const all=[],pageSize=500;
+   for(let offset=0;offset<100000;offset+=pageSize){
+     const {data,error}=await sb.from('report_expenses').select('*')
+       .order('expense_date',{ascending:false})
+       .order('created_at',{ascending:false})
+       .order('id',{ascending:false})
+       .range(offset,offset+pageSize-1);
+     if(error)throw new Error(error.message);
+     all.push(...(data||[]));
+     if(!data||data.length<pageSize)return all;
+   }
+   throw new Error('Expense history exceeds the supported page limit. Contact support to export older records.');
+ }
  async function getFinanceTables(){
-   const [cfg,expenseRows]=await Promise.all([sb.from('report_budget_settings').select('*').eq('id','angi').maybeSingle(),sb.from('report_expenses').select('*').order('expense_date',{ascending:false}).limit(1000)]);
-   if(cfg.error||expenseRows.error){schemaReady=false;return}
-   schemaReady=true;settings={...defaults,...(cfg.data||{})};expenses=expenseRows.data||[];
+   // Do not discard previously loaded expenses if an intermittent request fails.
+   const [cfg,expenseResult]=await Promise.all([
+     sb.from('report_budget_settings').select('*').eq('id','angi').maybeSingle(),
+     fetchAllExpenses().then(data=>({data})).catch(error=>({error}))
+   ]);
+   if(cfg.error||expenseResult.error){
+     schemaReady=false;
+     expenseError=expenseResult.error?.message||cfg.error?.message||'Unable to load expense records';
+     console.warn('Reports finance data:',expenseError);
+     return;
+   }
+   schemaReady=true;expenseError='';settings={...defaults,...(cfg.data||{})};expenses=expenseResult.data;
  }
  async function load(force=true){
   if(busy)return;
@@ -132,20 +158,71 @@ export function initReports({sb,notify=()=>{}}){
   const best=[...d.revenueJobs].sort((a,b)=>b.amount-a.amount).slice(0,8);
   if(el('reportBest'))el('reportBest').innerHTML=`${heading('Completed Jobs',labelFor(r))}<div class="dr-table-wrap"><table class="dr-table"><thead><tr><th>Customer</th><th>Revenue</th><th>Direct cost*</th><th>Lead cost*</th><th>Est. contribution*</th></tr></thead><tbody>${best.length?best.map(x=>{const direct=d.expenses.filter(e=>x.quote?.id&&e.quote_id===x.quote.id).reduce((s,e)=>s+n(e.amount),0),leadCash=x.leadFaceCost*n(settings.monthly_cash_spend)/Math.max(1,n(settings.monthly_credit_value));return `<tr><td>${esc(x.customer)}<div class="dr-source-sub">${esc(x.source)}</div></td><td>${money(x.amount)}</td><td>${money(direct)}</td><td>${money(leadCash)}</td><td><b>${money(x.amount-direct-leadCash)}</b></td></tr>`}).join(''):'<tr><td colspan="5">No linked completed jobs for this period.</td></tr>'}</tbody></table></div><p class="dr-fine">*Only recorded job-specific expenses are included. Angi acquisition cost is allocated using the $550 ÷ $750 credit ratio; full cycle cash spend is counted once in the overall contribution, not again per job.</p>`;
   if(el('reportInsights'))el('reportInsights').innerHTML=`${heading('Key Insights')}<div class="dr-insights"><div><strong>${d.angiUsage.count}</strong><span>Angi leads during the selected period</span></div><div><strong>${money(d.expenseTotal)}</strong><span>Other expenses recorded</span></div><div><strong>${d.leads?pct(d.wonCount/d.leads*100):'—'}</strong><span>Won opportunities ÷ received leads</span></div><div><strong>${money(d.contribution)}</strong><span>Estimated contribution, before unrecorded costs</span></div></div>${d.unknownJobPrices?`<p class="dr-fine dr-warning">${d.unknownJobPrices} completed job(s) have no linked saved quote price; those jobs count, but their revenue is $0 pending linkage.</p>`:''}`;
-  if(el('reportExpenses'))el('reportExpenses').innerHTML=`${heading('Operating Expenses',schemaReady?'Recorded cash costs':'Database setup required')}<div class="dr-expense-toolbar"><p>Record fuel, materials, labor, software, and overhead. Avoid entering the same $550 Angi subscription here; it is already included above.</p><button class="dr-solid" id="reportAddExpense" ${schemaReady?'':'disabled'}>+ Record Expense</button></div><div class="dr-table-wrap"><table class="dr-table"><thead><tr><th>Date</th><th>Category</th><th>Details</th><th>Amount</th><th></th></tr></thead><tbody>${d.expenses.length?d.expenses.slice(0,100).map(x=>`<tr><td>${esc(x.expense_date)}</td><td>${esc(x.category)}</td><td>${esc(x.description||'—')}</td><td>${money(x.amount)}</td><td><button class="dr-text-btn" data-delete-expense="${esc(x.id)}" aria-label="Delete recorded expense">Delete</button></td></tr>`).join(''):'<tr><td colspan="5">No other expenses recorded for this period.</td></tr>'}</tbody></table></div>${schemaReady?'':'<p class="dr-warning">Run the included Supabase SQL once to enable budget settings and expense recording.</p>'}`;
+  // Show all saved expenses by default, including those outside the current billing cycle.
+  // Only in-period expenses count toward the selected reporting period's figures.
+  const historical=[...expenses].sort((a,b)=>
+    String(b.expense_date||'').localeCompare(String(a.expense_date||'')) ||
+    String(b.created_at||'').localeCompare(String(a.created_at||'')) ||
+    String(b.id||'').localeCompare(String(a.id||'')));
+  const visibleExpenses=expenseView==='period'?historical.filter(x=>within(x.expense_date,r)):historical;
+  const expensePage=visibleExpenses.slice(0,expensePageSize);
+  if(el('reportExpenses'))el('reportExpenses').innerHTML=`${heading('Operating Expenses',schemaReady?'Saved expense history':'Finance data unavailable')}
+    <div class="dr-expense-toolbar"><p>Every saved expense appears here, regardless of billing cycle. Only expenses dated within ${esc(labelFor(r))} affect the figures above. Do not enter the same $550 Angi subscription twice.</p><button class="dr-solid" id="reportAddExpense" ${schemaReady?'':'disabled'}>+ Record Expense</button></div>
+    <div class="dr-expense-summary"><span><b>${historical.length}</b> saved total</span><span><b>${d.expenses.length}</b> in selected period</span><span><b>${money(d.expenseTotal)}</b> counted in this period</span></div>
+    <div class="dr-expense-list-controls"><label for="reportExpenseView">Expense history</label><select id="reportExpenseView" aria-label="Expense history filter"><option value="all" ${expenseView==='all'?'selected':''}>All saved expenses</option><option value="period" ${expenseView==='period'?'selected':''}>Only this report period</option></select><span>Showing ${Math.min(visibleExpenses.length,expensePageSize)} of ${visibleExpenses.length}</span></div>
+    <div class="dr-table-wrap"><table class="dr-table"><thead><tr><th>Date</th><th>Category</th><th>Details</th><th>Amount</th><th>Report period</th><th>Actions</th></tr></thead><tbody>${expensePage.length?expensePage.map(x=>{
+      const inPeriod=within(x.expense_date,r);
+      return `<tr><td>${esc(x.expense_date)}</td><td>${esc(x.category)}</td><td>${esc(x.description||'—')}</td><td>${money(x.amount)}</td><td><span class="dr-expense-period ${inPeriod?'in':'out'}">${inPeriod?'Included':'Other period'}</span></td><td class="dr-expense-actions"><button class="dr-text-btn dr-edit-btn" data-edit-expense="${esc(x.id)}" aria-label="Edit expense">Edit</button><button class="dr-text-btn" data-delete-expense="${esc(x.id)}" aria-label="Delete expense">Delete</button></td></tr>`;
+    }).join(''):'<tr><td colspan="6">No expenses found in this view.</td></tr>'}</tbody></table></div>
+    ${visibleExpenses.length>expensePageSize?`<button type="button" class="dr-outline dr-expense-more" id="reportExpenseMore">Load more expenses (${visibleExpenses.length-expensePageSize} remaining)</button>`:''}
+    ${!schemaReady?`<p class="dr-warning">${expenseError?'Could not retrieve finance data: '+esc(expenseError):'Run the included Supabase Reports SQL to enable expense tracking.'}</p>`:''}`;
   renderLeadBudget(leads);
   bindControls();
  }
  function bindControls(){
    el('reportOpenBudget')?.addEventListener('click',()=>{el('reportBudgetCash').value=settings.monthly_cash_spend;el('reportBudgetCredit').value=settings.monthly_credit_value;el('reportBudgetModal').classList.add('show')});
-   el('reportAddExpense')?.addEventListener('click',()=>{el('reportExpenseForm').reset();el('reportExpenseDate').value=nowInput();el('reportExpenseQuote').innerHTML='<option value="">General expense (not job-linked)</option>'+quotes.slice(0,200).map(q=>`<option value="${esc(q.id)}">${esc(qname(q))} • ${esc(q.project_name||'Project')}</option>`).join('');el('reportExpenseModal').classList.add('show')});
+   el('reportAddExpense')?.addEventListener('click',()=>openExpense());
+   el('reportExpenseView')?.addEventListener('change',e=>{expenseView=e.target.value;expensePageSize=50;render()});
+   el('reportExpenseMore')?.addEventListener('click',()=>{expensePageSize+=50;render()});
+   el('reportExpenses')?.querySelectorAll('[data-edit-expense]').forEach(b=>b.onclick=()=>openExpense(b.dataset.editExpense));
    el('reportExpenses')?.querySelectorAll('[data-delete-expense]').forEach(b=>b.onclick=()=>removeExpense(b.dataset.deleteExpense));
  }
+ function expenseFeedback(message='',isError=false){
+   const target=el('reportExpenseFeedback');if(!target)return;
+   target.textContent=message;
+   target.classList.toggle('dr-expense-error',isError);
+ }
+ function openExpense(id=null){
+   if(!schemaReady)return;
+   const existing=id?expenses.find(e=>String(e.id)===String(id)):null;
+   if(id&&!existing){notify('Expense was not found. Refresh Reports.');return}
+   editingExpenseId=existing?.id||null;
+   el('reportExpenseForm').reset();
+   el('reportExpenseDate').value=existing?.expense_date||nowInput();
+   el('reportExpenseAmount').value=existing?.amount??'';
+   el('reportExpenseCategory').value=existing?.category||categories[0];
+   el('reportExpenseDescription').value=existing?.description||'';
+   // Keep the linked quote editable even when it is older than the latest 200 quotes.
+   const available=quotes.slice(0,200);
+   el('reportExpenseQuote').innerHTML='<option value="">General expense (not job-linked)</option>'+available.map(q=>`<option value="${esc(q.id)}">${esc(qname(q))} • ${esc(q.project_name||'Project')}</option>`).join('');
+   if(existing?.quote_id&&!available.some(q=>String(q.id)===String(existing.quote_id))){
+     el('reportExpenseQuote').insertAdjacentHTML('beforeend',`<option value="${esc(existing.quote_id)}">Previously linked quote (${esc(existing.quote_id)})</option>`);
+   }
+   el('reportExpenseQuote').value=existing?.quote_id||'';
+   el('reportExpenseTitle').textContent=existing?'Edit Operating Expense':'Record Operating Expense';
+   el('reportExpenseSubmit').textContent=existing?'Save Changes':'Save Expense';
+   expenseFeedback();el('reportExpenseModal').classList.add('show');
+ }
  async function removeExpense(id){
-  if(!schemaReady||!confirm('Delete this expense entry permanently?'))return;
-  const {error}=await sb.from('report_expenses').delete().eq('id',id);
-  if(error){notify('Could not delete expense: '+error.message);return}
-  expenses=expenses.filter(e=>String(e.id)!==id);render();notify('Expense deleted.');
+  if(!schemaReady||expenseSaving||!confirm('Delete this expense entry permanently?'))return;
+  expenseSaving=true;
+  try{
+    const {data,error}=await sb.from('report_expenses').delete().eq('id',id).select('id');
+    if(error)throw new Error(error.message);
+    if(!data?.some(row=>String(row.id)===String(id)))throw new Error('Database did not confirm deletion. Check your permissions.');
+    expenses=expenses.filter(e=>String(e.id)!==String(id));render();notify('Expense deleted.');
+  }catch(error){notify('Could not delete expense: '+error.message);console.error('Expense deletion:',error)}
+  finally{expenseSaving=false}
  }
  async function saveBudget(e){
   e.preventDefault();const cash=n(el('reportBudgetCash').value),credit=n(el('reportBudgetCredit').value);
@@ -155,12 +232,37 @@ export function initReports({sb,notify=()=>{}}){
   settings={...settings,...data};homeBudgetLoadedAt=0;renderHomeBudget();el('reportBudgetModal').classList.remove('show');render();notify('Budget settings saved.');
  }
  async function saveExpense(e){
-  e.preventDefault();if(!schemaReady)return;
-  const amount=n(el('reportExpenseAmount').value);if(amount<=0)return notify('Expense amount must be greater than zero.');
+  e.preventDefault();if(!schemaReady||expenseSaving)return;
+  const amount=n(el('reportExpenseAmount').value);
+  if(!el('reportExpenseDate').value||amount<=0){expenseFeedback('Enter a valid expense date and positive amount.',true);return}
   const payload={expense_date:el('reportExpenseDate').value,category:el('reportExpenseCategory').value,amount,description:el('reportExpenseDescription').value.trim(),quote_id:el('reportExpenseQuote').value||null};
-  const {data,error}=await sb.from('report_expenses').insert(payload).select().single();
-  if(error){notify('Could not save expense: '+error.message);return}
-  expenses.unshift(data);el('reportExpenseModal').classList.remove('show');render();notify('Expense recorded.');
+  const editedId=editingExpenseId;
+  const submit=el('reportExpenseSubmit');expenseSaving=true;
+  if(submit){submit.disabled=true;submit.textContent='Saving…'}
+  expenseFeedback('Saving to Supabase…');
+  try{
+    const query=editedId
+      ?sb.from('report_expenses').update(payload).eq('id',editedId)
+      :sb.from('report_expenses').insert(payload);
+    const {data,error}=await query.select().single();
+    if(error)throw new Error(error.message);
+    if(!data?.id)throw new Error('Database did not return a saved expense record.');
+    // An existing record can be updated without modifying or duplicating any others.
+    expenses=editedId?expenses.map(x=>String(x.id)===String(editedId)?data:x):[data,...expenses];
+    editingExpenseId=null;
+    expenseView='all';expensePageSize=50;render();
+    el('reportExpenseModal').classList.remove('show');
+    notify(editedId?'Expense updated.':'Expense recorded.');
+    // Reconcile with the database so server-persisted records are the source of truth.
+    try{expenses=await fetchAllExpenses();render()}
+    catch(refreshError){console.warn('Expense saved, but refresh failed:',refreshError);notify('Saved. Refresh Reports to check the history.');}
+  }catch(error){
+    expenseFeedback('Could not save expense: '+error.message,true);
+    console.error('Expense save:',error);
+  }finally{
+    expenseSaving=false;
+    if(submit){submit.disabled=false;submit.textContent=editingExpenseId?'Save Changes':'Save Expense'}
+  }
  }
  function wire(){
   const sel=el('reportRange');if(sel)sel.onchange=()=>{mode=sel.value;render()};
