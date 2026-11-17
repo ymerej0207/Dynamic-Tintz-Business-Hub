@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.18.0"><link rel="stylesheet" href="home-command-center.css?v=7.20.0"><link rel="stylesheet" href="command-center-pages.css?v=7.21.2-nav-performance"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#020909"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icons/icon-180.png"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css?v=7.18.0"><link rel="stylesheet" href="home-command-center.css?v=7.20.0"><link rel="stylesheet" href="command-center-pages.css?v=7.21.2-nav-performance"><link rel="stylesheet" href="reports-dashboard.css?v=7.22.0"><style>.card.metric[data-command-center-bound="true"]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}.card.metric[data-command-center-bound="true"]:hover,.card.metric[data-command-center-bound="true"]:focus{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.28);outline:2px solid rgba(71,214,195,.45);outline-offset:2px}
 /* iOS scheduling modal: readable, touch-friendly single-column layout */
 @media (max-width: 620px) {
   #scheduleJobModal { padding: 8px !important; align-items: center; }
@@ -222,6 +222,7 @@
       <button data-go="inventory"><span class="dt-side-icon">⬡</span>Inventory</button>
       <button data-go="optimizer"><span class="dt-side-icon">◎</span>Roll Optimizer</button>
       <button data-go="rollcalculator"><span class="dt-side-icon">▦</span>Film Calculator</button>
+      <button data-go="reports"><span class="dt-side-icon">▥</span>Reports</button>
     </nav>
     <div class="dt-home-side-bottom"><button data-go="account"><span class="dt-side-icon">⚙</span>Settings</button><span class="dt-home-side-foot">DYNAMIC TINTZ OS</span><small><i class="dt-home-dot"></i>Business workspace</small></div>
   </aside>
@@ -308,6 +309,8 @@
     <button class="lead-command-card" data-leadquick="follow_up"><span>Follow Up</span><b id="leadFollowCount">0</b><small>active follow ups</small></button>
     <button class="lead-command-card" data-leadquick="approved"><span>Won</span><b id="leadWonCount">0</b><small>approved pipeline</small></button>
   </section>
+
+  <section id="reportsLeadBudget" aria-label="Angi lead budget" role="region"></section>
 
   <section class="lead-filter-bar">
     <div class="field"><label>Search</label><input id="leadSearch" placeholder="Name, phone, address, request..."></div>
@@ -735,6 +738,19 @@
     </div>
   </details>
 </main>
+<main id="reports" class="view dt-reports-screen" aria-label="Business reports">
+  <header class="dr-head"><div><div class="dr-eyebrow">BUSINESS INSIGHTS &amp; PERFORMANCE</div><h2>Reports</h2></div><div class="dr-head-actions"><select id="reportRange" aria-label="Report period"><option value="cycle">This billing cycle</option><option value="previous">Previous cycle</option><option value="month">This calendar month</option><option value="six">Last six cycles</option></select><button id="reportRefresh" class="dr-outline" type="button">↻ Refresh</button></div></header>
+  <div class="dr-small-line"><span id="reportRangeLabel">Current cycle</span><span id="reportStatus" role="status" aria-live="polite">Loading live reports…</span></div>
+  <section id="reportMetrics" class="dr-metrics" aria-label="Reports key figures"></section>
+  <div class="dr-row"><section id="reportBudget" class="dr-panel" aria-label="Angi budget tracker"></section><section id="reportSources" class="dr-panel" aria-label="Lead source performance"></section></div>
+  <section id="reportChart" class="dr-panel" aria-label="Revenue versus spend chart"></section>
+  <div class="dr-row dr-row-bottom"><section id="reportFunnel" class="dr-panel" aria-label="Conversion funnel"></section><section id="reportBest" class="dr-panel" aria-label="Completed jobs"></section></div>
+  <section id="reportInsights" class="dr-panel" aria-label="Key business insights"></section>
+  <section id="reportExpenses" class="dr-panel" aria-label="Operating expenses"></section>
+  <p class="dr-disclaimer">Completed jobs count as won and contribute saved quote revenue. This is <b>not verified Square payment settlement</b>. Estimated contribution is not accounting net profit: taxes, chargebacks, materials, labor, and overhead must be recorded separately when applicable. Individual Angi fees are credit usage; the assumed $550 cash investment is not charged again per lead.</p>
+  <div id="reportExpenseModal" class="modal"><div class="panel"><div class="head"><h2>Record Operating Expense</h2><button id="reportExpenseClose" type="button" class="btn">Close</button></div><form id="reportExpenseForm" class="dr-modal-form"><label>Date <input required id="reportExpenseDate" type="date"></label><label>Amount ($) <input required id="reportExpenseAmount" type="number" min="0.01" step="0.01"></label><label>Category <select id="reportExpenseCategory"><option>Materials</option><option>Labor</option><option>Fuel / Travel</option><option>Supplies</option><option>Equipment</option><option>Insurance</option><option>Software</option><option>Advertising - Other</option><option>Rent / Utilities</option><option>Taxes / Fees</option><option>Other</option></select></label><label>Related Job / Quote (optional) <select id="reportExpenseQuote"><option value="">General expense</option></select></label><label class="dr-full">Description <textarea id="reportExpenseDescription" maxlength="2000" rows="3" placeholder="What was the expense for?"></textarea></label><div class="dr-modal-actions"><button type="submit" class="dr-solid">Save Expense</button></div></form></div></div>
+  <div id="reportBudgetModal" class="modal"><div class="panel"><div class="head"><h2>Angi Budget Settings</h2><button id="reportBudgetClose" type="button" class="btn">Close</button></div><p class="muted">Your current plan is $550 per 7th–6th billing cycle for approximately $750 in lead credit value. Change these amounts if Angi changes your plan.</p><form id="reportBudgetForm" class="dr-modal-form"><label>Monthly Cash Payment ($) <input id="reportBudgetCash" type="number" min="0" step="0.01" required></label><label>Monthly Lead Credit Target ($) <input id="reportBudgetCredit" type="number" min="0.01" step="0.01" required></label><div class="dr-modal-actions"><button type="submit" class="dr-solid">Save Budget</button></div></form></div></div>
+</main>
 <main id="operations" class="view app-operations-screen">
   <div class="app-screen-title">
     <div><span class="eyebrow">JOBS & INSTALLATIONS</span><h2>Schedule</h2></div>
@@ -881,6 +897,7 @@
     <div class="more-menu-grid">
       <button data-more-go="inventory"><span>▱</span><b>Inventory</b><small>Film, rolls & scraps</small></button>
       <button data-more-go="followups"><span>↻</span><b>Follow-Ups</b><small>Due & upcoming</small></button>
+      <button data-more-go="reports"><span>▥</span><b>Reports</b><small>Budget & profitability</small></button>
       <button data-more-go="optimizer"><span>✂</span><b>Roll Optimizer</b><small>Cut plans & scraps</small></button>
       <button data-more-go="rollcalculator"><span>▤</span><b>Film Calculator</b><small>Roll area &amp; cut plans</small></button>
       <button data-more-go="contentstudio"><span>▣</span><b>Content Studio</b><small>Before & after posts</small></button><button data-more-go="shortcuts"><span>◌</span><b>Responses</b><small>Quick messages</small></button>
@@ -1008,4 +1025,4 @@
 <small class="muted">Choose either combined screen/track sets OR individual screens/tracks to avoid double billing.</small></div>
 <button id="sendCleaningOffer" class="btn primary wide">Email Both Options to Customer</button><div id="cleaningOfferMessage" class="muted" style="margin-top:8px"></div></div></div>
 <div id="cleaningGlobalAlert" style="display:none;position:fixed;right:12px;bottom:82px;z-index:1000;max-width:min(370px,calc(100vw - 24px));padding:12px 16px;background:#0d383a;color:#e9ffff;border:1px solid #45c8c2;border-radius:12px;box-shadow:0 10px 25px #0006;cursor:pointer" role="status"></div>
-<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.21.2-nav-performance"></script></body></html>
+<div id="toast" class="toast"></div><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script><script type="module" src="app.js?v=7.22.0-reports"></script></body></html>

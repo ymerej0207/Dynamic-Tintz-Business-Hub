@@ -4,7 +4,7 @@
  */
 
 const CACHE_PREFIX = "dynamic-tintz-v";
-const CACHE_NAME = `${CACHE_PREFIX}7.21.2-nav-performance`; 
+const CACHE_NAME = `${CACHE_PREFIX}7.22.0-reports`; 
 
 const APP_SHELL = [
   "./",
@@ -13,6 +13,9 @@ const APP_SHELL = [
   "./styles.css",
   "./home-command-center.css",
   "./command-center-pages.css",
+  "./reports-dashboard.css",
+  "./reports-core.js",
+  "./reports-dashboard.js",
   "./manifest.webmanifest",
   "./logo.png",
 ];
